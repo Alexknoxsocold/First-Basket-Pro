@@ -14,6 +14,12 @@ interface PlayerStatsTableProps {
   compact?: boolean;
 }
 
+const getPercentageColor = (percentage: number) => {
+  if (percentage >= 40) return "text-green-600 dark:text-green-400";
+  if (percentage >= 20) return "text-yellow-600 dark:text-yellow-400";
+  return "text-red-600 dark:text-red-400";
+};
+
 export default function PlayerStatsTable({ stats, compact = false }: PlayerStatsTableProps) {
   const colSpan = compact ? 6 : 7;
   
@@ -52,8 +58,8 @@ export default function PlayerStatsTable({ stats, compact = false }: PlayerStats
                 </TableCell>
                 <TableCell className="text-right font-mono" data-testid={`text-games-${stat.id}`}>{stat.gamesPlayed}</TableCell>
                 <TableCell className="text-right font-mono font-bold" data-testid={`text-first-baskets-${stat.id}`}>{stat.firstBaskets}</TableCell>
-                <TableCell className="text-right font-mono font-bold" data-testid={`text-percentage-${stat.id}`}>{stat.percentage.toFixed(1)}%</TableCell>
-                <TableCell className="text-right font-mono" data-testid={`text-avg-tip-${stat.id}`}>{stat.avgTipWin}%</TableCell>
+                <TableCell className={`text-right font-mono font-bold ${getPercentageColor(stat.percentage)}`} data-testid={`text-percentage-${stat.id}`}>{stat.percentage.toFixed(1)}%</TableCell>
+                <TableCell className={`text-right font-mono ${getPercentageColor(stat.avgTipWin)}`} data-testid={`text-avg-tip-${stat.id}`}>{stat.avgTipWin}%</TableCell>
               </TableRow>
             ))
           )}
