@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import PlayerStatsTable from "@/components/PlayerStatsTable";
 import { Input } from "@/components/ui/input";
-import { Search, Filter } from "lucide-react";
+import { Search, CalendarDays } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -12,41 +12,66 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type { PlayerStat } from "@shared/schema";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import type { PlayerStat, Game } from "@shared/schema";
 
 export default function PlayerStats() {
   const [searchQuery, setSearchQuery] = useState("");
-  const [teamFilter, setTeamFilter] = useState<string>("all");
+  const [dateFilter, setDateFilter] = useState<string>("all");
 
-  const { data: stats, isLoading } = useQuery<PlayerStat[]>({
+  const { data: stats, isLoading: statsLoading } = useQuery<PlayerStat[]>({
     queryKey: ["/api/player-stats"],
   });
 
-  const teams = useMemo(() => {
-    if (!stats) return [];
-    const uniqueTeams = new Set(stats.map(s => s.team));
-    return Array.from(uniqueTeams).sort();
-  }, [stats]);
+  const { data: games, isLoading: gamesLoading } = useQuery<Game[]>({
+    queryKey: ["/api/games"],
+  });
 
-  const filteredStats = useMemo(() => {
-    if (!stats) return [];
-    
-    return stats.filter(stat => {
-      const matchesSearch = 
-        stat.player.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        stat.team.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        stat.position.toLowerCase().includes(searchQuery.toLowerCase());
-      
-      const matchesTeam = teamFilter === "all" || stat.team === teamFilter;
-      
-      return matchesSearch && matchesTeam;
-    });
-  }, [stats, searchQuery, teamFilter]);
+  const availableDates = useMemo(() => {
+    if (!games) return [];
+    const uniqueDates = new Set(games.map(g => g.gameDate));
+    return Array.from(uniqueDates).sort();
+  }, [games]);
+
+  const filteredGames = useMemo(() => {
+    if (!games) return [];
+    if (dateFilter === "all") return games;
+    return games.filter(game => game.gameDate === dateFilter);
+  }, [games, dateFilter]);
+
+  const matchupsWithStats = useMemo(() => {
+    if (!filteredGames || !stats) return [];
+
+    return filteredGames.map(game => {
+      const awayPlayers = stats.filter(s => s.team === game.awayTeam);
+      const homePlayers = stats.filter(s => s.team === game.homeTeam);
+
+      // Apply search filter
+      const filterBySearch = (playerStats: PlayerStat[]) => {
+        if (!searchQuery) return playerStats;
+        return playerStats.filter(stat =>
+          stat.player.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          stat.team.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          stat.position.toLowerCase().includes(searchQuery.toLowerCase())
+        );
+      };
+
+      const filteredAwayPlayers = filterBySearch(awayPlayers).sort((a, b) => b.firstBaskets - a.firstBaskets);
+      const filteredHomePlayers = filterBySearch(homePlayers).sort((a, b) => b.firstBaskets - a.firstBaskets);
+
+      return {
+        game,
+        awayPlayers: filteredAwayPlayers,
+        homePlayers: filteredHomePlayers,
+        hasResults: filteredAwayPlayers.length > 0 || filteredHomePlayers.length > 0,
+      };
+    }).filter(m => m.hasResults);
+  }, [filteredGames, stats, searchQuery]);
 
   const totalPlayers = stats?.length || 0;
   const playersWithBaskets = stats?.filter(s => s.firstBaskets > 0).length || 0;
 
-  if (isLoading) {
+  if (statsLoading || gamesLoading) {
     return (
       <div className="space-y-6">
         <div className="flex items-center justify-between gap-4">
@@ -63,27 +88,27 @@ export default function PlayerStats() {
       <div>
         <h2 className="text-lg font-semibold mb-2">Player First Basket Stats - 2024/2025 Season</h2>
         <p className="text-sm text-muted-foreground">
-          Full roster stats showing first baskets scored this season. {playersWithBaskets} of {totalPlayers} players have scored a first basket.
+          Compare team rosters side-by-side for upcoming matchups. {playersWithBaskets} of {totalPlayers} players have scored a first basket this season.
         </p>
       </div>
 
       <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div className="flex items-center gap-2">
-          <Filter className="h-4 w-4 text-muted-foreground" />
-          <Select value={teamFilter} onValueChange={setTeamFilter}>
-            <SelectTrigger className="w-40" data-testid="select-team-filter">
-              <SelectValue placeholder="All Teams" />
+          <CalendarDays className="h-4 w-4 text-muted-foreground" />
+          <Select value={dateFilter} onValueChange={setDateFilter}>
+            <SelectTrigger className="w-48" data-testid="select-date-filter">
+              <SelectValue placeholder="All Games" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Teams</SelectItem>
-              {teams.map(team => (
-                <SelectItem key={team} value={team}>{team}</SelectItem>
+              <SelectItem value="all">All Games</SelectItem>
+              {availableDates.map(date => (
+                <SelectItem key={date} value={date}>{date}</SelectItem>
               ))}
             </SelectContent>
           </Select>
-          {teamFilter !== "all" && (
+          {dateFilter !== "all" && (
             <Badge variant="secondary" className="text-xs">
-              {filteredStats.length} players
+              {matchupsWithStats.length} matchups
             </Badge>
           )}
         </div>
@@ -100,7 +125,55 @@ export default function PlayerStats() {
         </div>
       </div>
 
-      <PlayerStatsTable stats={filteredStats} />
+      {matchupsWithStats.length === 0 ? (
+        <Card>
+          <CardContent className="py-12 text-center">
+            <p className="text-muted-foreground">No matchups found with your search criteria.</p>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="space-y-6">
+          {matchupsWithStats.map(({ game, awayPlayers, homePlayers }) => (
+            <Card key={game.id} data-testid={`matchup-${game.awayTeam}-vs-${game.homeTeam}`}>
+              <CardHeader className="pb-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <CardTitle className="text-base font-semibold">
+                    {game.awayTeam} vs {game.homeTeam}
+                  </CardTitle>
+                  <Badge variant="outline" className="text-xs">
+                    {game.gameDate}
+                  </Badge>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Away Team */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-sm font-semibold">{game.awayTeam}</h3>
+                      <Badge variant="secondary" className="text-xs">
+                        {awayPlayers.length} players
+                      </Badge>
+                    </div>
+                    <PlayerStatsTable stats={awayPlayers} compact />
+                  </div>
+
+                  {/* Home Team */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-sm font-semibold">{game.homeTeam}</h3>
+                      <Badge variant="secondary" className="text-xs">
+                        {homePlayers.length} players
+                      </Badge>
+                    </div>
+                    <PlayerStatsTable stats={homePlayers} compact />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
