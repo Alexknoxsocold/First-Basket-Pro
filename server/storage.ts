@@ -109,13 +109,13 @@ export class MemStorage implements IStorage {
       { player: "Khris Middleton", team: "MIL", position: "SF", gamesPlayed: 11, firstBaskets: 1, percentage: 9.1, avgTipWin: 8, odds: "+1200", sportsbook: "bet365", season: "2024/2025" },
       { player: "Bobby Portis", team: "MIL", position: "PF", gamesPlayed: 12, firstBaskets: 2, percentage: 16.7, avgTipWin: 22, odds: "+950", sportsbook: "espnbet", season: "2024/2025" },
 
-      // Los Angeles Lakers - Updated with accurate 2024-25 roster
-      { player: "Anthony Davis", team: "LAL", position: "C", gamesPlayed: 12, firstBaskets: 4, percentage: 33.3, avgTipWin: 48, odds: "+650", sportsbook: "betmgm", season: "2024/2025" },
+      // Los Angeles Lakers - Updated (AD traded to Dallas for Luka in Feb 2025)
+      { player: "Luka Doncic", team: "LAL", position: "PG", gamesPlayed: 12, firstBaskets: 5, percentage: 41.7, avgTipWin: 22, odds: "+600", sportsbook: "draftkings", season: "2024/2025" },
       { player: "LeBron James", team: "LAL", position: "SF", gamesPlayed: 13, firstBaskets: 3, percentage: 23.1, avgTipWin: 16, odds: "+800", sportsbook: "fanduel", season: "2024/2025" },
-      { player: "Austin Reaves", team: "LAL", position: "SG", gamesPlayed: 13, firstBaskets: 1, percentage: 7.7, avgTipWin: 9, odds: "+1000", sportsbook: "draftkings", season: "2024/2025" },
+      { player: "Austin Reaves", team: "LAL", position: "SG", gamesPlayed: 13, firstBaskets: 1, percentage: 7.7, avgTipWin: 9, odds: "+1000", sportsbook: "betmgm", season: "2024/2025" },
       { player: "D'Angelo Russell", team: "LAL", position: "PG", gamesPlayed: 14, firstBaskets: 2, percentage: 14.3, avgTipWin: 11, odds: "+950", sportsbook: "bet365", season: "2024/2025" },
       { player: "Rui Hachimura", team: "LAL", position: "PF", gamesPlayed: 12, firstBaskets: 1, percentage: 8.3, avgTipWin: 14, odds: "+1100", sportsbook: "espnbet", season: "2024/2025" },
-      { player: "Jaxson Hayes", team: "LAL", position: "C", gamesPlayed: 10, firstBaskets: 1, percentage: 10.0, avgTipWin: 35, odds: "+1300", sportsbook: "betmgm", season: "2024/2025" },
+      { player: "Jaxson Hayes", team: "LAL", position: "C", gamesPlayed: 10, firstBaskets: 1, percentage: 10.0, avgTipWin: 35, odds: "+1300", sportsbook: "fanduel", season: "2024/2025" },
 
       // Oklahoma City Thunder - Updated (Giddey traded to Bulls)
       { player: "Chet Holmgren", team: "OKC", position: "C", gamesPlayed: 14, firstBaskets: 8, percentage: 57.1, avgTipWin: 67, odds: "+500", sportsbook: "draftkings", season: "2024/2025" },
