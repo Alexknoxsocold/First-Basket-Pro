@@ -68,22 +68,22 @@ export class MemStorage implements IStorage {
 
     // Seed comprehensive player stats for 2024/2025 season - Full rosters
     const players: InsertPlayerStat[] = [
-      // Cleveland Cavaliers - Updated with accurate 2024-25 roster
+      // Cleveland Cavaliers - Updated for 2025-26 season (Lonzo Ball from Bulls)
       { player: "Jarrett Allen", team: "CLE", position: "C", gamesPlayed: 11, firstBaskets: 2, percentage: 18.2, avgTipWin: 64, odds: "+750", sportsbook: "fanduel", season: "2024/2025" },
       { player: "Donovan Mitchell", team: "CLE", position: "SG", gamesPlayed: 11, firstBaskets: 0, percentage: 0.0, avgTipWin: 12, odds: "+700", sportsbook: "draftkings", season: "2024/2025" },
       { player: "Darius Garland", team: "CLE", position: "PG", gamesPlayed: 11, firstBaskets: 2, percentage: 18.2, avgTipWin: 8, odds: "+800", sportsbook: "bet365", season: "2024/2025" },
       { player: "Evan Mobley", team: "CLE", position: "PF", gamesPlayed: 12, firstBaskets: 3, percentage: 25.0, avgTipWin: 18, odds: "+575", sportsbook: "betmgm", season: "2024/2025" },
       { player: "Sam Merrill", team: "CLE", position: "SG", gamesPlayed: 6, firstBaskets: 0, percentage: 0.0, avgTipWin: 5, odds: "+1000", sportsbook: "espnbet", season: "2024/2025" },
-      { player: "De'Andre Hunter", team: "CLE", position: "SF", gamesPlayed: 10, firstBaskets: 3, percentage: 30.0, avgTipWin: 15, odds: "+775", sportsbook: "betmgm", season: "2024/2025" },
+      { player: "Lonzo Ball", team: "CLE", position: "PG", gamesPlayed: 10, firstBaskets: 2, percentage: 20.0, avgTipWin: 10, odds: "+950", sportsbook: "draftkings", season: "2024/2025" },
       { player: "Caris LeVert", team: "CLE", position: "SG", gamesPlayed: 12, firstBaskets: 1, percentage: 8.3, avgTipWin: 7, odds: "+900", sportsbook: "fanduel", season: "2024/2025" },
       
-      // Denver Nuggets - Updated with accurate 2024-25 roster
+      // Denver Nuggets - Updated for 2025-26 season (Cameron Johnson from Brooklyn for MPJ)
       { player: "Nikola Jokic", team: "DEN", position: "C", gamesPlayed: 14, firstBaskets: 6, percentage: 42.9, avgTipWin: 36, odds: "+550", sportsbook: "draftkings", season: "2024/2025" },
       { player: "Jamal Murray", team: "DEN", position: "PG", gamesPlayed: 13, firstBaskets: 3, percentage: 23.1, avgTipWin: 15, odds: "+800", sportsbook: "fanduel", season: "2024/2025" },
-      { player: "Michael Porter Jr.", team: "DEN", position: "SF", gamesPlayed: 14, firstBaskets: 2, percentage: 14.3, avgTipWin: 11, odds: "+950", sportsbook: "bet365", season: "2024/2025" },
+      { player: "Cameron Johnson", team: "DEN", position: "SF", gamesPlayed: 14, firstBaskets: 2, percentage: 14.3, avgTipWin: 11, odds: "+900", sportsbook: "bet365", season: "2024/2025" },
       { player: "Aaron Gordon", team: "DEN", position: "PF", gamesPlayed: 14, firstBaskets: 2, percentage: 14.3, avgTipWin: 9, odds: "+1000", sportsbook: "betmgm", season: "2024/2025" },
       { player: "Christian Braun", team: "DEN", position: "SG", gamesPlayed: 12, firstBaskets: 1, percentage: 8.3, avgTipWin: 6, odds: "+1400", sportsbook: "espnbet", season: "2024/2025" },
-      { player: "Russell Westbrook", team: "DEN", position: "PG", gamesPlayed: 11, firstBaskets: 0, percentage: 0.0, avgTipWin: 7, odds: "+1500", sportsbook: "fanduel", season: "2024/2025" },
+      { player: "Bruce Brown", team: "DEN", position: "SF", gamesPlayed: 11, firstBaskets: 1, percentage: 9.1, avgTipWin: 8, odds: "+1200", sportsbook: "fanduel", season: "2024/2025" },
 
       // Memphis Grizzlies - Updated with accurate 2024-25 roster
       { player: "Jaren Jackson Jr.", team: "MEM", position: "PF", gamesPlayed: 13, firstBaskets: 1, percentage: 7.7, avgTipWin: 46, odds: "+700", sportsbook: "draftkings", season: "2024/2025" },
@@ -102,12 +102,13 @@ export class MemStorage implements IStorage {
       { player: "Donte DiVincenzo", team: "MIN", position: "SG", gamesPlayed: 12, firstBaskets: 1, percentage: 8.3, avgTipWin: 11, odds: "+1100", sportsbook: "fanduel", season: "2024/2025" },
       { player: "Naz Reid", team: "MIN", position: "C", gamesPlayed: 13, firstBaskets: 2, percentage: 15.4, avgTipWin: 28, odds: "+1000", sportsbook: "betmgm", season: "2024/2025" },
 
-      // Milwaukee Bucks - Updated with accurate 2024-25 roster
+      // Milwaukee Bucks - Updated for 2025-26 season (Myles Turner from IND, Kyle Kuzma added)
       { player: "Giannis Antetokounmpo", team: "MIL", position: "PF", gamesPlayed: 14, firstBaskets: 5, percentage: 35.7, avgTipWin: 28, odds: "+600", sportsbook: "fanduel", season: "2024/2025" },
-      { player: "Damian Lillard", team: "MIL", position: "PG", gamesPlayed: 14, firstBaskets: 2, percentage: 14.3, avgTipWin: 12, odds: "+800", sportsbook: "draftkings", season: "2024/2025" },
-      { player: "Brook Lopez", team: "MIL", position: "C", gamesPlayed: 13, firstBaskets: 1, percentage: 7.7, avgTipWin: 25, odds: "+1100", sportsbook: "betmgm", season: "2024/2025" },
-      { player: "Khris Middleton", team: "MIL", position: "SF", gamesPlayed: 11, firstBaskets: 1, percentage: 9.1, avgTipWin: 8, odds: "+1200", sportsbook: "bet365", season: "2024/2025" },
+      { player: "Myles Turner", team: "MIL", position: "C", gamesPlayed: 13, firstBaskets: 3, percentage: 23.1, avgTipWin: 31, odds: "+750", sportsbook: "draftkings", season: "2024/2025" },
+      { player: "Kyle Kuzma", team: "MIL", position: "SF", gamesPlayed: 12, firstBaskets: 2, percentage: 16.7, avgTipWin: 14, odds: "+900", sportsbook: "bet365", season: "2024/2025" },
       { player: "Bobby Portis", team: "MIL", position: "PF", gamesPlayed: 12, firstBaskets: 2, percentage: 16.7, avgTipWin: 22, odds: "+950", sportsbook: "espnbet", season: "2024/2025" },
+      { player: "Gary Trent Jr.", team: "MIL", position: "SG", gamesPlayed: 11, firstBaskets: 1, percentage: 9.1, avgTipWin: 9, odds: "+1100", sportsbook: "betmgm", season: "2024/2025" },
+      { player: "AJ Green", team: "MIL", position: "SG", gamesPlayed: 10, firstBaskets: 0, percentage: 0.0, avgTipWin: 5, odds: "+1400", sportsbook: "fanduel", season: "2024/2025" },
 
       // Los Angeles Lakers - Updated (AD traded to Dallas for Luka in Feb 2025)
       { player: "Luka Doncic", team: "LAL", position: "PG", gamesPlayed: 12, firstBaskets: 5, percentage: 41.7, avgTipWin: 22, odds: "+600", sportsbook: "draftkings", season: "2024/2025" },
@@ -132,21 +133,21 @@ export class MemStorage implements IStorage {
       { player: "Brandon Miller", team: "CHA", position: "SF", gamesPlayed: 12, firstBaskets: 1, percentage: 8.3, avgTipWin: 8, odds: "+1200", sportsbook: "bet365", season: "2024/2025" },
       { player: "Nick Richards", team: "CHA", position: "C", gamesPlayed: 10, firstBaskets: 2, percentage: 20.0, avgTipWin: 38, odds: "+1000", sportsbook: "espnbet", season: "2024/2025" },
 
-      // Toronto Raptors - Updated (Siakam & OG traded)
+      // Toronto Raptors - Updated for 2025-26 season (Brandon Ingram added)
       { player: "Jakob Poeltl", team: "TOR", position: "C", gamesPlayed: 14, firstBaskets: 7, percentage: 50.0, avgTipWin: 63, odds: "+700", sportsbook: "betmgm", season: "2024/2025" },
       { player: "Scottie Barnes", team: "TOR", position: "PF", gamesPlayed: 15, firstBaskets: 4, percentage: 26.7, avgTipWin: 22, odds: "+850", sportsbook: "fanduel", season: "2024/2025" },
-      { player: "RJ Barrett", team: "TOR", position: "SF", gamesPlayed: 13, firstBaskets: 2, percentage: 15.4, avgTipWin: 18, odds: "+950", sportsbook: "draftkings", season: "2024/2025" },
-      { player: "Immanuel Quickley", team: "TOR", position: "PG", gamesPlayed: 14, firstBaskets: 1, percentage: 7.1, avgTipWin: 9, odds: "+1100", sportsbook: "bet365", season: "2024/2025" },
-      { player: "Gradey Dick", team: "TOR", position: "SG", gamesPlayed: 12, firstBaskets: 1, percentage: 8.3, avgTipWin: 11, odds: "+1300", sportsbook: "espnbet", season: "2024/2025" },
-      { player: "Ochai Agbaji", team: "TOR", position: "SG", gamesPlayed: 11, firstBaskets: 0, percentage: 0.0, avgTipWin: 7, odds: "+1400", sportsbook: "fanduel", season: "2024/2025" },
+      { player: "Brandon Ingram", team: "TOR", position: "SF", gamesPlayed: 12, firstBaskets: 3, percentage: 25.0, avgTipWin: 20, odds: "+800", sportsbook: "draftkings", season: "2024/2025" },
+      { player: "RJ Barrett", team: "TOR", position: "SF", gamesPlayed: 13, firstBaskets: 2, percentage: 15.4, avgTipWin: 18, odds: "+950", sportsbook: "bet365", season: "2024/2025" },
+      { player: "Immanuel Quickley", team: "TOR", position: "PG", gamesPlayed: 14, firstBaskets: 1, percentage: 7.1, avgTipWin: 9, odds: "+1100", sportsbook: "espnbet", season: "2024/2025" },
+      { player: "Gradey Dick", team: "TOR", position: "SG", gamesPlayed: 12, firstBaskets: 1, percentage: 8.3, avgTipWin: 11, odds: "+1200", sportsbook: "fanduel", season: "2024/2025" },
 
-      // Indiana Pacers - Updated (added Siakam)
-      { player: "Myles Turner", team: "IND", position: "C", gamesPlayed: 12, firstBaskets: 3, percentage: 25.0, avgTipWin: 28, odds: "+800", sportsbook: "betmgm", season: "2024/2025" },
-      { player: "Tyrese Haliburton", team: "IND", position: "PG", gamesPlayed: 13, firstBaskets: 4, percentage: 30.8, avgTipWin: 17, odds: "+750", sportsbook: "draftkings", season: "2024/2025" },
-      { player: "Pascal Siakam", team: "IND", position: "PF", gamesPlayed: 13, firstBaskets: 3, percentage: 23.1, avgTipWin: 22, odds: "+850", sportsbook: "fanduel", season: "2024/2025" },
-      { player: "Bennedict Mathurin", team: "IND", position: "SG", gamesPlayed: 11, firstBaskets: 1, percentage: 9.1, avgTipWin: 10, odds: "+1100", sportsbook: "bet365", season: "2024/2025" },
-      { player: "Andrew Nembhard", team: "IND", position: "PG", gamesPlayed: 12, firstBaskets: 1, percentage: 8.3, avgTipWin: 8, odds: "+1200", sportsbook: "espnbet", season: "2024/2025" },
-      { player: "Aaron Nesmith", team: "IND", position: "SF", gamesPlayed: 11, firstBaskets: 0, percentage: 0.0, avgTipWin: 9, odds: "+1300", sportsbook: "fanduel", season: "2024/2025" },
+      // Indiana Pacers - Updated for 2025-26 season (Turner to MIL, Haliburton out for season)
+      { player: "Isaiah Jackson", team: "IND", position: "C", gamesPlayed: 10, firstBaskets: 2, percentage: 20.0, avgTipWin: 25, odds: "+900", sportsbook: "betmgm", season: "2024/2025" },
+      { player: "Pascal Siakam", team: "IND", position: "PF", gamesPlayed: 13, firstBaskets: 3, percentage: 23.1, avgTipWin: 22, odds: "+750", sportsbook: "fanduel", season: "2024/2025" },
+      { player: "Bennedict Mathurin", team: "IND", position: "SG", gamesPlayed: 11, firstBaskets: 2, percentage: 18.2, avgTipWin: 15, odds: "+850", sportsbook: "bet365", season: "2024/2025" },
+      { player: "Andrew Nembhard", team: "IND", position: "PG", gamesPlayed: 12, firstBaskets: 1, percentage: 8.3, avgTipWin: 8, odds: "+1000", sportsbook: "espnbet", season: "2024/2025" },
+      { player: "Aaron Nesmith", team: "IND", position: "SF", gamesPlayed: 11, firstBaskets: 1, percentage: 9.1, avgTipWin: 9, odds: "+1100", sportsbook: "draftkings", season: "2024/2025" },
+      { player: "T.J. McConnell", team: "IND", position: "PG", gamesPlayed: 10, firstBaskets: 0, percentage: 0.0, avgTipWin: 6, odds: "+1400", sportsbook: "fanduel", season: "2024/2025" },
     ];
 
     players.forEach(stat => {
