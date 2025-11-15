@@ -8,6 +8,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useState, useEffect } from "react";
+import logoImage from "@assets/AGSX8074_1763247106947.jpeg";
 
 export default function Header() {
   const [theme, setTheme] = useState<"light" | "dark">("dark");
@@ -28,9 +29,14 @@ export default function Header() {
       <div className="max-w-7xl mx-auto px-4 md:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16 gap-4">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-md flex items-center justify-center bg-[#1cf05f]">
-              <span className="text-primary-foreground font-bold text-sm">SC</span>
-            </div>
+            <img 
+              src={logoImage} 
+              alt="socold logo" 
+              width={32}
+              height={32}
+              className="w-8 h-8 rounded-md object-cover"
+              data-testid="img-logo"
+            />
             <h1 className="text-xl font-bold">socold's first basket model</h1>
           </div>
 
