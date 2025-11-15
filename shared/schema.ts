@@ -23,10 +23,12 @@ export const playerStats = pgTable("player_stats", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   player: text("player").notNull(),
   team: text("team").notNull(),
+  position: text("position").notNull(),
   gamesPlayed: integer("games_played").notNull(),
   firstBaskets: integer("first_baskets").notNull(),
   percentage: real("percentage").notNull(),
   avgTipWin: integer("avg_tip_win").notNull(),
+  season: text("season").notNull().default('2024/2025'),
 });
 
 export const teamStats = pgTable("team_stats", {

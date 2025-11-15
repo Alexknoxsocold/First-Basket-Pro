@@ -23,10 +23,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Player stats endpoints
-  app.get("/api/player-stats", async (_req, res) => {
+  app.get("/api/player-stats", async (req, res) => {
     try {
-      const stats = await storage.getPlayerStats();
-      res.json(stats);
+      const team = req.query.team as string | undefined;
+      if (team) {
+        const stats = await storage.getPlayerStatsByTeam(team);
+        res.json(stats);
+      } else {
+        const stats = await storage.getPlayerStats();
+        res.json(stats);
+      }
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch player stats" });
     }
