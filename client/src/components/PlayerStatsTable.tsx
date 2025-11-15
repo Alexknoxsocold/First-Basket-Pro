@@ -21,7 +21,7 @@ const getPercentageColor = (percentage: number) => {
 };
 
 export default function PlayerStatsTable({ stats, compact = false }: PlayerStatsTableProps) {
-  const colSpan = compact ? 6 : 7;
+  const colSpan = compact ? 7 : 8;
   
   return (
     <div className="border rounded-md bg-card" data-testid="container-player-stats-table">
@@ -35,6 +35,7 @@ export default function PlayerStatsTable({ stats, compact = false }: PlayerStats
             <TableHead className="text-xs uppercase tracking-wide text-right">1st Baskets</TableHead>
             <TableHead className="text-xs uppercase tracking-wide text-right">FB Rate %</TableHead>
             <TableHead className="text-xs uppercase tracking-wide text-right">Avg Tip %</TableHead>
+            <TableHead className="text-xs uppercase tracking-wide text-right">Odds</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -60,6 +61,7 @@ export default function PlayerStatsTable({ stats, compact = false }: PlayerStats
                 <TableCell className="text-right font-mono font-bold" data-testid={`text-first-baskets-${stat.id}`}>{stat.firstBaskets}</TableCell>
                 <TableCell className={`text-right font-mono font-bold ${getPercentageColor(stat.percentage)}`} data-testid={`text-percentage-${stat.id}`}>{stat.percentage.toFixed(1)}%</TableCell>
                 <TableCell className={`text-right font-mono ${getPercentageColor(stat.avgTipWin)}`} data-testid={`text-avg-tip-${stat.id}`}>{stat.avgTipWin}%</TableCell>
+                <TableCell className="text-right font-mono text-muted-foreground" data-testid={`text-odds-${stat.id}`}>{stat.odds || '-'}</TableCell>
               </TableRow>
             ))
           )}
