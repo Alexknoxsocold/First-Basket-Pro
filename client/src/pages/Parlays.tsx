@@ -1,9 +1,12 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Plus, Trash2 } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
+import type { Game } from "@shared/schema";
 
 interface ParlayOption {
   id: string;
@@ -16,13 +19,38 @@ interface ParlayOption {
 export default function Parlays() {
   const [selectedPicks, setSelectedPicks] = useState<string[]>([]);
 
-  const parlayOptions: ParlayOption[] = [
-    { id: "1", player: "J. Allen", team: "CLE", opponent: "vs MEM", percentage: 64 },
-    { id: "2", player: "D. Ayton", team: "LAL", opponent: "vs MIL", percentage: 58 },
-    { id: "3", player: "C. Holmgren", team: "OKC", opponent: "vs CHA", percentage: 67 },
-    { id: "4", player: "J. Poeltl", team: "TOR", opponent: "vs IND", percentage: 63 },
-    { id: "5", player: "R. Gobert", team: "MIN", opponent: "vs DEN", percentage: 58 },
-  ];
+  const { data: games, isLoading } = useQuery<Game[]>({
+    queryKey: ["/api/games"],
+  });
+
+  const parlayOptions = useMemo<ParlayOption[]>(() => {
+    if (!games) return [];
+
+    const options: ParlayOption[] = [];
+    
+    games.forEach(game => {
+      if (game.awayTipPercent >= 50) {
+        options.push({
+          id: `away-${game.id}`,
+          player: game.awayPlayer,
+          team: game.awayTeam,
+          opponent: `vs ${game.homeTeam}`,
+          percentage: game.awayTipPercent,
+        });
+      }
+      if (game.homeTipPercent >= 50) {
+        options.push({
+          id: `home-${game.id}`,
+          player: game.homePlayer,
+          team: game.homeTeam,
+          opponent: `vs ${game.awayTeam}`,
+          percentage: game.homeTipPercent,
+        });
+      }
+    });
+
+    return options.sort((a, b) => b.percentage - a.percentage);
+  }, [games]);
 
   const togglePick = (id: string) => {
     setSelectedPicks(prev =>
@@ -37,6 +65,22 @@ export default function Parlays() {
     return (combinedOdds * 100).toFixed(2);
   };
 
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <Skeleton className="h-20" />
+        <div className="grid gap-6 lg:grid-cols-3">
+          <div className="lg:col-span-2 space-y-4">
+            <Skeleton className="h-24" />
+            <Skeleton className="h-24" />
+            <Skeleton className="h-24" />
+          </div>
+          <Skeleton className="h-96" />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div>
@@ -48,35 +92,43 @@ export default function Parlays() {
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2 space-y-4">
-          <h3 className="text-sm font-semibold">Available Picks</h3>
-          {parlayOptions.map((option) => (
-            <Card
-              key={option.id}
-              className={selectedPicks.includes(option.id) ? "border-primary" : ""}
-              data-testid={`card-parlay-option-${option.id}`}
-            >
-              <CardContent className="p-4">
-                <div className="flex items-center gap-4">
-                  <Checkbox
-                    checked={selectedPicks.includes(option.id)}
-                    onCheckedChange={() => togglePick(option.id)}
-                    data-testid={`checkbox-pick-${option.id}`}
-                  />
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium" data-testid={`text-player-${option.id}`}>{option.player}</span>
-                      <Badge variant="secondary" className="text-xs">{option.team}</Badge>
-                    </div>
-                    <div className="text-sm text-muted-foreground mt-1">{option.opponent}</div>
-                  </div>
-                  <div className="text-right">
-                    <div className="font-mono font-bold text-lg" data-testid={`text-percentage-${option.id}`}>{option.percentage}%</div>
-                    <div className="text-xs text-muted-foreground">Tip Win %</div>
-                  </div>
-                </div>
+          <h3 className="text-sm font-semibold">Available Picks (50%+ Tip Win)</h3>
+          {parlayOptions.length === 0 ? (
+            <Card>
+              <CardContent className="p-8 text-center text-muted-foreground">
+                No picks available with 50%+ tip win probability
               </CardContent>
             </Card>
-          ))}
+          ) : (
+            parlayOptions.map((option) => (
+              <Card
+                key={option.id}
+                className={selectedPicks.includes(option.id) ? "border-primary" : ""}
+                data-testid={`card-parlay-option-${option.id}`}
+              >
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-4">
+                    <Checkbox
+                      checked={selectedPicks.includes(option.id)}
+                      onCheckedChange={() => togglePick(option.id)}
+                      data-testid={`checkbox-pick-${option.id}`}
+                    />
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium" data-testid={`text-player-${option.id}`}>{option.player}</span>
+                        <Badge variant="secondary" className="text-xs">{option.team}</Badge>
+                      </div>
+                      <div className="text-sm text-muted-foreground mt-1">{option.opponent}</div>
+                    </div>
+                    <div className="text-right">
+                      <div className="font-mono font-bold text-lg" data-testid={`text-percentage-${option.id}`}>{option.percentage}%</div>
+                      <div className="text-xs text-muted-foreground">Tip Win %</div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))
+          )}
         </div>
 
         <div className="lg:col-span-1">

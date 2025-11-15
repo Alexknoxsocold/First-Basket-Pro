@@ -1,18 +1,52 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, real } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
-export const users = pgTable("users", {
+export const games = pgTable("games", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  username: text("username").notNull().unique(),
-  password: text("password").notNull(),
+  awayTeam: text("away_team").notNull(),
+  awayPlayer: text("away_player").notNull(),
+  awayTipCount: integer("away_tip_count").notNull(),
+  awayTipPercent: integer("away_tip_percent").notNull(),
+  awayScorePercent: integer("away_score_percent").notNull(),
+  homeTeam: text("home_team").notNull(),
+  homePlayer: text("home_player").notNull(),
+  homeTipCount: integer("home_tip_count").notNull(),
+  homeTipPercent: integer("home_tip_percent").notNull(),
+  homeScorePercent: integer("home_score_percent").notNull(),
+  h2h: text("h2h").notNull(),
+  gameDate: text("game_date").notNull(),
 });
 
-export const insertUserSchema = createInsertSchema(users).pick({
-  username: true,
-  password: true,
+export const playerStats = pgTable("player_stats", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  player: text("player").notNull(),
+  team: text("team").notNull(),
+  gamesPlayed: integer("games_played").notNull(),
+  firstBaskets: integer("first_baskets").notNull(),
+  percentage: real("percentage").notNull(),
+  avgTipWin: integer("avg_tip_win").notNull(),
 });
 
-export type InsertUser = z.infer<typeof insertUserSchema>;
-export type User = typeof users.$inferSelect;
+export const teamStats = pgTable("team_stats", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  team: text("team").notNull(),
+  gamesPlayed: integer("games_played").notNull(),
+  firstToScore: integer("first_to_score").notNull(),
+  percentage: real("percentage").notNull(),
+  avgPoints: real("avg_points").notNull(),
+});
+
+export const insertGameSchema = createInsertSchema(games).omit({ id: true });
+export const insertPlayerStatSchema = createInsertSchema(playerStats).omit({ id: true });
+export const insertTeamStatSchema = createInsertSchema(teamStats).omit({ id: true });
+
+export type InsertGame = z.infer<typeof insertGameSchema>;
+export type Game = typeof games.$inferSelect;
+
+export type InsertPlayerStat = z.infer<typeof insertPlayerStatSchema>;
+export type PlayerStat = typeof playerStats.$inferSelect;
+
+export type InsertTeamStat = z.infer<typeof insertTeamStatSchema>;
+export type TeamStat = typeof teamStats.$inferSelect;

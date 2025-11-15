@@ -1,26 +1,38 @@
+import { useQuery } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
 import PlayerStatsTable from "@/components/PlayerStatsTable";
 import { Input } from "@/components/ui/input";
 import { Search } from "lucide-react";
-import { useState } from "react";
+import { Skeleton } from "@/components/ui/skeleton";
+import type { PlayerStat } from "@shared/schema";
 
 export default function PlayerStats() {
   const [searchQuery, setSearchQuery] = useState("");
 
-  const mockStats = [
-    { id: "1", player: "J. Allen", team: "CLE", gamesPlayed: 42, firstBaskets: 18, percentage: 42.9, avgTipWin: 64 },
-    { id: "2", player: "N. Jokic", team: "DEN", gamesPlayed: 45, firstBaskets: 16, percentage: 35.6, avgTipWin: 36 },
-    { id: "3", player: "J. Jackson Jr.", team: "MEM", gamesPlayed: 40, firstBaskets: 15, percentage: 37.5, avgTipWin: 46 },
-    { id: "4", player: "R. Gobert", team: "MIN", gamesPlayed: 44, firstBaskets: 14, percentage: 31.8, avgTipWin: 58 },
-    { id: "5", player: "C. Holmgren", team: "OKC", gamesPlayed: 38, firstBaskets: 13, percentage: 34.2, avgTipWin: 67 },
-    { id: "6", player: "D. Ayton", team: "LAL", gamesPlayed: 41, firstBaskets: 12, percentage: 29.3, avgTipWin: 58 },
-    { id: "7", player: "M. Turner", team: "MIL", gamesPlayed: 39, firstBaskets: 11, percentage: 28.2, avgTipWin: 31 },
-    { id: "8", player: "J. Poeltl", team: "TOR", gamesPlayed: 43, firstBaskets: 10, percentage: 23.3, avgTipWin: 63 },
-  ];
+  const { data: stats, isLoading } = useQuery<PlayerStat[]>({
+    queryKey: ["/api/player-stats"],
+  });
 
-  const filteredStats = mockStats.filter(stat =>
-    stat.player.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    stat.team.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredStats = useMemo(() => {
+    if (!stats) return [];
+    
+    return stats.filter(stat =>
+      stat.player.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      stat.team.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  }, [stats, searchQuery]);
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between gap-4">
+          <Skeleton className="h-8 w-64" />
+          <Skeleton className="h-10 w-64" />
+        </div>
+        <Skeleton className="h-96" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

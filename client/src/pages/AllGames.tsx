@@ -1,105 +1,76 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import GamesTable from "@/components/GamesTable";
 import StatsCard from "@/components/StatsCard";
 import { Target, TrendingUp, Calendar } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
+import type { Game } from "@shared/schema";
 
 export default function AllGames() {
   const [selectedDate, setSelectedDate] = useState("Today");
 
-  const mockGames = [
-    {
-      id: "1",
-      awayTeam: "MEM",
-      awayPlayer: "J. Jackson Jr.",
-      awayTipCount: 13,
-      awayTipPercent: 46,
-      awayScorePercent: 31,
-      homeTeam: "CLE",
-      homePlayer: "J. Allen",
-      homeTipCount: 11,
-      homeTipPercent: 64,
-      homeScorePercent: 77,
-      h2h: "N/A"
-    },
-    {
-      id: "2",
-      awayTeam: "LAL",
-      awayPlayer: "D. Ayton",
-      awayTipCount: 12,
-      awayTipPercent: 58,
-      awayScorePercent: 62,
-      homeTeam: "MIL",
-      homePlayer: "M. Turner",
-      homeTipCount: 13,
-      homeTipPercent: 31,
-      homeScorePercent: 54,
-      h2h: "N/A"
-    },
-    {
-      id: "3",
-      awayTeam: "DEN",
-      awayPlayer: "N. Jokic",
-      awayTipCount: 11,
-      awayTipPercent: 36,
-      awayScorePercent: 45,
-      homeTeam: "MIN",
-      homePlayer: "R. Gobert",
-      homeTipCount: 12,
-      homeTipPercent: 58,
-      homeScorePercent: 58,
-      h2h: "0 - 1"
-    },
-    {
-      id: "4",
-      awayTeam: "OKC",
-      awayPlayer: "C. Holmgren",
-      awayTipCount: 9,
-      awayTipPercent: 67,
-      awayScorePercent: 62,
-      homeTeam: "CHA",
-      homePlayer: "R. Kalkbrenner",
-      homeTipCount: 11,
-      homeTipPercent: 45,
-      homeScorePercent: 25,
-      h2h: "N/A"
-    },
-    {
-      id: "5",
-      awayTeam: "TOR",
-      awayPlayer: "J. Poeltl",
-      awayTipCount: 8,
-      awayTipPercent: 63,
-      awayScorePercent: 75,
-      homeTeam: "IND",
-      homePlayer: "I. Jackson",
-      homeTipCount: 8,
-      homeTipPercent: 25,
-      homeScorePercent: 50,
-      h2h: "N/A"
-    }
-  ];
+  const { data: games, isLoading } = useQuery<Game[]>({
+    queryKey: ["/api/games"],
+  });
+
+  const stats = useMemo(() => {
+    if (!games || games.length === 0) return { avgTipWin: 0, highestScore: 0, highestScoreTeam: "" };
+    
+    const totalTipPercent = games.reduce((sum, game) => {
+      return sum + game.awayTipPercent + game.homeTipPercent;
+    }, 0);
+    const avgTipWin = (totalTipPercent / (games.length * 2)).toFixed(1);
+
+    let highestScore = 0;
+    let highestScoreTeam = "";
+    games.forEach(game => {
+      if (game.awayScorePercent > highestScore) {
+        highestScore = game.awayScorePercent;
+        highestScoreTeam = `${game.awayTeam} vs ${game.homeTeam}`;
+      }
+      if (game.homeScorePercent > highestScore) {
+        highestScore = game.homeScorePercent;
+        highestScoreTeam = `${game.homeTeam} vs ${game.awayTeam}`;
+      }
+    });
+
+    return { avgTipWin, highestScore, highestScoreTeam };
+  }, [games]);
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <div className="grid gap-4 md:grid-cols-3">
+          <Skeleton className="h-32" />
+          <Skeleton className="h-32" />
+          <Skeleton className="h-32" />
+        </div>
+        <Skeleton className="h-96" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
       <div className="grid gap-4 md:grid-cols-3">
         <StatsCard
           title="Today's Games"
-          value={mockGames.length}
+          value={games?.length || 0}
           subtitle="NBA games scheduled"
           icon={Target}
         />
         <StatsCard
           title="Avg Tip Win %"
-          value="54.3%"
+          value={`${stats.avgTipWin}%`}
           subtitle="Season average"
           icon={TrendingUp}
         />
         <StatsCard
           title="Highest Score %"
-          value="77%"
-          subtitle="CLE vs MEM"
+          value={`${stats.highestScore}%`}
+          subtitle={stats.highestScoreTeam}
           icon={Calendar}
         />
       </div>
@@ -117,7 +88,7 @@ export default function AllGames() {
         </div>
       </div>
 
-      <GamesTable games={mockGames} />
+      <GamesTable games={games || []} />
     </div>
   );
 }
