@@ -8,6 +8,9 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import type { PlayerStat } from "@shared/schema";
+import fanduelLogo from "@assets/stock_images/fanduel_sportsbook_l_57e28f23.jpg";
+import draftkingsLogo from "@assets/stock_images/draftkings_sportsboo_cecba09d.jpg";
+import betmgmLogo from "@assets/stock_images/betmgm_sports_bettin_72594126.jpg";
 
 interface PlayerStatsTableProps {
   stats: PlayerStat[];
@@ -18,6 +21,19 @@ const getPercentageColor = (percentage: number) => {
   if (percentage >= 40) return "text-green-600 dark:text-green-400";
   if (percentage >= 20) return "text-yellow-600 dark:text-yellow-400";
   return "text-red-600 dark:text-red-400";
+};
+
+const getSportsbookLogo = (sportsbook: string | null) => {
+  switch (sportsbook?.toLowerCase()) {
+    case "fanduel":
+      return fanduelLogo;
+    case "draftkings":
+      return draftkingsLogo;
+    case "betmgm":
+      return betmgmLogo;
+    default:
+      return null;
+  }
 };
 
 export default function PlayerStatsTable({ stats, compact = false }: PlayerStatsTableProps) {
@@ -61,7 +77,20 @@ export default function PlayerStatsTable({ stats, compact = false }: PlayerStats
                 <TableCell className="text-right font-mono font-bold" data-testid={`text-first-baskets-${stat.id}`}>{stat.firstBaskets}</TableCell>
                 <TableCell className={`text-right font-mono font-bold ${getPercentageColor(stat.percentage)}`} data-testid={`text-percentage-${stat.id}`}>{stat.percentage.toFixed(1)}%</TableCell>
                 <TableCell className={`text-right font-mono ${getPercentageColor(stat.avgTipWin)}`} data-testid={`text-avg-tip-${stat.id}`}>{stat.avgTipWin}%</TableCell>
-                <TableCell className="text-right font-mono text-muted-foreground" data-testid={`text-odds-${stat.id}`}>{stat.odds || '-'}</TableCell>
+                <TableCell className="text-right" data-testid={`text-odds-${stat.id}`}>
+                  {stat.odds && stat.sportsbook ? (
+                    <div className="flex items-center justify-end gap-2">
+                      <img 
+                        src={getSportsbookLogo(stat.sportsbook) || ''} 
+                        alt={stat.sportsbook}
+                        className="h-5 w-auto object-contain rounded"
+                      />
+                      <span className="font-mono text-muted-foreground">{stat.odds}</span>
+                    </div>
+                  ) : (
+                    <span className="text-muted-foreground">-</span>
+                  )}
+                </TableCell>
               </TableRow>
             ))
           )}

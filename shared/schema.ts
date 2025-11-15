@@ -29,6 +29,7 @@ export const playerStats = pgTable("player_stats", {
   percentage: real("percentage").notNull(),
   avgTipWin: integer("avg_tip_win").notNull(),
   odds: text("odds"),
+  sportsbook: text("sportsbook"),
   season: text("season").notNull().default('2024/2025'),
 });
 

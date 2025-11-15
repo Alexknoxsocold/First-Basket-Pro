@@ -69,12 +69,12 @@ export class MemStorage implements IStorage {
     // Seed comprehensive player stats for 2024/2025 season - Full rosters
     const players: InsertPlayerStat[] = [
       // Cleveland Cavaliers - Updated with accurate first basket counts
-      { player: "Jarrett Allen", team: "CLE", position: "C", gamesPlayed: 11, firstBaskets: 2, percentage: 18.2, avgTipWin: 64, odds: "+750", season: "2024/2025" },
-      { player: "Donovan Mitchell", team: "CLE", position: "G", gamesPlayed: 11, firstBaskets: 0, percentage: 0.0, avgTipWin: 12, odds: "+700", season: "2024/2025" },
+      { player: "Jarrett Allen", team: "CLE", position: "C", gamesPlayed: 11, firstBaskets: 2, percentage: 18.2, avgTipWin: 64, odds: "+750", sportsbook: "fanduel", season: "2024/2025" },
+      { player: "Donovan Mitchell", team: "CLE", position: "G", gamesPlayed: 11, firstBaskets: 0, percentage: 0.0, avgTipWin: 12, odds: "+700", sportsbook: "draftkings", season: "2024/2025" },
       { player: "Darius Garland", team: "CLE", position: "PG", gamesPlayed: 14, firstBaskets: 2, percentage: 14.3, avgTipWin: 8, season: "2024/2025" },
-      { player: "Evan Mobley", team: "CLE", position: "F", gamesPlayed: 12, firstBaskets: 3, percentage: 25.0, avgTipWin: 18, odds: "+575", season: "2024/2025" },
-      { player: "Sam Merrill", team: "CLE", position: "G", gamesPlayed: 6, firstBaskets: 0, percentage: 0.0, avgTipWin: 5, odds: "+1000", season: "2024/2025" },
-      { player: "De'Andre Hunter", team: "CLE", position: "F-G", gamesPlayed: 10, firstBaskets: 3, percentage: 30.0, avgTipWin: 15, odds: "+775", season: "2024/2025" },
+      { player: "Evan Mobley", team: "CLE", position: "F", gamesPlayed: 12, firstBaskets: 3, percentage: 25.0, avgTipWin: 18, odds: "+575", sportsbook: "betmgm", season: "2024/2025" },
+      { player: "Sam Merrill", team: "CLE", position: "G", gamesPlayed: 6, firstBaskets: 0, percentage: 0.0, avgTipWin: 5, odds: "+1000", sportsbook: "draftkings", season: "2024/2025" },
+      { player: "De'Andre Hunter", team: "CLE", position: "F-G", gamesPlayed: 10, firstBaskets: 3, percentage: 30.0, avgTipWin: 15, odds: "+775", sportsbook: "betmgm", season: "2024/2025" },
       { player: "Caris LeVert", team: "CLE", position: "SG", gamesPlayed: 12, firstBaskets: 1, percentage: 8.3, avgTipWin: 7, season: "2024/2025" },
       
       // Denver Nuggets
@@ -85,12 +85,12 @@ export class MemStorage implements IStorage {
       { player: "Christian Braun", team: "DEN", position: "SG", gamesPlayed: 12, firstBaskets: 1, percentage: 8.3, avgTipWin: 6, season: "2024/2025" },
 
       // Memphis Grizzlies - Updated with accurate first basket counts
-      { player: "Jaren Jackson Jr.", team: "MEM", position: "F", gamesPlayed: 13, firstBaskets: 1, percentage: 7.7, avgTipWin: 46, odds: "+700", season: "2024/2025" },
-      { player: "Ja Morant", team: "MEM", position: "G", gamesPlayed: 11, firstBaskets: 1, percentage: 9.1, avgTipWin: 22, odds: "+725", season: "2024/2025" },
+      { player: "Jaren Jackson Jr.", team: "MEM", position: "F", gamesPlayed: 13, firstBaskets: 1, percentage: 7.7, avgTipWin: 46, odds: "+700", sportsbook: "draftkings", season: "2024/2025" },
+      { player: "Ja Morant", team: "MEM", position: "G", gamesPlayed: 11, firstBaskets: 1, percentage: 9.1, avgTipWin: 22, odds: "+725", sportsbook: "betmgm", season: "2024/2025" },
       { player: "Desmond Bane", team: "MEM", position: "SG", gamesPlayed: 13, firstBaskets: 2, percentage: 15.4, avgTipWin: 13, season: "2024/2025" },
-      { player: "Jock Landale", team: "MEM", position: "C", gamesPlayed: 13, firstBaskets: 1, percentage: 7.7, avgTipWin: 38, odds: "+1100", season: "2024/2025" },
-      { player: "Kentavious Caldwell-Pope", team: "MEM", position: "G", gamesPlayed: 13, firstBaskets: 0, percentage: 0.0, avgTipWin: 8, odds: "+1500", season: "2024/2025" },
-      { player: "Jaylen Wells", team: "MEM", position: "F", gamesPlayed: 13, firstBaskets: 1, percentage: 7.7, avgTipWin: 12, odds: "+1300", season: "2024/2025" },
+      { player: "Jock Landale", team: "MEM", position: "C", gamesPlayed: 13, firstBaskets: 1, percentage: 7.7, avgTipWin: 38, odds: "+1100", sportsbook: "fanduel", season: "2024/2025" },
+      { player: "Kentavious Caldwell-Pope", team: "MEM", position: "G", gamesPlayed: 13, firstBaskets: 0, percentage: 0.0, avgTipWin: 8, odds: "+1500", sportsbook: "fanduel", season: "2024/2025" },
+      { player: "Jaylen Wells", team: "MEM", position: "F", gamesPlayed: 13, firstBaskets: 1, percentage: 7.7, avgTipWin: 12, odds: "+1300", sportsbook: "fanduel", season: "2024/2025" },
 
       // Minnesota Timberwolves
       { player: "Rudy Gobert", team: "MIN", position: "C", gamesPlayed: 15, firstBaskets: 7, percentage: 46.7, avgTipWin: 58, season: "2024/2025" },
@@ -144,7 +144,7 @@ export class MemStorage implements IStorage {
 
     players.forEach(stat => {
       const id = randomUUID();
-      this.playerStats.set(id, { ...stat, id, odds: stat.odds || null, season: stat.season || "2024/2025" });
+      this.playerStats.set(id, { ...stat, id, odds: stat.odds || null, sportsbook: stat.sportsbook || null, season: stat.season || "2024/2025" });
     });
 
     // Seed team stats
@@ -200,7 +200,7 @@ export class MemStorage implements IStorage {
 
   async createPlayerStat(insertStat: InsertPlayerStat): Promise<PlayerStat> {
     const id = randomUUID();
-    const stat: PlayerStat = { ...insertStat, id, odds: insertStat.odds || null, season: insertStat.season || "2024/2025" };
+    const stat: PlayerStat = { ...insertStat, id, odds: insertStat.odds || null, sportsbook: insertStat.sportsbook || null, season: insertStat.season || "2024/2025" };
     this.playerStats.set(id, stat);
     return stat;
   }
