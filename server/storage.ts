@@ -68,14 +68,14 @@ export class MemStorage implements IStorage {
 
     // Seed comprehensive player stats for 2024/2025 season - Full rosters
     const players: InsertPlayerStat[] = [
-      // Cleveland Cavaliers - Updated with accurate first basket counts
+      // Cleveland Cavaliers - Updated with accurate 2024-25 roster
       { player: "Jarrett Allen", team: "CLE", position: "C", gamesPlayed: 11, firstBaskets: 2, percentage: 18.2, avgTipWin: 64, odds: "+750", sportsbook: "fanduel", season: "2024/2025" },
-      { player: "Donovan Mitchell", team: "CLE", position: "G", gamesPlayed: 11, firstBaskets: 0, percentage: 0.0, avgTipWin: 12, odds: "+700", sportsbook: "draftkings", season: "2024/2025" },
-      { player: "Darius Garland", team: "CLE", position: "PG", gamesPlayed: 14, firstBaskets: 2, percentage: 14.3, avgTipWin: 8, season: "2024/2025" },
-      { player: "Evan Mobley", team: "CLE", position: "F", gamesPlayed: 12, firstBaskets: 3, percentage: 25.0, avgTipWin: 18, odds: "+575", sportsbook: "betmgm", season: "2024/2025" },
-      { player: "Sam Merrill", team: "CLE", position: "G", gamesPlayed: 6, firstBaskets: 0, percentage: 0.0, avgTipWin: 5, odds: "+1000", sportsbook: "draftkings", season: "2024/2025" },
-      { player: "De'Andre Hunter", team: "CLE", position: "F-G", gamesPlayed: 10, firstBaskets: 3, percentage: 30.0, avgTipWin: 15, odds: "+775", sportsbook: "betmgm", season: "2024/2025" },
-      { player: "Caris LeVert", team: "CLE", position: "SG", gamesPlayed: 12, firstBaskets: 1, percentage: 8.3, avgTipWin: 7, season: "2024/2025" },
+      { player: "Donovan Mitchell", team: "CLE", position: "SG", gamesPlayed: 11, firstBaskets: 0, percentage: 0.0, avgTipWin: 12, odds: "+700", sportsbook: "draftkings", season: "2024/2025" },
+      { player: "Darius Garland", team: "CLE", position: "PG", gamesPlayed: 11, firstBaskets: 2, percentage: 18.2, avgTipWin: 8, odds: "+800", sportsbook: "bet365", season: "2024/2025" },
+      { player: "Evan Mobley", team: "CLE", position: "PF", gamesPlayed: 12, firstBaskets: 3, percentage: 25.0, avgTipWin: 18, odds: "+575", sportsbook: "betmgm", season: "2024/2025" },
+      { player: "Sam Merrill", team: "CLE", position: "SG", gamesPlayed: 6, firstBaskets: 0, percentage: 0.0, avgTipWin: 5, odds: "+1000", sportsbook: "espnbet", season: "2024/2025" },
+      { player: "De'Andre Hunter", team: "CLE", position: "SF", gamesPlayed: 10, firstBaskets: 3, percentage: 30.0, avgTipWin: 15, odds: "+775", sportsbook: "betmgm", season: "2024/2025" },
+      { player: "Caris LeVert", team: "CLE", position: "SG", gamesPlayed: 12, firstBaskets: 1, percentage: 8.3, avgTipWin: 7, odds: "+900", sportsbook: "fanduel", season: "2024/2025" },
       
       // Denver Nuggets
       { player: "Nikola Jokic", team: "DEN", position: "C", gamesPlayed: 14, firstBaskets: 6, percentage: 42.9, avgTipWin: 36, season: "2024/2025" },
@@ -84,13 +84,13 @@ export class MemStorage implements IStorage {
       { player: "Aaron Gordon", team: "DEN", position: "PF", gamesPlayed: 14, firstBaskets: 2, percentage: 14.3, avgTipWin: 9, season: "2024/2025" },
       { player: "Christian Braun", team: "DEN", position: "SG", gamesPlayed: 12, firstBaskets: 1, percentage: 8.3, avgTipWin: 6, season: "2024/2025" },
 
-      // Memphis Grizzlies - Updated with accurate first basket counts
-      { player: "Jaren Jackson Jr.", team: "MEM", position: "F", gamesPlayed: 13, firstBaskets: 1, percentage: 7.7, avgTipWin: 46, odds: "+700", sportsbook: "draftkings", season: "2024/2025" },
-      { player: "Ja Morant", team: "MEM", position: "G", gamesPlayed: 11, firstBaskets: 1, percentage: 9.1, avgTipWin: 22, odds: "+725", sportsbook: "betmgm", season: "2024/2025" },
-      { player: "Desmond Bane", team: "MEM", position: "SG", gamesPlayed: 13, firstBaskets: 2, percentage: 15.4, avgTipWin: 13, season: "2024/2025" },
-      { player: "Jock Landale", team: "MEM", position: "C", gamesPlayed: 13, firstBaskets: 1, percentage: 7.7, avgTipWin: 38, odds: "+1100", sportsbook: "fanduel", season: "2024/2025" },
-      { player: "Kentavious Caldwell-Pope", team: "MEM", position: "G", gamesPlayed: 13, firstBaskets: 0, percentage: 0.0, avgTipWin: 8, odds: "+1500", sportsbook: "fanduel", season: "2024/2025" },
-      { player: "Jaylen Wells", team: "MEM", position: "F", gamesPlayed: 13, firstBaskets: 1, percentage: 7.7, avgTipWin: 12, odds: "+1300", sportsbook: "fanduel", season: "2024/2025" },
+      // Memphis Grizzlies - Updated with accurate 2024-25 roster
+      { player: "Jaren Jackson Jr.", team: "MEM", position: "PF", gamesPlayed: 13, firstBaskets: 1, percentage: 7.7, avgTipWin: 46, odds: "+700", sportsbook: "draftkings", season: "2024/2025" },
+      { player: "Ja Morant", team: "MEM", position: "PG", gamesPlayed: 11, firstBaskets: 1, percentage: 9.1, avgTipWin: 22, odds: "+725", sportsbook: "betmgm", season: "2024/2025" },
+      { player: "Desmond Bane", team: "MEM", position: "SG", gamesPlayed: 13, firstBaskets: 2, percentage: 15.4, avgTipWin: 13, odds: "+850", sportsbook: "bet365", season: "2024/2025" },
+      { player: "Zach Edey", team: "MEM", position: "C", gamesPlayed: 10, firstBaskets: 1, percentage: 10.0, avgTipWin: 52, odds: "+1100", sportsbook: "fanduel", season: "2024/2025" },
+      { player: "Marcus Smart", team: "MEM", position: "PG", gamesPlayed: 12, firstBaskets: 0, percentage: 0.0, avgTipWin: 8, odds: "+1200", sportsbook: "espnbet", season: "2024/2025" },
+      { player: "Jaylen Wells", team: "MEM", position: "SF", gamesPlayed: 13, firstBaskets: 1, percentage: 7.7, avgTipWin: 12, odds: "+1300", sportsbook: "fanduel", season: "2024/2025" },
 
       // Minnesota Timberwolves
       { player: "Rudy Gobert", team: "MIN", position: "C", gamesPlayed: 15, firstBaskets: 7, percentage: 46.7, avgTipWin: 58, season: "2024/2025" },

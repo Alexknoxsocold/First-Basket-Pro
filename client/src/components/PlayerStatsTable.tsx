@@ -8,9 +8,11 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import type { PlayerStat } from "@shared/schema";
-import fanduelLogo from "@assets/stock_images/fanduel_sportsbook_l_57e28f23.jpg";
-import draftkingsLogo from "@assets/stock_images/draftkings_sportsboo_cecba09d.jpg";
-import betmgmLogo from "@assets/stock_images/betmgm_sports_bettin_72594126.jpg";
+import fanduelLogo from "@assets/stock_images/fanduel_official_log_98a9f9e7.jpg";
+import draftkingsLogo from "@assets/stock_images/draftkings_official__a889a444.jpg";
+import betmgmLogo from "@assets/stock_images/betmgm_official_logo_f6868395.jpg";
+import bet365Logo from "@assets/stock_images/bet365_official_logo_4393739a.jpg";
+import espnbetLogo from "@assets/stock_images/espn_bet_official_lo_d6faee7d.jpg";
 
 interface PlayerStatsTableProps {
   stats: PlayerStat[];
@@ -31,6 +33,11 @@ const getSportsbookLogo = (sportsbook: string | null) => {
       return draftkingsLogo;
     case "betmgm":
       return betmgmLogo;
+    case "bet365":
+      return bet365Logo;
+    case "espnbet":
+    case "espn bet":
+      return espnbetLogo;
     default:
       return null;
   }
