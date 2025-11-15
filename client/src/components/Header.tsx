@@ -11,7 +11,7 @@ import { useState, useEffect } from "react";
 import logoImage from "@assets/AGSX8074_1763247106947.jpeg";
 
 export default function Header() {
-  const [theme, setTheme] = useState<"light" | "dark">("dark");
+  const [theme, setTheme] = useState<"light" | "dark">("light");
   const [season, setSeason] = useState("2024/2025");
 
   useEffect(() => {
