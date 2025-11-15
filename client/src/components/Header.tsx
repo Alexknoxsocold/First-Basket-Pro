@@ -29,9 +29,9 @@ export default function Header() {
         <div className="flex items-center justify-between h-16 gap-4">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 bg-primary rounded-md flex items-center justify-center">
-              <span className="text-primary-foreground font-bold text-sm">FB</span>
+              <span className="text-primary-foreground font-bold text-sm">SC</span>
             </div>
-            <h1 className="text-xl font-bold">First Basket PRO</h1>
+            <h1 className="text-xl font-bold">socold's first basket model</h1>
           </div>
 
           <div className="flex items-center gap-3">
