@@ -225,3 +225,66 @@ export async function getSession(req: Request, res: Response) {
   const { passwordHash: _, ...userWithoutPassword } = req.user;
   res.json({ user: userWithoutPassword });
 }
+
+export async function inviteAccess(req: Request, res: Response) {
+  try {
+    const { code } = req.body;
+
+    // Validate input
+    if (!code) {
+      return res.status(400).json({ error: "Invite code is required" });
+    }
+
+    // Check invite code against environment variable
+    const validInviteCode = process.env.INVITE_CODE || "FIRSTBASKET2024";
+    
+    if (code !== validInviteCode) {
+      return res.status(401).json({ error: "Invalid invite code" });
+    }
+
+    // Create a guest user if one doesn't exist
+    const guestEmail = "guest@firstbasket.pro";
+    let user = await storage.getUserByEmail(guestEmail);
+    
+    if (!user) {
+      // Create guest user with random password (they won't use it)
+      const guestPassword = randomBytes(32).toString('hex');
+      const passwordHash = await hashPassword(guestPassword);
+      
+      user = await storage.createUser({
+        email: guestEmail,
+        passwordHash,
+        role: 'guest'
+      });
+    }
+
+    // Generate session token
+    const sessionToken = generateSessionToken();
+    const expiresAt = new Date(Date.now() + SESSION_DURATION_DAYS * 24 * 60 * 60 * 1000);
+
+    // Create session
+    await storage.createSession({
+      userId: user.id,
+      sessionToken,
+      expiresAt
+    });
+
+    // Set cookie with proper security settings
+    // Use secure cookies when served over HTTPS (supports proxy chains)
+    const forwardedProto = String(req.headers['x-forwarded-proto'] || '').split(',')[0]?.trim().toLowerCase();
+    const isSecure = req.secure || forwardedProto === 'https';
+    res.cookie('session', sessionToken, {
+      httpOnly: true,
+      secure: isSecure,
+      sameSite: 'lax',
+      maxAge: SESSION_DURATION_DAYS * 24 * 60 * 60 * 1000
+    });
+
+    // Return user without password hash
+    const { passwordHash: _, ...userWithoutPassword } = user;
+    res.json({ user: userWithoutPassword });
+  } catch (error) {
+    console.error('[Auth] Invite access error:', error);
+    res.status(500).json({ error: "Failed to process invite" });
+  }
+}

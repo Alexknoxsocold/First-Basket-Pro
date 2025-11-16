@@ -15,6 +15,7 @@ import Parlays from "@/pages/Parlays";
 import Admin from "@/pages/Admin";
 import Login from "@/pages/Login";
 import Signup from "@/pages/Signup";
+import Invite from "@/pages/Invite";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -22,6 +23,7 @@ function Router() {
     <Switch>
       <Route path="/signup" component={Signup} />
       <Route path="/login" component={Login} />
+      <Route path="/invite" component={Invite} />
       <Route path="/">
         <ProtectedRoute>
           <AllGames />
