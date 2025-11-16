@@ -117,7 +117,7 @@ export default function Signup() {
               type="submit"
               className="w-full"
               disabled={isLoading}
-              data-testid="button-signup"
+              data-testid="button-signup-submit"
             >
               {isLoading ? (
                 <>

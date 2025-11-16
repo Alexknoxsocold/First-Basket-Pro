@@ -6,6 +6,9 @@ import { authMiddleware } from "./auth";
 
 const app = express();
 
+// Trust first proxy for proper HTTPS detection when behind reverse proxy
+app.set('trust proxy', 1);
+
 declare module 'http' {
   interface IncomingMessage {
     rawBody: unknown

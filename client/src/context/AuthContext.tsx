@@ -24,39 +24,50 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Check for existing session on mount
   useEffect(() => {
-    checkSession();
+    const abortController = new AbortController();
+    checkSession(abortController.signal);
+    return () => abortController.abort();
   }, []);
 
-  async function checkSession() {
+  async function checkSession(signal?: AbortSignal) {
     try {
       const response = await fetch("/api/auth/session", {
-        credentials: "include"
+        credentials: "include",
+        signal
       });
       
       if (response.ok) {
         const data = await response.json();
-        setUser(data.user);
+        if (!signal?.aborted) {
+          setUser(data.user);
+        }
       } else {
-        setUser(null);
+        if (!signal?.aborted) {
+          setUser(null);
+        }
       }
     } catch (error) {
-      console.error("Failed to check session:", error);
-      setUser(null);
+      if (error instanceof Error && error.name !== 'AbortError') {
+        console.error("Failed to check session:", error);
+      }
+      if (!signal?.aborted) {
+        setUser(null);
+      }
     } finally {
-      setIsLoading(false);
+      if (!signal?.aborted) {
+        setIsLoading(false);
+      }
     }
   }
 
   async function login(email: string, password: string) {
-    const res = await apiRequest("POST", "/api/auth/login", { email, password });
-    const data = await res.json();
-    setUser(data.user);
+    await apiRequest("POST", "/api/auth/login", { email, password });
+    await checkSession();
   }
 
   async function signup(email: string, password: string) {
-    const res = await apiRequest("POST", "/api/auth/signup", { email, password });
-    const data = await res.json();
-    setUser(data.user);
+    await apiRequest("POST", "/api/auth/signup", { email, password });
+    await checkSession();
   }
 
   async function logout() {

@@ -84,6 +84,12 @@ export async function signup(req: Request, res: Response) {
       return res.status(400).json({ error: "Email and password are required" });
     }
 
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({ error: "Invalid email format" });
+    }
+
     if (password.length < 8) {
       return res.status(400).json({ error: "Password must be at least 8 characters" });
     }
@@ -113,10 +119,13 @@ export async function signup(req: Request, res: Response) {
       expiresAt
     });
 
-    // Set cookie
+    // Set cookie with proper security settings
+    // Use secure cookies when served over HTTPS (supports proxy chains)
+    const forwardedProto = String(req.headers['x-forwarded-proto'] || '').split(',')[0]?.trim().toLowerCase();
+    const isSecure = req.secure || forwardedProto === 'https';
     res.cookie('session', sessionToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: isSecure,
       sameSite: 'lax',
       maxAge: SESSION_DURATION_DAYS * 24 * 60 * 60 * 1000
     });
@@ -137,6 +146,12 @@ export async function login(req: Request, res: Response) {
     // Validate input
     if (!email || !password) {
       return res.status(400).json({ error: "Email and password are required" });
+    }
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({ error: "Invalid email format" });
     }
 
     // Find user
@@ -162,10 +177,13 @@ export async function login(req: Request, res: Response) {
       expiresAt
     });
 
-    // Set cookie
+    // Set cookie with proper security settings
+    // Use secure cookies when served over HTTPS (supports proxy chains)
+    const forwardedProto = String(req.headers['x-forwarded-proto'] || '').split(',')[0]?.trim().toLowerCase();
+    const isSecure = req.secure || forwardedProto === 'https';
     res.cookie('session', sessionToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: isSecure,
       sameSite: 'lax',
       maxAge: SESSION_DURATION_DAYS * 24 * 60 * 60 * 1000
     });

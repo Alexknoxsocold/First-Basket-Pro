@@ -39,35 +39,14 @@ export default function Admin() {
   const [editingGame, setEditingGame] = useState<string | null>(null);
   const [localLineups, setLocalLineups] = useState<Record<string, { away: string[], home: string[] }>>({});
 
-  useEffect(() => {
-    if (!authLoading && !user) {
-      toast({
-        title: "Authentication required",
-        description: "Please log in to access admin features",
-        variant: "destructive"
-      });
-      setLocation("/login");
-    }
-  }, [user, authLoading, setLocation, toast]);
-
-  if (authLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-[50vh]">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
-  }
-
-  if (!user) {
-    return null;
-  }
-
   const { data: games, isLoading: gamesLoading } = useQuery<Game[]>({
     queryKey: ["/api/games"],
+    enabled: !!user,
   });
 
   const { data: playerStats, isLoading: playersLoading } = useQuery<PlayerStat[]>({
     queryKey: ["/api/player-stats"],
+    enabled: !!user,
   });
 
   const updateLineupMutation = useMutation({
@@ -91,6 +70,24 @@ export default function Admin() {
       });
     },
   });
+
+  useEffect(() => {
+    if (!authLoading && !user) {
+      setLocation("/login");
+    }
+  }, [user, authLoading, setLocation]);
+
+  if (authLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[50vh]">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return null;
+  }
 
   const todayGames = games?.filter(g => g.gameTime?.includes(new Date().toISOString().split('T')[0])) || [];
 
