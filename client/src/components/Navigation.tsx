@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 const navItems = [
   { label: "All Games", path: "/" },
   { label: "Opening Tips", path: "/opening-tips" },
-  { label: "Player Stats", path: "/player-stats" },
+  { label: "Player FB Stats", path: "/player-stats" },
   { label: "Parlays", path: "/parlays" },
 ];
 
