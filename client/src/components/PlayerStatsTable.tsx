@@ -8,11 +8,11 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import type { PlayerStat } from "@shared/schema";
-import fanduelLogo from "@assets/stock_images/fanduel_official_log_98a9f9e7.jpg";
-import draftkingsLogo from "@assets/stock_images/draftkings_official__a889a444.jpg";
-import betmgmLogo from "@assets/stock_images/betmgm_official_logo_f6868395.jpg";
+import fanduelLogo from "@assets/fanduel-sportsbook-icon-filled-256_1763251312090.png";
+import draftkingsLogo from "@assets/unnamed_1763251320186.png";
+import betmgmLogo from "@assets/cgen-partner-icon-betmgm_1763251287741.png";
 import bet365Logo from "@assets/stock_images/bet365_official_logo_4393739a.jpg";
-import espnbetLogo from "@assets/stock_images/espn_bet_official_lo_d6faee7d.jpg";
+import espnbetLogo from "@assets/6554e066511e1_1763251305883.webp";
 
 interface PlayerStatsTableProps {
   stats: PlayerStat[];
