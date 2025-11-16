@@ -4,8 +4,6 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { useAuth } from "@/context/AuthContext";
-import { useLocation } from "wouter";
 import { Settings, Save, RotateCw, Loader2 } from "lucide-react";
 import { useState, useEffect } from "react";
 import {
@@ -33,20 +31,16 @@ interface PlayerStat {
 }
 
 export default function Admin() {
-  const { user, isLoading: authLoading } = useAuth();
-  const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [editingGame, setEditingGame] = useState<string | null>(null);
   const [localLineups, setLocalLineups] = useState<Record<string, { away: string[], home: string[] }>>({});
 
   const { data: games, isLoading: gamesLoading } = useQuery<Game[]>({
     queryKey: ["/api/games"],
-    enabled: !!user,
   });
 
   const { data: playerStats, isLoading: playersLoading } = useQuery<PlayerStat[]>({
     queryKey: ["/api/player-stats"],
-    enabled: !!user,
   });
 
   const updateLineupMutation = useMutation({
@@ -70,24 +64,6 @@ export default function Admin() {
       });
     },
   });
-
-  useEffect(() => {
-    if (!authLoading && !user) {
-      setLocation("/login");
-    }
-  }, [user, authLoading, setLocation]);
-
-  if (authLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-[50vh]">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
-  }
-
-  if (!user) {
-    return null;
-  }
 
   const todayGames = games?.filter(g => g.gameTime?.includes(new Date().toISOString().split('T')[0])) || [];
 

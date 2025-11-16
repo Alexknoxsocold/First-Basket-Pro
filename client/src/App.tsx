@@ -4,6 +4,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/context/AuthContext";
+import ProtectedRoute from "@/components/ProtectedRoute";
 import Header from "@/components/Header";
 import Navigation from "@/components/Navigation";
 import AllGames from "@/pages/AllGames";
@@ -19,14 +20,38 @@ import NotFound from "@/pages/not-found";
 function Router() {
   return (
     <Switch>
-      <Route path="/" component={AllGames} />
-      <Route path="/opening-tips" component={OpeningTips} />
-      <Route path="/player-stats" component={PlayerStats} />
-      <Route path="/team-stats" component={TeamStats} />
-      <Route path="/parlays" component={Parlays} />
-      <Route path="/admin" component={Admin} />
-      <Route path="/login" component={Login} />
       <Route path="/signup" component={Signup} />
+      <Route path="/login" component={Login} />
+      <Route path="/">
+        <ProtectedRoute>
+          <AllGames />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/opening-tips">
+        <ProtectedRoute>
+          <OpeningTips />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/player-stats">
+        <ProtectedRoute>
+          <PlayerStats />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/team-stats">
+        <ProtectedRoute>
+          <TeamStats />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/parlays">
+        <ProtectedRoute>
+          <Parlays />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/admin">
+        <ProtectedRoute>
+          <Admin />
+        </ProtectedRoute>
+      </Route>
       <Route component={NotFound} />
     </Switch>
   );
