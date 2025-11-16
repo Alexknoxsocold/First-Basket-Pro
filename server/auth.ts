@@ -1,13 +1,11 @@
 import type { Request, Response, NextFunction } from "express";
 import bcrypt from "bcrypt";
-import { randomBytes } from "crypto";
 import { storage } from "./storage";
 import type { User } from "@shared/schema";
 
 const SALT_ROUNDS = 12;
-const SESSION_DURATION_DAYS = 30;
 
-// Extend Express Request type to include user
+// Extend Express Request and Session types
 declare global {
   namespace Express {
     interface Request {
@@ -16,9 +14,10 @@ declare global {
   }
 }
 
-// Generate a secure session token
-export function generateSessionToken(): string {
-  return randomBytes(32).toString('hex');
+declare module 'express-session' {
+  interface SessionData {
+    userId?: string;
+  }
 }
 
 // Hash a password with bcrypt
@@ -33,32 +32,15 @@ export async function verifyPassword(password: string, hash: string): Promise<bo
 
 // Auth middleware - attaches user to request if valid session exists
 export async function authMiddleware(req: Request, res: Response, next: NextFunction) {
-  const sessionToken = req.cookies?.session;
-
-  if (!sessionToken) {
+  if (!req.session?.userId) {
     return next();
   }
 
   try {
-    const session = await storage.getSessionByToken(sessionToken);
-    
-    if (!session) {
-      return next();
-    }
-
-    // Check if session is expired
-    if (new Date(session.expiresAt) < new Date()) {
-      await storage.deleteSession(session.id);
-      res.clearCookie('session');
-      return next();
-    }
-
-    // Get user and attach to request
-    const user = await storage.getUserById(session.userId);
+    const user = await storage.getUserById(req.session.userId);
     if (user) {
       req.user = user;
     }
-
     next();
   } catch (error) {
     console.error('[Auth] Middleware error:', error);
@@ -108,27 +90,8 @@ export async function signup(req: Request, res: Response) {
       role: 'user'
     });
 
-    // Create session
-    const sessionToken = generateSessionToken();
-    const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + SESSION_DURATION_DAYS);
-
-    await storage.createSession({
-      userId: user.id,
-      sessionToken,
-      expiresAt
-    });
-
-    // Set cookie with proper security settings
-    // Use secure cookies when served over HTTPS (supports proxy chains)
-    const forwardedProto = String(req.headers['x-forwarded-proto'] || '').split(',')[0]?.trim().toLowerCase();
-    const isSecure = req.secure || forwardedProto === 'https';
-    res.cookie('session', sessionToken, {
-      httpOnly: true,
-      secure: isSecure,
-      sameSite: 'lax',
-      maxAge: SESSION_DURATION_DAYS * 24 * 60 * 60 * 1000
-    });
+    // Store user ID in session
+    req.session.userId = user.id;
 
     // Return user without password hash
     const { passwordHash: _, ...userWithoutPassword } = user;
@@ -166,27 +129,8 @@ export async function login(req: Request, res: Response) {
       return res.status(401).json({ error: "Invalid email or password" });
     }
 
-    // Create session
-    const sessionToken = generateSessionToken();
-    const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + SESSION_DURATION_DAYS);
-
-    await storage.createSession({
-      userId: user.id,
-      sessionToken,
-      expiresAt
-    });
-
-    // Set cookie with proper security settings
-    // Use secure cookies when served over HTTPS (supports proxy chains)
-    const forwardedProto = String(req.headers['x-forwarded-proto'] || '').split(',')[0]?.trim().toLowerCase();
-    const isSecure = req.secure || forwardedProto === 'https';
-    res.cookie('session', sessionToken, {
-      httpOnly: true,
-      secure: isSecure,
-      sameSite: 'lax',
-      maxAge: SESSION_DURATION_DAYS * 24 * 60 * 60 * 1000
-    });
+    // Store user ID in session
+    req.session.userId = user.id;
 
     // Return user without password hash
     const { passwordHash: _, ...userWithoutPassword } = user;
@@ -199,17 +143,14 @@ export async function login(req: Request, res: Response) {
 
 export async function logout(req: Request, res: Response) {
   try {
-    const sessionToken = req.cookies?.session;
-
-    if (sessionToken) {
-      const session = await storage.getSessionByToken(sessionToken);
-      if (session) {
-        await storage.deleteSession(session.id);
+    req.session.destroy((err) => {
+      if (err) {
+        console.error('[Auth] Logout error:', err);
+        return res.status(500).json({ error: "Failed to log out" });
       }
-    }
-
-    res.clearCookie('session');
-    res.json({ message: "Logged out successfully" });
+      res.clearCookie('connect.sid');
+      res.json({ message: "Logged out successfully" });
+    });
   } catch (error) {
     console.error('[Auth] Logout error:', error);
     res.status(500).json({ error: "Failed to log out" });
@@ -247,8 +188,8 @@ export async function inviteAccess(req: Request, res: Response) {
     let user = await storage.getUserByEmail(guestEmail);
     
     if (!user) {
-      // Create guest user with random password (they won't use it)
-      const guestPassword = randomBytes(32).toString('hex');
+      // Create guest user with a secure random password (they won't use it)
+      const guestPassword = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
       const passwordHash = await hashPassword(guestPassword);
       
       user = await storage.createUser({
@@ -258,27 +199,8 @@ export async function inviteAccess(req: Request, res: Response) {
       });
     }
 
-    // Generate session token
-    const sessionToken = generateSessionToken();
-    const expiresAt = new Date(Date.now() + SESSION_DURATION_DAYS * 24 * 60 * 60 * 1000);
-
-    // Create session
-    await storage.createSession({
-      userId: user.id,
-      sessionToken,
-      expiresAt
-    });
-
-    // Set cookie with proper security settings
-    // Use secure cookies when served over HTTPS (supports proxy chains)
-    const forwardedProto = String(req.headers['x-forwarded-proto'] || '').split(',')[0]?.trim().toLowerCase();
-    const isSecure = req.secure || forwardedProto === 'https';
-    res.cookie('session', sessionToken, {
-      httpOnly: true,
-      secure: isSecure,
-      sameSite: 'lax',
-      maxAge: SESSION_DURATION_DAYS * 24 * 60 * 60 * 1000
-    });
+    // Store user ID in session
+    req.session.userId = user.id;
 
     // Return user without password hash
     const { passwordHash: _, ...userWithoutPassword } = user;

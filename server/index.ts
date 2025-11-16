@@ -1,5 +1,8 @@
 import express, { type Request, Response, NextFunction } from "express";
 import cookieParser from "cookie-parser";
+import session from "express-session";
+import connectPgSimple from "connect-pg-simple";
+import { Pool } from "@neondatabase/serverless";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { authMiddleware } from "./auth";
@@ -8,6 +11,29 @@ const app = express();
 
 // Trust first proxy for proper HTTPS detection when behind reverse proxy
 app.set('trust proxy', 1);
+
+// Set up PostgreSQL session store
+const PgSession = connectPgSimple(session);
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+
+const sessionMiddleware = session({
+  store: new PgSession({
+    pool,
+    tableName: 'session',
+    createTableIfMissing: true
+  }),
+  secret: process.env.SESSION_SECRET || 'firstbasket-secret-key-change-in-production',
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    secure: process.env.NODE_ENV === 'production',
+    httpOnly: true,
+    maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
+    sameSite: 'lax'
+  }
+});
+
+app.use(sessionMiddleware);
 
 declare module 'http' {
   interface IncomingMessage {
