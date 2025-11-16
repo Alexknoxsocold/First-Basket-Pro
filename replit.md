@@ -7,6 +7,8 @@ NBA First Basket PRO is a sports analytics web application providing predictions
 Preferred communication style: Simple, everyday language.
 
 ## Recent Bug Fixes (November 2025)
+**Session Persistence Fix (11/16/2025)**: Fixed critical issue where user logins weren't being saved across server restarts. Migrated from in-memory session storage to persistent PostgreSQL storage using express-session and connect-pg-simple. Added WebSocket support via `neonConfig.webSocketConstructor = ws` for Neon serverless database. Sessions now explicitly save to PostgreSQL before responding. Users stay logged in for 30 days even after server restarts.
+
 **Date Sync Bug Fix (11/16/2025)**: Fixed critical bug where daily sync was not explicitly fetching TODAY's date, causing ESPN API to return default (yesterday's) games instead of today's schedule. Now explicitly passes today's date to ESPN API. Also fixed gameDate persistence issue where games marked "Today" would never update to actual dates - added cleanup step that runs daily to delete old games from previous dates. Fixed game matching to use ESPN game ID as primary key with date+team fallback, preventing duplicate games on back-to-back matchups. Added automatic lineup sync every 30 minutes during game hours (9 AM-11 PM ET) to ensure lineups update throughout the day as they become available. **User Display**: Frontend now filters to show only TODAY's games (both "Today" label and current ISO date), hiding all past and future games from display. Old games are automatically deleted daily to keep database clean.
 
 ## System Architecture
