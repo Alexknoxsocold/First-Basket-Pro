@@ -348,12 +348,13 @@ export class DailySyncService {
     }
 
     if (matchingGame) {
-      // Update existing game with ESPN ID and sync timestamp
+      // Update existing game with ESPN ID and sync timestamp (backfill ESPN ID if missing)
       await this.storage.updateGame(matchingGame.id, {
         espnGameId: event.id,
         lastSynced: new Date().toISOString()
       });
-      console.log(`[DailySync] ✓ Updated upcoming game: ${awayTeam.team.abbreviation} @ ${homeTeam.team.abbreviation}`);
+      const action = matchingGame.espnGameId ? 'Updated' : 'Backfilled ESPN ID for';
+      console.log(`[DailySync] ✓ ${action} upcoming game: ${awayTeam.team.abbreviation} @ ${homeTeam.team.abbreviation} (${event.id})`);
     } else {
       // Create new game with default values (lineup and tip data will be updated later)
       const gameDateTime = new Date(event.date);
