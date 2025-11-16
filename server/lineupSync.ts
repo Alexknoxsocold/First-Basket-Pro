@@ -1,98 +1,95 @@
 import type { IStorage } from './storage';
 
-interface LineupsAPIPlayer {
+interface APISportsTeam {
+  id: number;
   name: string;
-  position: string;
-  team?: string;
-  injury_status?: string;
+  code: string;
 }
 
-interface LineupsAPIGame {
-  home_route: string;
-  away_route: string;
-  home_players: LineupsAPIPlayer[];
-  away_players: LineupsAPIPlayer[];
-  home_team?: string;
-  away_team?: string;
+interface APISportsPlayer {
+  id: number;
+  name: string;
+  pos: string;
 }
 
-interface LineupsAPIResponse {
-  data: LineupsAPIGame[];
+interface APISportsLineup {
+  team: APISportsTeam;
+  formation: string;
+  startingLineups: APISportsPlayer[];
 }
 
-const NBA_TEAM_MAPPING: Record<string, string> = {
-  'cavaliers': 'CLE',
-  'lakers': 'LAL',
-  'thunder': 'OKC',
-  'raptors': 'TOR',
-  'pacers': 'IND',
-  'bucks': 'MIL',
-  'timberwolves': 'MIN',
-  'nuggets': 'DEN',
-  'grizzlies': 'MEM',
-  'hornets': 'CHA',
-  'celtics': 'BOS',
-  'warriors': 'GSW',
-  'heat': 'MIA',
-  'suns': 'PHX',
-  'mavericks': 'DAL',
-  'clippers': 'LAC',
-  'kings': 'SAC',
-  '76ers': 'PHI',
-  'sixers': 'PHI',
-  'knicks': 'NYK',
-  'nets': 'BKN',
-  'bulls': 'CHI',
-  'hawks': 'ATL',
-  'wizards': 'WAS',
-  'magic': 'ORL',
-  'pistons': 'DET',
-  'rockets': 'HOU',
-  'spurs': 'SAS',
-  'jazz': 'UTA',
-  'pelicans': 'NOP',
-  'blazers': 'POR',
-  'trail-blazers': 'POR',
-};
+interface APISportsGame {
+  id: number;
+  league: {
+    name: string;
+  };
+  teams: {
+    away: APISportsTeam;
+    home: APISportsTeam;
+  };
+  lineups?: {
+    away: APISportsLineup;
+    home: APISportsLineup;
+  };
+}
+
+interface APISportsResponse {
+  response: APISportsGame[];
+}
 
 export class LineupSync {
   private storage: IStorage;
-  private apiUrl = 'https://api.lineups.com/nba/fetch/lineups/gateway';
+  private apiUrl = 'https://v1.basketball.api-sports.io';
+  private apiKey: string | undefined;
 
   constructor(storage: IStorage) {
     this.storage = storage;
-  }
-
-  private teamRouteToAbbrev(route: string): string {
-    const normalized = route.toLowerCase().trim();
-    return NBA_TEAM_MAPPING[normalized] || route.toUpperCase().slice(0, 3);
+    this.apiKey = process.env.APISPORTS_KEY;
   }
 
   async syncStartingLineups(): Promise<void> {
+    if (!this.apiKey) {
+      console.warn('[LineupSync] APISPORTS_KEY not configured. Skipping lineup sync.');
+      console.warn('[LineupSync] To enable automatic lineup updates, add your API-Sports.io key to Replit Secrets.');
+      return;
+    }
+
     try {
-      console.log('[LineupSync] Fetching starting lineups from lineups.com API...');
+      // Get today's date in YYYY-MM-DD format
+      const today = new Date().toISOString().split('T')[0];
       
-      const response = await fetch(this.apiUrl);
+      console.log('[LineupSync] Fetching NBA games from API-Sports.io...');
+      
+      const response = await fetch(`${this.apiUrl}/games?date=${today}&league=12&season=2024-2025`, {
+        headers: {
+          'x-apisports-key': this.apiKey
+        }
+      });
       
       if (!response.ok) {
-        throw new Error(`API responded with status ${response.status}`);
+        throw new Error(`API-Sports.io responded with status ${response.status}`);
       }
 
-      const data: LineupsAPIResponse = await response.json();
+      const data: APISportsResponse = await response.json();
       
-      if (!data.data || data.data.length === 0) {
-        console.log('[LineupSync] No games found in API response');
+      if (!data.response || data.response.length === 0) {
+        console.log('[LineupSync] No NBA games found for today');
         return;
       }
 
-      console.log(`[LineupSync] Found ${data.data.length} games with lineups`);
+      console.log(`[LineupSync] Found ${data.response.length} NBA games`);
 
       const todayGames = await this.storage.getGamesByDate('Today');
       const playerStats = await this.storage.getPlayerStats();
 
-      for (const apiGame of data.data) {
-        const awayTeam = this.teamRouteToAbbrev(apiGame.away_route);
-        const homeTeam = this.teamRouteToAbbrev(apiGame.home_route);
+      for (const apiGame of data.response) {
+        if (!apiGame.lineups || !apiGame.lineups.away.startingLineups || !apiGame.lineups.home.startingLineups) {
+          console.log(`[LineupSync] No lineups available yet for ${apiGame.teams.away.code} @ ${apiGame.teams.home.code}`);
+          continue;
+        }
+
+        const awayTeam = apiGame.teams.away.code;
+        const homeTeam = apiGame.teams.home.code;
 
         console.log(`[LineupSync] Processing ${awayTeam} @ ${homeTeam}`);
 
@@ -101,15 +98,15 @@ export class LineupSync {
         );
 
         if (!matchingGame) {
-          console.log(`[LineupSync] No matching game found for ${awayTeam} @ ${homeTeam}`);
+          console.log(`[LineupSync] No matching game found in storage for ${awayTeam} @ ${homeTeam}`);
           continue;
         }
 
-        const awayStarters = apiGame.away_players
+        const awayStarters = apiGame.lineups.away.startingLineups
           .slice(0, 5)
           .map(p => p.name.trim());
         
-        const homeStarters = apiGame.home_players
+        const homeStarters = apiGame.lineups.home.startingLineups
           .slice(0, 5)
           .map(p => p.name.trim());
 
@@ -121,6 +118,7 @@ export class LineupSync {
         console.log(`[LineupSync] Updated ${awayTeam} starters:`, awayStarters);
         console.log(`[LineupSync] Updated ${homeTeam} starters:`, homeStarters);
 
+        // Check if all starters have player stats
         const allStarters = [...awayStarters, ...homeStarters];
         for (const starterName of allStarters) {
           const playerStat = playerStats.find(ps => 
@@ -128,7 +126,7 @@ export class LineupSync {
           );
 
           if (!playerStat) {
-            console.log(`[LineupSync] Warning: No stats found for starter ${starterName}`);
+            console.log(`[LineupSync] Warning: No stats found for starter ${starterName} - may need to add to playerStats`);
           }
         }
       }
