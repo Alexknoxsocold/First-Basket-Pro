@@ -12,11 +12,11 @@ Preferred communication style: Simple, everyday language.
 The application employs a Linear/Vercel-inspired modern data dashboard design, prioritizing maximum information density and minimal visual noise. Typography uses Inter for primary content and JetBrains Mono for numerical data. The layout utilizes Tailwind's spacing primitives with a max-width container strategy. All data tables feature sticky headers, alternating row backgrounds, and responsive design with horizontal scroll on mobile. The UI is built with `shadcn/ui` components on `Radix UI` primitives, styled with `Tailwind CSS`.
 
 ### Technical Implementations
-**Frontend**: Developed with React 18 and TypeScript, using Wouter for routing and TanStack Query for server state management. Key pages include All Games, Opening Tips, Player Stats, Team Stats, and Parlays.
+**Frontend**: Developed with React 18 and TypeScript, using Wouter for routing and TanStack Query for server state management. Key pages include All Games, Opening Tips, Player Stats, Team Stats, Parlays, and Admin.
 **Backend**: Implemented with Express.js and TypeScript, using ES Modules and esbuild for production bundling. Data is currently stored in-memory via a `MemStorage` class, abstracting data access for future database migration.
-**API Endpoints**: RESTful endpoints under `/api` provide game data, player statistics (including injury status and today's starters), and team statistics. Manual trigger endpoints exist for syncing injuries, lineups, and a comprehensive daily sync.
+**API Endpoints**: RESTful endpoints under `/api` provide game data, player statistics (including injury status and today's starters), team statistics, and lineup updates. Manual trigger endpoints exist for syncing injuries, lineups, and a comprehensive daily sync. The `PUT /api/games/:id/lineups` endpoint supports manual lineup management with comprehensive validation (type checking, duplicate detection, whitespace trimming).
 **Daily Sync System**: A `DailySyncService` orchestrates nightly data updates (12:30 AM ET) using `node-cron`. It syncs injury data (ESPN API), starting lineups (API-Sports.io), fetches game schedules/scores (ESPN Scoreboard API), and processes completed games.
-**Lineup Tracking System**: The `LineupSync` service fetches NBA starting lineups from API-Sports.io, updating game records with `awayStarters` and `homeStarters`. Lineups are typically available 30-60 minutes before tipoff.
+**Lineup Tracking System**: The `LineupSync` service fetches NBA starting lineups from API-Sports.io, updating game records with `awayStarters` and `homeStarters`. Lineups are typically available 30-60 minutes before tipoff. **Admin Lineup Manager**: A manual UI at `/admin` enables click-based lineup management for today's games when API data is unavailable or needs correction. Features team-filtered player selection, duplicate prevention, and real-time validation.
 **Injury Tracking System**: The `InjurySync` service fetches NBA injury data hourly from ESPN's public API, mapping statuses to canonical values and displaying them with color-coded badges in the frontend.
 **Data Models**: Uses Drizzle ORM for PostgreSQL (though currently in-memory), with Zod for validation. Schemas include Games (matchup info, jump ball, tips, start times, starting lineups), Player Stats (player ID, team, position, games played, first basket occurrences, Q1 FGA Rate, Last 10 FB%, injury status, betting odds), and Team Stats (team ID, games played, first-to-score occurrences).
 
@@ -24,6 +24,7 @@ The application employs a Linear/Vercel-inspired modern data dashboard design, p
 - **Starting Lineup Filtering**: Player Stats page displays only starting players from today's games, dynamically updated.
 - **Chronological Game Sorting**: Games are displayed in order of start time.
 - **Automatic Lineup Updates**: Integrates with API-Sports.io for real-time starting lineup data, including identifying replacement starters.
+- **Manual Lineup Management**: Admin UI at `/admin` provides click-based lineup editing with team-filtered player dropdowns, client-side duplicate prevention, and backend validation (type checking, duplicate detection, trimming).
 - **Automatic Injury Tracking**: Hourly updates from ESPN NBA Injury API, with visual injury badges.
 - **Advanced Analytics**: Includes Q1 FGA Rate and Last 10 Games FB% statistics.
 - **Sportsbook Integration**: Displays sportsbook logos (FanDuel, DraftKings, BetMGM, Bet365, ESPN Bet) for odds.

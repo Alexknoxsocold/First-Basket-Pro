@@ -151,6 +151,19 @@ export default function Admin() {
     setEditingGame(null);
   };
 
+  const hasDuplicates = (gameId: string): boolean => {
+    const lineups = localLineups[gameId];
+    if (!lineups) return false;
+    
+    const awaySet = new Set(lineups.away.filter(name => name && name.trim() !== ''));
+    const homeSet = new Set(lineups.home.filter(name => name && name.trim() !== ''));
+    
+    const awayFilledCount = lineups.away.filter(name => name && name.trim() !== '').length;
+    const homeFilledCount = lineups.home.filter(name => name && name.trim() !== '').length;
+    
+    return awaySet.size !== awayFilledCount || homeSet.size !== homeFilledCount;
+  };
+
   if (gamesLoading || playersLoading) {
     return (
       <div className="space-y-6">
@@ -294,7 +307,7 @@ export default function Admin() {
                     <div className="flex gap-2 mt-4 pt-4 border-t">
                       <Button
                         onClick={() => handleSave(game.id)}
-                        disabled={updateLineupMutation.isPending}
+                        disabled={updateLineupMutation.isPending || hasDuplicates(game.id)}
                         data-testid={`button-save-${game.id}`}
                       >
                         {updateLineupMutation.isPending ? (
