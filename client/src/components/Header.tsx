@@ -11,13 +11,17 @@ import { useState, useEffect } from "react";
 import logoImage from "@assets/AGSX8074_1763247106947.jpeg";
 
 export default function Header() {
-  const [theme, setTheme] = useState<"light" | "dark">("dark");
+  const [theme, setTheme] = useState<"light" | "dark">(() => {
+    const savedTheme = localStorage.getItem("theme");
+    return (savedTheme as "light" | "dark") || "dark";
+  });
   const [season, setSeason] = useState("2024/2025");
 
   useEffect(() => {
     const root = window.document.documentElement;
     root.classList.remove("light", "dark");
     root.classList.add(theme);
+    localStorage.setItem("theme", theme);
   }, [theme]);
 
   const toggleTheme = () => {
