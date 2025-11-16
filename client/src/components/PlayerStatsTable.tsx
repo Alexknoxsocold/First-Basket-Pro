@@ -7,6 +7,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { AlertCircle, AlertTriangle, Activity } from "lucide-react";
 import type { PlayerStat } from "@shared/schema";
 import fanduelLogo from "@assets/fanduel-sportsbook-icon-filled-256_1763251312090.png";
 import draftkingsLogo from "@assets/unnamed_1763251320186.png";
@@ -43,6 +44,36 @@ const getSportsbookLogo = (sportsbook: string | null) => {
   }
 };
 
+const getInjuryBadge = (status: string | null, note: string | null) => {
+  if (!status) return null;
+
+  switch (status) {
+    case "OUT":
+      return (
+        <Badge variant="destructive" className="text-xs gap-1" data-testid="badge-injury-out">
+          <AlertCircle className="h-3 w-3" />
+          OUT
+        </Badge>
+      );
+    case "QUESTIONABLE":
+      return (
+        <Badge variant="secondary" className="text-xs gap-1 bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20" data-testid="badge-injury-questionable">
+          <AlertTriangle className="h-3 w-3" />
+          QUESTIONABLE
+        </Badge>
+      );
+    case "DAY-TO-DAY":
+      return (
+        <Badge variant="outline" className="text-xs gap-1" data-testid="badge-injury-dtd">
+          <Activity className="h-3 w-3" />
+          DAY-TO-DAY
+        </Badge>
+      );
+    default:
+      return null;
+  }
+};
+
 export default function PlayerStatsTable({ stats, compact = false }: PlayerStatsTableProps) {
   const colSpan = compact ? 9 : 10;
   
@@ -73,7 +104,12 @@ export default function PlayerStatsTable({ stats, compact = false }: PlayerStats
           ) : (
             stats.map((stat) => (
               <TableRow key={stat.id} className="hover-elevate" data-testid={`row-player-${stat.id}`}>
-                <TableCell className="font-medium" data-testid={`text-player-name-${stat.id}`}>{stat.player}</TableCell>
+                <TableCell className="font-medium" data-testid={`text-player-name-${stat.id}`}>
+                  <div className="flex items-center gap-2">
+                    <span>{stat.player}</span>
+                    {getInjuryBadge(stat.injuryStatus ?? null, stat.injuryNote ?? null)}
+                  </div>
+                </TableCell>
                 {!compact && (
                   <TableCell>
                     <Badge variant="secondary" className="text-xs" data-testid={`badge-team-${stat.id}`}>{stat.team}</Badge>

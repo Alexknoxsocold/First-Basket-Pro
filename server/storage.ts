@@ -12,6 +12,7 @@ export interface IStorage {
   getPlayerStatsByTeam(team: string): Promise<PlayerStat[]>;
   getPlayerStatById(id: string): Promise<PlayerStat | undefined>;
   createPlayerStat(stat: InsertPlayerStat): Promise<PlayerStat>;
+  updatePlayerInjuryStatus(playerId: string, injuryStatus: string | null, injuryNote: string | null): Promise<PlayerStat | undefined>;
 
   // Team Stats
   getTeamStats(): Promise<TeamStat[]>;
@@ -159,7 +160,10 @@ export class MemStorage implements IStorage {
         sportsbook: stat.sportsbook || null, 
         season: stat.season || "2024/2025",
         q1FgaRate: stat.q1FgaRate ?? null,
-        last10GamesPercent: stat.last10GamesPercent ?? null
+        last10GamesPercent: stat.last10GamesPercent ?? null,
+        injuryStatus: stat.injuryStatus ?? null,
+        injuryNote: stat.injuryNote ?? null,
+        lastUpdated: stat.lastUpdated ?? null
       });
     });
 
@@ -223,10 +227,27 @@ export class MemStorage implements IStorage {
       sportsbook: insertStat.sportsbook || null, 
       season: insertStat.season || "2024/2025",
       q1FgaRate: insertStat.q1FgaRate ?? null,
-      last10GamesPercent: insertStat.last10GamesPercent ?? null
+      last10GamesPercent: insertStat.last10GamesPercent ?? null,
+      injuryStatus: insertStat.injuryStatus ?? null,
+      injuryNote: insertStat.injuryNote ?? null,
+      lastUpdated: insertStat.lastUpdated ?? null
     };
     this.playerStats.set(id, stat);
     return stat;
+  }
+
+  async updatePlayerInjuryStatus(playerId: string, injuryStatus: string | null, injuryNote: string | null): Promise<PlayerStat | undefined> {
+    const player = this.playerStats.get(playerId);
+    if (!player) return undefined;
+    
+    const updated: PlayerStat = {
+      ...player,
+      injuryStatus,
+      injuryNote,
+      lastUpdated: new Date().toISOString()
+    };
+    this.playerStats.set(playerId, updated);
+    return updated;
   }
 
   // Team Stats

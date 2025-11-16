@@ -1,8 +1,13 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
+import { InjurySync } from "./injurySync";
+
+const injurySync = new InjurySync(storage);
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Start automatic injury sync
+  injurySync.start();
   // Games endpoints
   app.get("/api/games", async (_req, res) => {
     try {
@@ -69,6 +74,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(stat);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch team stat" });
+    }
+  });
+
+  // Injury sync endpoint (manual trigger)
+  app.post("/api/sync-injuries", async (_req, res) => {
+    try {
+      await injurySync.syncInjuries();
+      res.json({ message: "Injury sync completed successfully" });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to sync injuries" });
     }
   });
 
