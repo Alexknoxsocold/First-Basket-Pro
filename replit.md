@@ -6,7 +6,19 @@ NBA First Basket PRO is a sports analytics web application that provides predict
 
 ## Recent Changes
 
-**November 16, 2025** - Daily Automated Update System + Q1 FGA% Color Grading
+**November 16, 2025** - Starting Lineup Filtering + Chronological Game Sorting
+- **Starting Lineup Filtering**: Player Stats page now displays only starting players from today's games
+  - Added `awayStarters` and `homeStarters` arrays to game schema (5 players per team)
+  - Created GET /api/today-starters endpoint that filters playerStats by starting lineups
+  - Player Stats page shows exactly 50 starters (5 games × 2 teams × 5 players)
+  - Updated page title to "Today's Starting Lineups - First Basket Stats"
+  - Each matchup displays only the 5 starters per team (no bench players)
+  - All 50 starters have complete playerStats entries with realistic statistics
+- **Chronological Game Sorting**: Games now display in order by start time
+  - Added `gameTime` field to game schema (ISO 8601 timestamp)
+  - GET /api/games endpoint sorts by gameTime in ascending order
+  - Games display earliest to latest (7:00 PM → 7:30 PM → 8:00 PM → 10:00 PM → 11:00 PM ET)
+  - All Games page automatically shows games chronologically
 - **Daily Sync System**: Implemented comprehensive DailySyncService that orchestrates all daily data updates
   - Fetches daily game schedules/scores from ESPN Scoreboard API (free, no auth required)
   - Processes completed games and identifies final scores
@@ -14,6 +26,7 @@ NBA First Basket PRO is a sports analytics web application that provides predict
   - Runs automatically at 12:30 AM ET every night via node-cron scheduler
   - Manual trigger endpoint: POST /api/sync/daily
   - Integrates with existing injury sync system for complete daily refresh
+  - Note: ESPN free API does not provide starting lineups; lineups must be manually seeded or obtained from third-party APIs
 - **Q1 FGA% Color Grading**: Added color-coded visual feedback to Q1 FGA Rate column
   - Green (≥20%): High first quarter shot attempts
   - Yellow (12-19%): Medium first quarter shot attempts
@@ -78,9 +91,10 @@ Preferred communication style: Simple, everyday language.
 **Data Layer**: Currently implemented with in-memory storage (MemStorage class) with seeded mock data. The storage interface (IStorage) abstracts data access, allowing easy migration to a database implementation.
 
 **API Endpoints**:
-- GET /api/games - Retrieve all games
+- GET /api/games - Retrieve all games (sorted by gameTime chronologically)
 - GET /api/games/:date - Retrieve games by date
 - GET /api/player-stats - Retrieve all player statistics (includes injury status)
+- GET /api/today-starters - Retrieve only starting players from today's games
 - GET /api/player-stats/:id - Retrieve specific player stat
 - GET /api/team-stats - Retrieve all team statistics
 - GET /api/team-stats/:team - Retrieve specific team stat
@@ -110,7 +124,8 @@ The service uses ESPN's free public Scoreboard API endpoint (`https://site.api.e
 - Opening tip statistics (count, win percentage)
 - First-to-score probabilities
 - Head-to-head records
-- Game dates
+- Game dates and start times
+- Starting lineups (awayStarters, homeStarters arrays with 5 players each)
 
 **Player Stats Table**:
 - Player identification (name, team, position)
