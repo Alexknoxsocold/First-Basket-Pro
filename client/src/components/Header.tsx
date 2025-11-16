@@ -11,7 +11,7 @@ import { useState, useEffect } from "react";
 import logoImage from "@assets/AGSX8074_1763247106947.jpeg";
 
 export default function Header() {
-  const [theme, setTheme] = useState<"light" | "dark">("light");
+  const [theme, setTheme] = useState<"light" | "dark">("dark");
   const [season, setSeason] = useState("2024/2025");
 
   useEffect(() => {
@@ -32,9 +32,9 @@ export default function Header() {
             <img 
               src={logoImage} 
               alt="First Basket Pro logo" 
-              width={32}
-              height={32}
-              className="w-8 h-8 rounded-md object-cover"
+              width={40}
+              height={40}
+              className="w-10 h-10 rounded-md object-cover"
               data-testid="img-logo"
             />
             <h1 className="text-xl font-bold">First Basket Pro</h1>
