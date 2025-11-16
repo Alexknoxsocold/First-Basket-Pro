@@ -4,6 +4,7 @@ import { storage } from "./storage";
 import { InjurySync } from "./injurySync";
 import { LineupSync } from "./lineupSync";
 import { createDailySyncService } from "./dailySync";
+import { signup, login, logout, getSession, requireAuth } from "./auth";
 import cron from "node-cron";
 
 const injurySync = new InjurySync(storage);
@@ -13,6 +14,13 @@ const dailySyncService = createDailySyncService(storage);
 export async function registerRoutes(app: Express): Promise<Server> {
   // Start automatic injury sync
   injurySync.start();
+
+  // Auth endpoints
+  app.post("/api/auth/signup", signup);
+  app.post("/api/auth/login", login);
+  app.post("/api/auth/logout", logout);
+  app.get("/api/auth/session", getSession);
+
   // Games endpoints
   app.get("/api/games", async (_req, res) => {
     try {
@@ -39,8 +47,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Update game lineups
-  app.put("/api/games/:id/lineups", async (req, res) => {
+  // Update game lineups (protected - requires authentication)
+  app.put("/api/games/:id/lineups", requireAuth, async (req, res) => {
     try {
       const { awayStarters, homeStarters } = req.body;
       

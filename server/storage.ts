@@ -371,6 +371,7 @@ export class MemStorage implements IStorage {
     const user: User = {
       ...insertUser,
       id,
+      role: insertUser.role || 'user',
       createdAt: new Date()
     };
     this.users.set(id, user);
@@ -398,7 +399,8 @@ export class MemStorage implements IStorage {
 
   async deleteExpiredSessions(): Promise<void> {
     const now = new Date();
-    for (const [id, session] of this.sessions.entries()) {
+    const entries = Array.from(this.sessions.entries());
+    for (const [id, session] of entries) {
       if (new Date(session.expiresAt) < now) {
         this.sessions.delete(id);
       }
