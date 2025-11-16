@@ -11,9 +11,14 @@ import type { Game } from "@shared/schema";
 export default function AllGames() {
   const [selectedDate, setSelectedDate] = useState("Today");
 
-  const { data: games, isLoading } = useQuery<Game[]>({
+  const { data: allGames, isLoading } = useQuery<Game[]>({
     queryKey: ["/api/games"],
   });
+
+  const games = useMemo(() => {
+    if (!allGames) return [];
+    return allGames.filter(game => game.gameDate === "Today");
+  }, [allGames]);
 
   const stats = useMemo(() => {
     if (!games || games.length === 0) return { avgTipWin: 0, highestScore: 0, highestScoreTeam: "" };
@@ -57,7 +62,7 @@ export default function AllGames() {
       <div className="grid gap-4 md:grid-cols-3">
         <StatsCard
           title="Today's Games"
-          value={games?.length || 0}
+          value={games.length}
           subtitle="NBA games scheduled"
           icon={Target}
         />
@@ -88,7 +93,7 @@ export default function AllGames() {
         </div>
       </div>
 
-      <GamesTable games={games || []} />
+      <GamesTable games={games} />
     </div>
   );
 }

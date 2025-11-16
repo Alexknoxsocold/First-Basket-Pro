@@ -7,6 +7,7 @@ export interface IStorage {
   getGamesByDate(date: string): Promise<Game[]>;
   createGame(game: InsertGame): Promise<Game>;
   updateGame(gameId: string, updates: Partial<Omit<Game, 'id'>>): Promise<Game | undefined>;
+  deleteGame(gameId: string): Promise<void>;
 
   // Player Stats
   getPlayerStats(): Promise<PlayerStat[]>;
@@ -274,6 +275,10 @@ export class MemStorage implements IStorage {
     };
     this.games.set(gameId, updated);
     return updated;
+  }
+
+  async deleteGame(gameId: string): Promise<void> {
+    this.games.delete(gameId);
   }
 
   // Player Stats

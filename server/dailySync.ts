@@ -139,43 +139,47 @@ export class DailySyncService {
   }
 
   /**
-   * Clean up yesterday's games - update "Today" to actual dates for games that are no longer today
+   * Clean up old games - delete games from previous dates and keep only today's games
    */
   private async cleanupYesterdayGames(): Promise<void> {
     const allGames = await this.storage.getGames();
-    const gamesToUpdate = allGames.filter(game => 
-      game.gameDate === 'Today' && game.gameTime
-    );
+    const today = new Date();
+    const todayDateOnly = today.toISOString().split('T')[0];
     
-    let updatedCount = 0;
-    for (const game of gamesToUpdate) {
+    let deletedCount = 0;
+    
+    for (const game of allGames) {
       try {
-        if (!game.gameTime) continue; // Skip if no gameTime (TypeScript safety)
-        
-        const gameDateTime = new Date(game.gameTime);
-        const today = new Date();
-        
-        // Check if the game is NOT today (compare dates only, ignore time)
-        const gameDateOnly = gameDateTime.toISOString().split('T')[0];
-        const todayDateOnly = today.toISOString().split('T')[0];
-        
-        if (gameDateOnly !== todayDateOnly) {
-          // Update gameDate to ISO format (YYYY-MM-DD) for consistency
-          await this.storage.updateGame(game.id, {
-            gameDate: gameDateOnly
-          });
-          updatedCount++;
-          console.log(`[DailySync] Updated old game date: ${game.awayTeam} @ ${game.homeTeam} (${gameDateOnly})`);
+        // Delete games that are not "Today" and not from today's date
+        if (game.gameDate !== 'Today') {
+          // Check if the game is from a previous date
+          const isOldDate = game.gameDate < todayDateOnly;
+          
+          if (isOldDate) {
+            await this.storage.deleteGame(game.id);
+            deletedCount++;
+            console.log(`[DailySync] Deleted old game: ${game.awayTeam} @ ${game.homeTeam} (${game.gameDate})`);
+          }
+        } else if (game.gameTime) {
+          // For games marked "Today", check if they're actually from a previous date
+          const gameDateTime = new Date(game.gameTime);
+          const gameDateOnly = gameDateTime.toISOString().split('T')[0];
+          
+          if (gameDateOnly < todayDateOnly) {
+            await this.storage.deleteGame(game.id);
+            deletedCount++;
+            console.log(`[DailySync] Deleted old game marked 'Today': ${game.awayTeam} @ ${game.homeTeam} (actual date: ${gameDateOnly})`);
+          }
         }
       } catch (error) {
-        console.error(`[DailySync] Error updating game date for ${game.awayTeam} @ ${game.homeTeam}:`, error);
+        console.error(`[DailySync] Error deleting old game ${game.awayTeam} @ ${game.homeTeam}:`, error);
       }
     }
     
-    if (updatedCount > 0) {
-      console.log(`[DailySync] Cleaned up ${updatedCount} old game(s)`);
+    if (deletedCount > 0) {
+      console.log(`[DailySync] Deleted ${deletedCount} old game(s)`);
     } else {
-      console.log('[DailySync] No old games to clean up');
+      console.log('[DailySync] No old games to delete');
     }
   }
 
