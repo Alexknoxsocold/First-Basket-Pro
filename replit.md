@@ -12,15 +12,17 @@ Preferred communication style: Simple, everyday language.
 The application employs a Linear/Vercel-inspired modern data dashboard design, prioritizing maximum information density and minimal visual noise. Typography uses Inter for primary content and JetBrains Mono for numerical data. The layout utilizes Tailwind's spacing primitives with a max-width container strategy. All data tables feature sticky headers, alternating row backgrounds, and responsive design with horizontal scroll on mobile. The UI is built with `shadcn/ui` components on `Radix UI` primitives, styled with `Tailwind CSS`.
 
 ### Technical Implementations
-**Frontend**: Developed with React 18 and TypeScript, using Wouter for routing and TanStack Query for server state management. Key pages include All Games, Opening Tips, Player Stats, Team Stats, Parlays, and Admin.
-**Backend**: Implemented with Express.js and TypeScript, using ES Modules and esbuild for production bundling. Data is currently stored in-memory via a `MemStorage` class, abstracting data access for future database migration.
-**API Endpoints**: RESTful endpoints under `/api` provide game data, player statistics (including injury status and today's starters), team statistics, and lineup updates. Manual trigger endpoints exist for syncing injuries, lineups, and a comprehensive daily sync. The `PUT /api/games/:id/lineups` endpoint supports manual lineup management with comprehensive validation (type checking, duplicate detection, whitespace trimming).
+**Frontend**: Developed with React 18 and TypeScript, using Wouter for routing and TanStack Query for server state management. Key pages include All Games, Opening Tips, Player Stats, Team Stats, Parlays, Admin, Login, and Signup.
+**Backend**: Implemented with Express.js and TypeScript, using ES Modules and esbuild for production bundling. Data is currently stored in-memory via a `MemStorage` class, abstracting data access for future database migration. Express configured with `trust proxy` for correct HTTPS detection behind reverse proxies.
+**Authentication System**: Custom email/password authentication with bcrypt password hashing and secure cookie-based sessions. Sessions expire after 30 days. Cookie security adapts to deployment environment (httpOnly, sameSite: 'lax', secure flag based on HTTPS detection via req.secure or x-forwarded-proto header). AuthContext provides login/signup/logout functions and manages session state with AbortController to prevent memory leaks.
+**API Endpoints**: RESTful endpoints under `/api` provide game data, player statistics (including injury status and today's starters), team statistics, and lineup updates. Authentication endpoints at `/api/auth` handle signup, login, logout, and session verification. Manual trigger endpoints exist for syncing injuries, lineups, and a comprehensive daily sync. The `PUT /api/games/:id/lineups` endpoint is protected with authentication middleware and supports manual lineup management with comprehensive validation (type checking, duplicate detection, whitespace trimming).
 **Daily Sync System**: A `DailySyncService` orchestrates nightly data updates (12:30 AM ET) using `node-cron`. It syncs injury data (ESPN API), starting lineups (API-Sports.io), fetches game schedules/scores (ESPN Scoreboard API), and processes completed games.
 **Lineup Tracking System**: The `LineupSync` service fetches NBA starting lineups from API-Sports.io, updating game records with `awayStarters` and `homeStarters`. Lineups are typically available 30-60 minutes before tipoff. **Admin Lineup Manager**: A manual UI at `/admin` enables click-based lineup management for today's games when API data is unavailable or needs correction. Features team-filtered player selection, duplicate prevention, and real-time validation.
 **Injury Tracking System**: The `InjurySync` service fetches NBA injury data hourly from ESPN's public API, mapping statuses to canonical values and displaying them with color-coded badges in the frontend.
-**Data Models**: Uses Drizzle ORM for PostgreSQL (though currently in-memory), with Zod for validation. Schemas include Games (matchup info, jump ball, tips, start times, starting lineups), Player Stats (player ID, team, position, games played, first basket occurrences, Q1 FGA Rate, Last 10 FB%, injury status, betting odds), and Team Stats (team ID, games played, first-to-score occurrences).
+**Data Models**: Uses Drizzle ORM for PostgreSQL (though currently in-memory), with Zod for validation. Schemas include Users (id, email, passwordHash, role, createdAt), Sessions (sessionToken, userId, expiresAt), Games (matchup info, jump ball, tips, start times, starting lineups), Player Stats (player ID, team, position, games played, first basket occurrences, Q1 FGA Rate, Last 10 FB%, injury status, betting odds), and Team Stats (team ID, games played, first-to-score occurrences).
 
 ### Feature Specifications
+- **Custom Authentication**: Email/password authentication with secure session management protecting admin features while keeping analytics public.
 - **Starting Lineup Filtering**: Player Stats page displays only starting players from today's games, dynamically updated.
 - **Chronological Game Sorting**: Games are displayed in order of start time.
 - **Automatic Lineup Updates**: Integrates with API-Sports.io for real-time starting lineup data, including identifying replacement starters.
@@ -51,6 +53,11 @@ The application employs a Linear/Vercel-inspired modern data dashboard design, p
 - **Drizzle Zod**: Schema validation integration.
 - **@neondatabase/serverless**: PostgreSQL driver (configured).
 - **connect-pg-simple**: PostgreSQL session store for Express.
+
+### Authentication and Security
+- **bcrypt**: Password hashing (10 rounds).
+- **cookie-parser**: Cookie parsing middleware for Express.
+- **Custom session management**: Cookie-based sessions with 30-day expiration.
 
 ### Date Handling
 - **date-fns**: Date manipulation and formatting.
