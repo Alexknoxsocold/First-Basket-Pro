@@ -95,12 +95,6 @@ export default function PlayerStats() {
     <div className="space-y-6">
       <div>
         <h2 className="text-lg font-semibold mb-2">Today's Starting Lineups - First Basket Stats</h2>
-        <p className="text-sm text-muted-foreground">
-          Starting lineups automatically update with injury data hourly. Players marked OUT show replacement starters. {playersWithBaskets} of {totalPlayers} players shown have scored a first basket this season.
-        </p>
-        <p className="text-xs text-muted-foreground mt-1">
-          ⚠️ Always verify lineups against official sources (Underdog, sportsbooks, team news) before betting.
-        </p>
       </div>
 
       <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
