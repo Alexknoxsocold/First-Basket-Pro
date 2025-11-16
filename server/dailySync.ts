@@ -371,9 +371,23 @@ export class DailySyncService {
       const gameDateTime = new Date(event.date);
       const today = new Date();
       
-      // Use ISO date format (YYYY-MM-DD) for consistency
-      const gameDateOnly = gameDateTime.toISOString().split('T')[0];
-      const todayDateOnly = today.toISOString().split('T')[0];
+      // Get dates in ET timezone (America/New_York) for proper "today" comparison
+      const getDateInET = (date: Date): string => {
+        const formatter = new Intl.DateTimeFormat('en-US', {
+          timeZone: 'America/New_York',
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit'
+        });
+        const parts = formatter.formatToParts(date);
+        const year = parts.find(p => p.type === 'year')?.value;
+        const month = parts.find(p => p.type === 'month')?.value;
+        const day = parts.find(p => p.type === 'day')?.value;
+        return `${year}-${month}-${day}`;
+      };
+      
+      const gameDateOnly = getDateInET(gameDateTime);
+      const todayDateOnly = getDateInET(today);
       const isToday = gameDateOnly === todayDateOnly;
       
       await this.storage.createGame({
