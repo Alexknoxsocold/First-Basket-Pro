@@ -10,13 +10,16 @@ export const games = pgTable("games", {
   awayTipCount: integer("away_tip_count").notNull(),
   awayTipPercent: integer("away_tip_percent").notNull(),
   awayScorePercent: integer("away_score_percent").notNull(),
+  awayStarters: text("away_starters").array(), // full starting lineup (5 players)
   homeTeam: text("home_team").notNull(),
   homePlayer: text("home_player").notNull(),
   homeTipCount: integer("home_tip_count").notNull(),
   homeTipPercent: integer("home_tip_percent").notNull(),
   homeScorePercent: integer("home_score_percent").notNull(),
+  homeStarters: text("home_starters").array(), // full starting lineup (5 players)
   h2h: text("h2h").notNull(),
   gameDate: text("game_date").notNull(),
+  gameTime: text("game_time"), // ISO timestamp for sorting games chronologically
   status: text("status").notNull().default('scheduled'), // scheduled, in_progress, completed
   awayScore: integer("away_score"), // actual final score
   homeScore: integer("home_score"), // actual final score

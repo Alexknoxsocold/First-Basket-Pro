@@ -19,8 +19,9 @@ export default function PlayerStats() {
   const [searchQuery, setSearchQuery] = useState("");
   const [dateFilter, setDateFilter] = useState<string>("all");
 
+  // Use today-starters endpoint to only show starting players
   const { data: stats, isLoading: statsLoading } = useQuery<PlayerStat[]>({
-    queryKey: ["/api/player-stats"],
+    queryKey: ["/api/today-starters"],
   });
 
   const { data: games, isLoading: gamesLoading } = useQuery<Game[]>({
@@ -43,8 +44,15 @@ export default function PlayerStats() {
     if (!filteredGames || !stats) return [];
 
     return filteredGames.map(game => {
-      const awayPlayers = stats.filter(s => s.team === game.awayTeam);
-      const homePlayers = stats.filter(s => s.team === game.homeTeam);
+      // Filter to only show starting players for this game
+      const awayPlayers = stats.filter(s => 
+        s.team === game.awayTeam && 
+        game.awayStarters?.includes(s.player)
+      );
+      const homePlayers = stats.filter(s => 
+        s.team === game.homeTeam && 
+        game.homeStarters?.includes(s.player)
+      );
 
       // Apply search filter
       const filterBySearch = (playerStats: PlayerStat[]) => {
@@ -56,8 +64,8 @@ export default function PlayerStats() {
         );
       };
 
-      const filteredAwayPlayers = filterBySearch(awayPlayers).sort((a, b) => b.firstBaskets - a.firstBaskets);
-      const filteredHomePlayers = filterBySearch(homePlayers).sort((a, b) => b.firstBaskets - a.firstBaskets);
+      const filteredAwayPlayers = filterBySearch(awayPlayers).sort((a, b) => b.percentage - a.percentage);
+      const filteredHomePlayers = filterBySearch(homePlayers).sort((a, b) => b.percentage - a.percentage);
 
       return {
         game,
@@ -86,9 +94,9 @@ export default function PlayerStats() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-lg font-semibold mb-2">Player First Basket Stats - 2024/2025 Season</h2>
+        <h2 className="text-lg font-semibold mb-2">Today's Starting Lineups - First Basket Stats</h2>
         <p className="text-sm text-muted-foreground">
-          Compare team rosters side-by-side for upcoming matchups. {playersWithBaskets} of {totalPlayers} players have scored a first basket this season.
+          View starting lineups for today's games only. {playersWithBaskets} of {totalPlayers} starters have scored a first basket this season.
         </p>
       </div>
 

@@ -15,7 +15,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/games", async (_req, res) => {
     try {
       const games = await storage.getGames();
-      res.json(games);
+      // Sort games by gameTime (earliest first), then by gameDate
+      const sortedGames = games.sort((a, b) => {
+        if (a.gameTime && b.gameTime) {
+          return new Date(a.gameTime).getTime() - new Date(b.gameTime).getTime();
+        }
+        return 0;
+      });
+      res.json(sortedGames);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch games" });
     }
@@ -55,6 +62,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(stat);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch player stat" });
+    }
+  });
+
+  // Today's starters endpoint
+  app.get("/api/today-starters", async (_req, res) => {
+    try {
+      const starters = await storage.getTodayStarters();
+      res.json(starters);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch today's starters" });
     }
   });
 
