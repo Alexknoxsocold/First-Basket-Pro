@@ -6,6 +6,18 @@ NBA First Basket PRO is a sports analytics web application that provides predict
 
 ## Recent Changes
 
+**November 16, 2025** - Automatic Injury Tracking System
+- Implemented automatic injury tracking using ESPN NBA Injury API (free, no auth required)
+- Added three new player stat fields: injuryStatus, injuryNote, lastUpdated
+- Created InjurySync service that fetches and updates injury data every hour
+- Added visual injury badges to Player Stats page (red=OUT, yellow=QUESTIONABLE, gray=DAY-TO-DAY)
+- Robust error handling: preserves existing data if ESPN API fails, distinguishes between API failure vs. no injuries
+- Canonical status mapping with raw ESPN status fallback for unmapped injury types
+- Manual sync endpoint available: POST /api/sync-injuries
+- Currently tracking 13 injured players from 98 total ESPN injury reports
+- Added Q1 FGA Rate and Last 10 Games FB% statistics inspired by BettingPros research
+- Integrated sportsbook logos (FanDuel, DraftKings, BetMGM, Bet365, ESPN Bet) for odds display
+
 **November 15, 2025** - Initial MVP Complete
 - Built complete frontend with 5 main pages: All Games, Opening Tips, Player Stats, Team Stats, and Parlays
 - Implemented backend API routes serving game data, player statistics, and team statistics
@@ -16,7 +28,7 @@ NBA First Basket PRO is a sports analytics web application that provides predict
 - Seeded in-memory storage with realistic NBA game and statistics data
 - All features tested and verified working end-to-end
 
-**Current Status**: Fully functional MVP with in-memory data storage. Ready for integration with live NBA stats APIs (BALLDONTLIE or NBA Stats API recommended).
+**Current Status**: Fully functional with automatic injury tracking and advanced analytics. Features real-time injury updates via ESPN API (updates hourly).
 
 ## User Preferences
 
@@ -56,12 +68,15 @@ Preferred communication style: Simple, everyday language.
 **API Endpoints**:
 - GET /api/games - Retrieve all games
 - GET /api/games/:date - Retrieve games by date
-- GET /api/player-stats - Retrieve all player statistics
+- GET /api/player-stats - Retrieve all player statistics (includes injury status)
 - GET /api/player-stats/:id - Retrieve specific player stat
 - GET /api/team-stats - Retrieve all team statistics
 - GET /api/team-stats/:team - Retrieve specific team stat
+- POST /api/sync-injuries - Manually trigger injury data sync from ESPN
 
-**Server Features**: Custom logging middleware for API requests, JSON request parsing with raw body preservation, Vite integration for development with HMR support.
+**Server Features**: Custom logging middleware for API requests, JSON request parsing with raw body preservation, Vite integration for development with HMR support, automatic injury sync service running hourly.
+
+**Injury Tracking System**: InjurySync service fetches NBA injury data from ESPN's public API every hour. The system uses canonical status mapping (OUT, QUESTIONABLE, DAY-TO-DAY) with fallback to raw ESPN statuses for unmapped injury types. Robust error handling preserves existing injury data if the ESPN API fails, and distinguishes between API failures vs. legitimate zero-injury responses. The frontend displays color-coded injury badges on the Player Stats page.
 
 ### Data Models
 
@@ -76,11 +91,15 @@ Preferred communication style: Simple, everyday language.
 - Game dates
 
 **Player Stats Table**:
-- Player identification (name, team)
+- Player identification (name, team, position)
 - Games played count
 - First basket occurrences
 - Success percentage
 - Average tip win rate
+- Q1 FGA Rate (first quarter field goal attempt percentage)
+- Last 10 Games First Basket % (recent form indicator)
+- Injury tracking (status: OUT/QUESTIONABLE/DAY-TO-DAY/HEALTHY, note, lastUpdated)
+- Betting odds with sportsbook logos (FanDuel, DraftKings, BetMGM, Bet365, ESPN Bet)
 
 **Team Stats Table**:
 - Team identification
