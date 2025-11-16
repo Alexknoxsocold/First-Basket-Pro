@@ -47,6 +47,7 @@ export class DailySyncService {
   async runDailySync(): Promise<void> {
     console.log('[DailySync] Starting daily sync process...');
     const results = {
+      cleanupOldGames: false,
       injuries: false,
       lineups: false,
       todayGames: false,
@@ -54,6 +55,15 @@ export class DailySyncService {
       upcomingGames: false
     };
     
+    // Step 0: Clean up yesterday's games (update "Today" to actual dates)
+    try {
+      console.log('[DailySync] Step 0: Cleaning up yesterday\'s games...');
+      await this.cleanupYesterdayGames();
+      results.cleanupOldGames = true;
+    } catch (error) {
+      console.error('[DailySync] Step 0 failed (cleanup), continuing:', error);
+    }
+
     // Step 1: Sync injuries (resilient to failures)
     try {
       console.log('[DailySync] Step 1: Syncing injury data...');
@@ -64,7 +74,7 @@ export class DailySyncService {
       console.error('[DailySync] Step 1 failed (injuries), continuing:', error);
     }
 
-    // Step 1.5: Sync starting lineups from lineups.com (resilient to failures)
+    // Step 1.5: Sync starting lineups from API-Sports (resilient to failures)
     try {
       console.log('[DailySync] Step 1.5: Syncing starting lineups...');
       const lineupSync = new LineupSync(this.storage);
@@ -125,6 +135,47 @@ export class DailySyncService {
     } else {
       console.log(`[DailySync] ⚠ Daily sync completed with warnings (${successCount}/${totalSteps} steps succeeded)`);
       console.log('[DailySync] Results:', results);
+    }
+  }
+
+  /**
+   * Clean up yesterday's games - update "Today" to actual dates for games that are no longer today
+   */
+  private async cleanupYesterdayGames(): Promise<void> {
+    const allGames = await this.storage.getGames();
+    const gamesToUpdate = allGames.filter(game => 
+      game.gameDate === 'Today' && game.gameTime
+    );
+    
+    let updatedCount = 0;
+    for (const game of gamesToUpdate) {
+      try {
+        if (!game.gameTime) continue; // Skip if no gameTime (TypeScript safety)
+        
+        const gameDateTime = new Date(game.gameTime);
+        const today = new Date();
+        
+        // Check if the game is NOT today (compare dates only, ignore time)
+        const gameDateOnly = gameDateTime.toISOString().split('T')[0];
+        const todayDateOnly = today.toISOString().split('T')[0];
+        
+        if (gameDateOnly !== todayDateOnly) {
+          // Update gameDate to ISO format (YYYY-MM-DD) for consistency
+          await this.storage.updateGame(game.id, {
+            gameDate: gameDateOnly
+          });
+          updatedCount++;
+          console.log(`[DailySync] Updated old game date: ${game.awayTeam} @ ${game.homeTeam} (${gameDateOnly})`);
+        }
+      } catch (error) {
+        console.error(`[DailySync] Error updating game date for ${game.awayTeam} @ ${game.homeTeam}:`, error);
+      }
+    }
+    
+    if (updatedCount > 0) {
+      console.log(`[DailySync] Cleaned up ${updatedCount} old game(s)`);
+    } else {
+      console.log('[DailySync] No old games to clean up');
     }
   }
 
@@ -196,12 +247,26 @@ export class DailySyncService {
 
     console.log(`[DailySync] Processing: ${awayTeam.team.abbreviation} @ ${homeTeam.team.abbreviation}`);
     
-    // Find matching game in storage by team matchup and date
+    // Find matching game in storage by ESPN ID first, then fall back to team matchup + date
     const allGames = await this.storage.getGames();
-    const matchingGame = allGames.find(game => 
-      game.awayTeam === awayTeam.team.abbreviation && 
-      game.homeTeam === homeTeam.team.abbreviation
-    );
+    let matchingGame = allGames.find(game => game.espnGameId === event.id);
+    
+    // If no ESPN ID match, try team matchup + date (for games created before ESPN ID was added)
+    if (!matchingGame) {
+      const eventDateOnly = new Date(event.date).toISOString().split('T')[0];
+      matchingGame = allGames.find(game => {
+        if (game.awayTeam !== awayTeam.team.abbreviation || game.homeTeam !== homeTeam.team.abbreviation) {
+          return false;
+        }
+        // Match by date if available
+        if (game.gameTime) {
+          const gameDateOnly = new Date(game.gameTime).toISOString().split('T')[0];
+          return gameDateOnly === eventDateOnly;
+        }
+        // Fallback: match if gameDate is "Today" or matches the event date
+        return game.gameDate === 'Today' || game.gameDate === eventDateOnly;
+      });
+    }
 
     if (matchingGame) {
       // Update game with completion status and final scores
@@ -259,13 +324,28 @@ export class DailySyncService {
 
     console.log(`[DailySync] Upcoming: ${awayTeam.team.abbreviation} @ ${homeTeam.team.abbreviation} (${new Date(event.date).toLocaleString()})`);
 
-    // Find matching game in storage
+    // Find matching game in storage by ESPN ID first, then fall back to team matchup + date + status
     const allGames = await this.storage.getGames();
-    const matchingGame = allGames.find(game => 
-      game.awayTeam === awayTeam.team.abbreviation && 
-      game.homeTeam === homeTeam.team.abbreviation &&
-      game.status === 'scheduled'
-    );
+    let matchingGame = allGames.find(game => game.espnGameId === event.id);
+    
+    // If no ESPN ID match, try team matchup + date + status (for games created before ESPN ID was added)
+    if (!matchingGame) {
+      const eventDateOnly = new Date(event.date).toISOString().split('T')[0];
+      matchingGame = allGames.find(game => {
+        if (game.awayTeam !== awayTeam.team.abbreviation || 
+            game.homeTeam !== homeTeam.team.abbreviation || 
+            game.status !== 'scheduled') {
+          return false;
+        }
+        // Match by date if available
+        if (game.gameTime) {
+          const gameDateOnly = new Date(game.gameTime).toISOString().split('T')[0];
+          return gameDateOnly === eventDateOnly;
+        }
+        // Fallback: match if gameDate is "Today" or matches the event date
+        return game.gameDate === 'Today' || game.gameDate === eventDateOnly;
+      });
+    }
 
     if (matchingGame) {
       // Update existing game with ESPN ID and sync timestamp
@@ -276,8 +356,13 @@ export class DailySyncService {
       console.log(`[DailySync] ✓ Updated upcoming game: ${awayTeam.team.abbreviation} @ ${homeTeam.team.abbreviation}`);
     } else {
       // Create new game with default values (lineup and tip data will be updated later)
-      const gameDate = new Date(event.date);
-      const isToday = gameDate.toDateString() === new Date().toDateString();
+      const gameDateTime = new Date(event.date);
+      const today = new Date();
+      
+      // Use ISO date format (YYYY-MM-DD) for consistency
+      const gameDateOnly = gameDateTime.toISOString().split('T')[0];
+      const todayDateOnly = today.toISOString().split('T')[0];
+      const isToday = gameDateOnly === todayDateOnly;
       
       await this.storage.createGame({
         awayTeam: awayTeam.team.abbreviation,
@@ -293,7 +378,7 @@ export class DailySyncService {
         homeScorePercent: 50,
         homeStarters: [],
         h2h: 'N/A',
-        gameDate: isToday ? 'Today' : gameDate.toLocaleDateString(),
+        gameDate: isToday ? 'Today' : gameDateOnly, // ISO format (YYYY-MM-DD)
         gameTime: event.date,
         status: 'scheduled',
         espnGameId: event.id,

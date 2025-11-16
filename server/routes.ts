@@ -220,7 +220,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     timezone: 'America/New_York'
   });
 
+  // Configure lineup sync to run every 30 minutes during game hours (9 AM - 11 PM ET)
+  // This ensures lineups are updated throughout the day as they become available
+  cron.schedule('*/30 9-23 * * *', async () => {
+    console.log('[Cron] Running scheduled lineup sync...');
+    try {
+      await lineupSync.syncStartingLineups();
+      console.log('[Cron] ✓ Lineup sync completed successfully');
+    } catch (error) {
+      console.error('[Cron] Lineup sync failed:', error);
+    }
+  }, {
+    timezone: 'America/New_York'
+  });
+
   console.log('[Cron] Daily sync scheduled for 12:30 AM ET every day');
+  console.log('[Cron] Lineup sync scheduled every 30 minutes (9 AM - 11 PM ET)');
 
   const httpServer = createServer(app);
   return httpServer;
