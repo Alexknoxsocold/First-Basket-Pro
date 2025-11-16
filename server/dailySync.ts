@@ -77,8 +77,9 @@ export class DailySyncService {
     // Step 2: Fetch today's games from ESPN
     let scoreboard: ESPNScoreboardResponse | null = null;
     try {
-      console.log('[DailySync] Step 2: Fetching ESPN scoreboard...');
-      scoreboard = await this.fetchScoreboard();
+      console.log('[DailySync] Step 2: Fetching today\'s ESPN scoreboard...');
+      const today = new Date();
+      scoreboard = await this.fetchScoreboard(today);
       results.todayGames = true;
     } catch (error) {
       console.error('[DailySync] Step 2 failed (scoreboard fetch), continuing:', error);
@@ -93,18 +94,26 @@ export class DailySyncService {
       } catch (error) {
         console.error('[DailySync] Step 3 failed (completed games), continuing:', error);
       }
+
+      // Step 3.5: Process today's upcoming games (from the same scoreboard)
+      try {
+        console.log('[DailySync] Step 3.5: Processing today\'s upcoming games...');
+        await this.updateUpcomingGames(scoreboard.events);
+      } catch (error) {
+        console.error('[DailySync] Step 3.5 failed (today\'s upcoming games), continuing:', error);
+      }
     }
 
     // Step 4: Fetch upcoming games for tomorrow
     try {
-      console.log('[DailySync] Step 4: Updating upcoming games...');
+      console.log('[DailySync] Step 4: Updating tomorrow\'s games...');
       const tomorrow = new Date();
       tomorrow.setDate(tomorrow.getDate() + 1);
       const upcomingScoreboard = await this.fetchScoreboard(tomorrow);
       await this.updateUpcomingGames(upcomingScoreboard.events);
       results.upcomingGames = true;
     } catch (error) {
-      console.error('[DailySync] Step 4 failed (upcoming games), continuing:', error);
+      console.error('[DailySync] Step 4 failed (tomorrow\'s games), continuing:', error);
     }
 
     // Log final results
@@ -266,12 +275,31 @@ export class DailySyncService {
       });
       console.log(`[DailySync] ✓ Updated upcoming game: ${awayTeam.team.abbreviation} @ ${homeTeam.team.abbreviation}`);
     } else {
-      // Game doesn't exist in storage yet - would need to create it
-      // TODO: In a full implementation, we would:
-      // 1. Create a new game record with predicted opening tip winner (based on historical data)
-      // 2. Add predicted first-to-score probabilities (based on team stats)
-      // 3. Set players for opening tip (based on team rosters)
-      console.log(`[DailySync] New game not in storage: ${awayTeam.team.abbreviation} @ ${homeTeam.team.abbreviation}`);
+      // Create new game with default values (lineup and tip data will be updated later)
+      const gameDate = new Date(event.date);
+      const isToday = gameDate.toDateString() === new Date().toDateString();
+      
+      await this.storage.createGame({
+        awayTeam: awayTeam.team.abbreviation,
+        awayPlayer: 'TBD', // Will be updated when lineups sync
+        awayTipCount: 0,
+        awayTipPercent: 50,
+        awayScorePercent: 50,
+        awayStarters: [],
+        homeTeam: homeTeam.team.abbreviation,
+        homePlayer: 'TBD', // Will be updated when lineups sync
+        homeTipCount: 0,
+        homeTipPercent: 50,
+        homeScorePercent: 50,
+        homeStarters: [],
+        h2h: 'N/A',
+        gameDate: isToday ? 'Today' : gameDate.toLocaleDateString(),
+        gameTime: event.date,
+        status: 'scheduled',
+        espnGameId: event.id,
+        lastSynced: new Date().toISOString()
+      });
+      console.log(`[DailySync] ✓ Created new game: ${awayTeam.team.abbreviation} @ ${homeTeam.team.abbreviation}`);
     }
   }
 }
