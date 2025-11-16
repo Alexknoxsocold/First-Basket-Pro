@@ -110,7 +110,17 @@ app.use((req, res, next) => {
     port,
     host: "0.0.0.0",
     reusePort: true,
-  }, () => {
+  }, async () => {
     log(`serving on port ${port}`);
+    
+    // Automatically populate player stats on startup
+    try {
+      const { populateTodayStarters } = await import('./populate-player-stats.js');
+      const { storage } = await import('./storage.js');
+      await populateTodayStarters(storage);
+      log('[Startup] Player stats populated successfully');
+    } catch (error) {
+      log('[Startup] Failed to populate player stats:', error);
+    }
   });
 })();

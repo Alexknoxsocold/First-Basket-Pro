@@ -60,9 +60,10 @@ export class MemStorage implements IStorage {
 
   private seedData() {
     // No seed games - all games will be synced from ESPN API via daily sync
+    // No seed player stats - all players will be populated via populate-player-stats.ts script for today's games
 
-    // Seed comprehensive player stats for 2024/2025 season - Full rosters
-    const players: InsertPlayerStat[] = [
+    // Comment out old seed data to avoid conflicts with today's starters
+    /*const players: InsertPlayerStat[] = [
       // Cleveland Cavaliers - Updated for 2025-26 season (Lonzo Ball from Bulls)
       { player: "Jarrett Allen", team: "CLE", position: "C", gamesPlayed: 11, firstBaskets: 2, percentage: 18.2, avgTipWin: 64, q1FgaRate: 22.5, last10GamesPercent: 30.0, odds: "+750", sportsbook: "fanduel", season: "2024/2025" },
       { player: "Donovan Mitchell", team: "CLE", position: "SG", gamesPlayed: 11, firstBaskets: 0, percentage: 0.0, avgTipWin: 12, q1FgaRate: 18.3, last10GamesPercent: 10.0, odds: "+700", sportsbook: "draftkings", season: "2024/2025" },
@@ -166,7 +167,7 @@ export class MemStorage implements IStorage {
         injuryNote: stat.injuryNote ?? null,
         lastUpdated: stat.lastUpdated ?? null
       });
-    });
+    });*/
 
     // Seed team stats
     const teams: InsertTeamStat[] = [

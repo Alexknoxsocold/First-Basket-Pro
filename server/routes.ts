@@ -205,6 +205,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Populate player stats endpoint (manual trigger)
+  app.post("/api/populate-player-stats", async (_req, res) => {
+    try {
+      console.log('[API] Manual player stats population triggered');
+      const { populateTodayStarters } = await import('./populate-player-stats.js');
+      await populateTodayStarters(storage);
+      res.json({ message: "Player stats populated successfully" });
+    } catch (error) {
+      console.error('[API] Player stats population failed:', error);
+      res.status(500).json({ error: "Failed to populate player stats" });
+    }
+  });
+
   // Configure daily sync cron job
   // Runs at 12:30 AM ET every day (30 0 * * *)
   // Using America/New_York timezone handles DST automatically
