@@ -24,41 +24,13 @@ function Router() {
       <Route path="/signup" component={Signup} />
       <Route path="/login" component={Login} />
       <Route path="/invite" component={Invite} />
-      <Route path="/">
-        <ProtectedRoute>
-          <AllGames />
-        </ProtectedRoute>
-      </Route>
-      <Route path="/opening-tips">
-        <ProtectedRoute>
-          <OpeningTips />
-        </ProtectedRoute>
-      </Route>
-      <Route path="/player-stats">
-        <ProtectedRoute>
-          <PlayerStats />
-        </ProtectedRoute>
-      </Route>
-      <Route path="/team-stats">
-        <ProtectedRoute>
-          <TeamStats />
-        </ProtectedRoute>
-      </Route>
-      <Route path="/parlays">
-        <ProtectedRoute>
-          <Parlays />
-        </ProtectedRoute>
-      </Route>
-      <Route path="/admin">
-        <ProtectedRoute>
-          <Admin />
-        </ProtectedRoute>
-      </Route>
-      <Route>
-        <ProtectedRoute>
-          <NotFound />
-        </ProtectedRoute>
-      </Route>
+      <Route path="/" component={AllGames} />
+      <Route path="/opening-tips" component={OpeningTips} />
+      <Route path="/player-stats" component={PlayerStats} />
+      <Route path="/team-stats" component={TeamStats} />
+      <Route path="/parlays" component={Parlays} />
+      <Route path="/admin" component={Admin} />
+      <Route component={NotFound} />
     </Switch>
   );
 }
