@@ -5,7 +5,6 @@ const navItems = [
   { label: "All Games", path: "/" },
   { label: "Opening Tips", path: "/opening-tips" },
   { label: "Player Stats", path: "/player-stats" },
-  { label: "Team Stats", path: "/team-stats" },
   { label: "Parlays", path: "/parlays" },
 ];
 
