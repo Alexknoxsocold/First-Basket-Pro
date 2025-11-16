@@ -17,6 +17,11 @@ export const games = pgTable("games", {
   homeScorePercent: integer("home_score_percent").notNull(),
   h2h: text("h2h").notNull(),
   gameDate: text("game_date").notNull(),
+  status: text("status").notNull().default('scheduled'), // scheduled, in_progress, completed
+  awayScore: integer("away_score"), // actual final score
+  homeScore: integer("home_score"), // actual final score
+  espnGameId: text("espn_game_id"), // ESPN's game ID for tracking
+  lastSynced: text("last_synced"), // timestamp of last daily sync update
 });
 
 export const playerStats = pgTable("player_stats", {

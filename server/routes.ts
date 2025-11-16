@@ -2,8 +2,11 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { InjurySync } from "./injurySync";
+import { createDailySyncService } from "./dailySync";
+import cron from "node-cron";
 
 const injurySync = new InjurySync(storage);
+const dailySyncService = createDailySyncService(storage);
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Start automatic injury sync
@@ -86,6 +89,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ error: "Failed to sync injuries" });
     }
   });
+
+  // Daily sync endpoint (manual trigger)
+  app.post("/api/sync/daily", async (_req, res) => {
+    try {
+      console.log('[API] Manual daily sync triggered');
+      await dailySyncService.runDailySync();
+      res.json({ message: "Daily sync completed successfully" });
+    } catch (error) {
+      console.error('[API] Daily sync failed:', error);
+      res.status(500).json({ error: "Failed to run daily sync" });
+    }
+  });
+
+  // Configure daily sync cron job
+  // Runs at 12:30 AM ET every day (30 0 * * *)
+  // Using America/New_York timezone handles DST automatically
+  cron.schedule('30 0 * * *', async () => {
+    console.log('[Cron] Running scheduled daily sync at 12:30 AM ET...');
+    try {
+      await dailySyncService.runDailySync();
+      console.log('[Cron] ✓ Daily sync completed successfully');
+    } catch (error) {
+      console.error('[Cron] Daily sync failed:', error);
+    }
+  }, {
+    timezone: 'America/New_York'
+  });
+
+  console.log('[Cron] Daily sync scheduled for 12:30 AM ET every day');
 
   const httpServer = createServer(app);
   return httpServer;

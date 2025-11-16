@@ -6,17 +6,29 @@ NBA First Basket PRO is a sports analytics web application that provides predict
 
 ## Recent Changes
 
-**November 16, 2025** - Automatic Injury Tracking System
-- Implemented automatic injury tracking using ESPN NBA Injury API (free, no auth required)
-- Added three new player stat fields: injuryStatus, injuryNote, lastUpdated
-- Created InjurySync service that fetches and updates injury data every hour
-- Added visual injury badges to Player Stats page (red=OUT, yellow=QUESTIONABLE, gray=DAY-TO-DAY)
-- Robust error handling: preserves existing data if ESPN API fails, distinguishes between API failure vs. no injuries
-- Canonical status mapping with raw ESPN status fallback for unmapped injury types
-- Manual sync endpoint available: POST /api/sync-injuries
-- Currently tracking 13 injured players from 98 total ESPN injury reports
-- Added Q1 FGA Rate and Last 10 Games FB% statistics inspired by BettingPros research
-- Integrated sportsbook logos (FanDuel, DraftKings, BetMGM, Bet365, ESPN Bet) for odds display
+**November 16, 2025** - Daily Automated Update System + Q1 FGA% Color Grading
+- **Daily Sync System**: Implemented comprehensive DailySyncService that orchestrates all daily data updates
+  - Fetches daily game schedules/scores from ESPN Scoreboard API (free, no auth required)
+  - Processes completed games and identifies final scores
+  - Updates upcoming games for next day's slate
+  - Runs automatically at 12:30 AM ET every night via node-cron scheduler
+  - Manual trigger endpoint: POST /api/sync/daily
+  - Integrates with existing injury sync system for complete daily refresh
+- **Q1 FGA% Color Grading**: Added color-coded visual feedback to Q1 FGA Rate column
+  - Green (≥20%): High first quarter shot attempts
+  - Yellow (12-19%): Medium first quarter shot attempts
+  - Red (<12%): Low first quarter shot attempts
+  - Fixed zero-value handling across all percentage columns (Q1 FGA%, L10 FB%)
+- **Automatic Injury Tracking**: Implemented using ESPN NBA Injury API (free, no auth required)
+  - Added three new player stat fields: injuryStatus, injuryNote, lastUpdated
+  - Created InjurySync service that fetches and updates injury data every hour
+  - Visual injury badges on Player Stats page (red=OUT, yellow=QUESTIONABLE, gray=DAY-TO-DAY)
+  - Robust error handling: preserves existing data if ESPN API fails
+  - Canonical status mapping with raw ESPN status fallback for unmapped injury types
+  - Manual sync endpoint: POST /api/sync-injuries
+  - Currently tracking 13 injured players from 98 total ESPN injury reports
+- **Advanced Analytics**: Added Q1 FGA Rate and Last 10 Games FB% statistics
+- **Sportsbook Integration**: Integrated logos (FanDuel, DraftKings, BetMGM, Bet365, ESPN Bet) for odds display
 
 **November 15, 2025** - Initial MVP Complete
 - Built complete frontend with 5 main pages: All Games, Opening Tips, Player Stats, Team Stats, and Parlays
@@ -73,8 +85,18 @@ Preferred communication style: Simple, everyday language.
 - GET /api/team-stats - Retrieve all team statistics
 - GET /api/team-stats/:team - Retrieve specific team stat
 - POST /api/sync-injuries - Manually trigger injury data sync from ESPN
+- POST /api/sync/daily - Manually trigger comprehensive daily sync (games + injuries)
 
-**Server Features**: Custom logging middleware for API requests, JSON request parsing with raw body preservation, Vite integration for development with HMR support, automatic injury sync service running hourly.
+**Server Features**: Custom logging middleware for API requests, JSON request parsing with raw body preservation, Vite integration for development with HMR support, automatic injury sync service running hourly, daily sync system running at 12:30 AM ET.
+
+**Daily Sync System**: DailySyncService orchestrates comprehensive nightly data updates using node-cron scheduler. The system runs automatically at 12:30 AM ET (America/New_York timezone) and performs the following operations:
+1. Syncs injury data via InjurySync service
+2. Fetches current day's games from ESPN Scoreboard API
+3. Processes completed games and updates final scores
+4. Fetches next day's upcoming games
+5. Updates game schedules and predictions
+
+The service uses ESPN's free public Scoreboard API endpoint (`https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard`) with optional date parameters. Robust error handling ensures individual failures don't crash the entire sync process. Manual sync available via POST /api/sync/daily endpoint.
 
 **Injury Tracking System**: InjurySync service fetches NBA injury data from ESPN's public API every hour. The system uses canonical status mapping (OUT, QUESTIONABLE, DAY-TO-DAY) with fallback to raw ESPN statuses for unmapped injury types. Robust error handling preserves existing injury data if the ESPN API fails, and distinguishes between API failures vs. legitimate zero-injury responses. The frontend displays color-coded injury badges on the Player Stats page.
 

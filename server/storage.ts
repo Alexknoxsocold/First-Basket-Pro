@@ -6,6 +6,7 @@ export interface IStorage {
   getGames(): Promise<Game[]>;
   getGamesByDate(date: string): Promise<Game[]>;
   createGame(game: InsertGame): Promise<Game>;
+  updateGame(gameId: string, updates: Partial<Omit<Game, 'id'>>): Promise<Game | undefined>;
 
   // Player Stats
   getPlayerStats(): Promise<PlayerStat[]>;
@@ -64,7 +65,15 @@ export class MemStorage implements IStorage {
 
     todayGames.forEach(game => {
       const id = randomUUID();
-      this.games.set(id, { ...game, id });
+      this.games.set(id, { 
+        ...game, 
+        id,
+        status: 'scheduled',
+        awayScore: null,
+        homeScore: null,
+        espnGameId: null,
+        lastSynced: null
+      });
     });
 
     // Seed comprehensive player stats for 2024/2025 season - Full rosters
@@ -198,9 +207,29 @@ export class MemStorage implements IStorage {
 
   async createGame(insertGame: InsertGame): Promise<Game> {
     const id = randomUUID();
-    const game: Game = { ...insertGame, id };
+    const game: Game = { 
+      ...insertGame, 
+      id,
+      status: insertGame.status || 'scheduled',
+      awayScore: insertGame.awayScore ?? null,
+      homeScore: insertGame.homeScore ?? null,
+      espnGameId: insertGame.espnGameId ?? null,
+      lastSynced: insertGame.lastSynced ?? null
+    };
     this.games.set(id, game);
     return game;
+  }
+
+  async updateGame(gameId: string, updates: Partial<Omit<Game, 'id'>>): Promise<Game | undefined> {
+    const game = this.games.get(gameId);
+    if (!game) return undefined;
+    
+    const updated: Game = {
+      ...game,
+      ...updates
+    };
+    this.games.set(gameId, updated);
+    return updated;
   }
 
   // Player Stats
