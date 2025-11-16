@@ -17,10 +17,24 @@ export default function AllGames() {
 
   const games = useMemo(() => {
     if (!allGames) return [];
-    const today = new Date().toISOString().split('T')[0]; // e.g., "2025-11-16"
-    return allGames.filter(game => 
-      game.gameDate === "Today" || game.gameDate === today
-    );
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+    
+    return allGames.filter(game => {
+      // Always show games explicitly marked "Today"
+      if (game.gameDate === "Today") return true;
+      
+      // For games with gameTime, check if they fall on today (local timezone)
+      if (game.gameTime) {
+        const gameTime = new Date(game.gameTime);
+        return gameTime >= todayStart && gameTime < todayEnd;
+      }
+      
+      // For games without gameTime, check if gameDate matches today (ISO format)
+      const todayISO = now.toISOString().split('T')[0];
+      return game.gameDate === todayISO;
+    });
   }, [allGames]);
 
   const stats = useMemo(() => {
