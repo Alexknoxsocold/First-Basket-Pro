@@ -26,6 +26,12 @@ const getPercentageColor = (percentage: number) => {
   return "text-red-600 dark:text-red-400";
 };
 
+const getQ1FgaColor = (fgaRate: number) => {
+  if (fgaRate >= 20) return "text-green-600 dark:text-green-400";
+  if (fgaRate >= 12) return "text-yellow-600 dark:text-yellow-400";
+  return "text-red-600 dark:text-red-400";
+};
+
 const getSportsbookLogo = (sportsbook: string | null) => {
   switch (sportsbook?.toLowerCase()) {
     case "fanduel":
@@ -122,10 +128,10 @@ export default function PlayerStatsTable({ stats, compact = false }: PlayerStats
                 <TableCell className="text-right font-mono font-bold" data-testid={`text-first-baskets-${stat.id}`}>{stat.firstBaskets}</TableCell>
                 <TableCell className={`text-right font-mono font-bold ${getPercentageColor(stat.percentage)}`} data-testid={`text-percentage-${stat.id}`}>{stat.percentage.toFixed(1)}%</TableCell>
                 <TableCell className={`text-right font-mono ${getPercentageColor(stat.avgTipWin)}`} data-testid={`text-avg-tip-${stat.id}`}>{stat.avgTipWin}%</TableCell>
-                <TableCell className="text-right font-mono text-muted-foreground" data-testid={`text-q1-fga-${stat.id}`}>
-                  {stat.q1FgaRate ? `${stat.q1FgaRate.toFixed(1)}%` : '-'}
+                <TableCell className={`text-right font-mono font-bold ${stat.q1FgaRate !== null && stat.q1FgaRate !== undefined ? getQ1FgaColor(stat.q1FgaRate) : 'text-muted-foreground'}`} data-testid={`text-q1-fga-${stat.id}`}>
+                  {stat.q1FgaRate !== null && stat.q1FgaRate !== undefined ? `${stat.q1FgaRate.toFixed(1)}%` : '-'}
                 </TableCell>
-                <TableCell className={`text-right font-mono ${stat.last10GamesPercent ? getPercentageColor(stat.last10GamesPercent) : ''}`} data-testid={`text-l10-${stat.id}`}>
+                <TableCell className={`text-right font-mono ${stat.last10GamesPercent !== null && stat.last10GamesPercent !== undefined ? getPercentageColor(stat.last10GamesPercent) : ''}`} data-testid={`text-l10-${stat.id}`}>
                   {stat.last10GamesPercent !== null && stat.last10GamesPercent !== undefined ? `${stat.last10GamesPercent.toFixed(1)}%` : '-'}
                 </TableCell>
                 <TableCell className="text-right" data-testid={`text-odds-${stat.id}`}>
