@@ -4,8 +4,10 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { Settings, Save, RotateCw } from "lucide-react";
-import { useState } from "react";
+import { useAuth } from "@/context/AuthContext";
+import { useLocation } from "wouter";
+import { Settings, Save, RotateCw, Loader2 } from "lucide-react";
+import { useState, useEffect } from "react";
 import {
   Select,
   SelectContent,
@@ -31,9 +33,34 @@ interface PlayerStat {
 }
 
 export default function Admin() {
+  const { user, isLoading: authLoading } = useAuth();
+  const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [editingGame, setEditingGame] = useState<string | null>(null);
   const [localLineups, setLocalLineups] = useState<Record<string, { away: string[], home: string[] }>>({});
+
+  useEffect(() => {
+    if (!authLoading && !user) {
+      toast({
+        title: "Authentication required",
+        description: "Please log in to access admin features",
+        variant: "destructive"
+      });
+      setLocation("/login");
+    }
+  }, [user, authLoading, setLocation, toast]);
+
+  if (authLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[50vh]">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return null;
+  }
 
   const { data: games, isLoading: gamesLoading } = useQuery<Game[]>({
     queryKey: ["/api/games"],
