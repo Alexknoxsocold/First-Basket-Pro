@@ -90,8 +90,14 @@ export async function signup(req: Request, res: Response) {
       role: 'user'
     });
 
-    // Store user ID in session
+    // Store user ID in session and save before responding
     req.session.userId = user.id;
+    await new Promise<void>((resolve, reject) => {
+      req.session.save((err) => {
+        if (err) reject(err);
+        else resolve();
+      });
+    });
 
     // Return user without password hash
     const { passwordHash: _, ...userWithoutPassword } = user;
@@ -129,8 +135,14 @@ export async function login(req: Request, res: Response) {
       return res.status(401).json({ error: "Invalid email or password" });
     }
 
-    // Store user ID in session
+    // Store user ID in session and save before responding
     req.session.userId = user.id;
+    await new Promise<void>((resolve, reject) => {
+      req.session.save((err) => {
+        if (err) reject(err);
+        else resolve();
+      });
+    });
 
     // Return user without password hash
     const { passwordHash: _, ...userWithoutPassword } = user;
@@ -199,8 +211,14 @@ export async function inviteAccess(req: Request, res: Response) {
       });
     }
 
-    // Store user ID in session
+    // Store user ID in session and save before responding
     req.session.userId = user.id;
+    await new Promise<void>((resolve, reject) => {
+      req.session.save((err) => {
+        if (err) reject(err);
+        else resolve();
+      });
+    });
 
     // Return user without password hash
     const { passwordHash: _, ...userWithoutPassword } = user;
