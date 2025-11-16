@@ -26,7 +26,7 @@ export default function Login() {
         title: "Welcome back!",
         description: "You've successfully logged in."
       });
-      setLocation("/admin");
+      setLocation("/");
     } catch (error) {
       toast({
         variant: "destructive",
@@ -44,7 +44,7 @@ export default function Login() {
         <CardHeader>
           <CardTitle>Login</CardTitle>
           <CardDescription>
-            Enter your credentials to access admin features
+            Enter your credentials to access First Basket PRO
           </CardDescription>
         </CardHeader>
         <form onSubmit={handleSubmit}>

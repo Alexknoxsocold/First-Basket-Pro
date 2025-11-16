@@ -46,7 +46,7 @@ export default function Signup() {
         title: "Account created!",
         description: "You've successfully signed up and are now logged in."
       });
-      setLocation("/admin");
+      setLocation("/");
     } catch (error) {
       toast({
         variant: "destructive",
@@ -64,7 +64,7 @@ export default function Signup() {
         <CardHeader>
           <CardTitle>Sign Up</CardTitle>
           <CardDescription>
-            Create an account to access admin features
+            Create an account to access First Basket PRO
           </CardDescription>
         </CardHeader>
         <form onSubmit={handleSubmit}>

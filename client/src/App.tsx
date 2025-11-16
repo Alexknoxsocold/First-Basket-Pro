@@ -52,7 +52,11 @@ function Router() {
           <Admin />
         </ProtectedRoute>
       </Route>
-      <Route component={NotFound} />
+      <Route>
+        <ProtectedRoute>
+          <NotFound />
+        </ProtectedRoute>
+      </Route>
     </Switch>
   );
 }
