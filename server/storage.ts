@@ -1,4 +1,4 @@
-import { type Game, type InsertGame, type PlayerStat, type InsertPlayerStat, type TeamStat, type InsertTeamStat } from "@shared/schema";
+import { type Game, type InsertGame, type PlayerStat, type InsertPlayerStat, type TeamStat, type InsertTeamStat, type User, type InsertUser, type Session, type InsertSession } from "@shared/schema";
 import { randomUUID } from "crypto";
 
 export interface IStorage {
@@ -20,17 +20,32 @@ export interface IStorage {
   getTeamStats(): Promise<TeamStat[]>;
   getTeamStatByTeam(team: string): Promise<TeamStat | undefined>;
   createTeamStat(stat: InsertTeamStat): Promise<TeamStat>;
+
+  // Users
+  getUserByEmail(email: string): Promise<User | undefined>;
+  getUserById(id: string): Promise<User | undefined>;
+  createUser(user: InsertUser): Promise<User>;
+
+  // Sessions
+  createSession(session: InsertSession): Promise<Session>;
+  getSessionByToken(token: string): Promise<Session | undefined>;
+  deleteSession(sessionId: string): Promise<void>;
+  deleteExpiredSessions(): Promise<void>;
 }
 
 export class MemStorage implements IStorage {
   private games: Map<string, Game>;
   private playerStats: Map<string, PlayerStat>;
   private teamStats: Map<string, TeamStat>;
+  private users: Map<string, User>;
+  private sessions: Map<string, Session>;
 
   constructor() {
     this.games = new Map();
     this.playerStats = new Map();
     this.teamStats = new Map();
+    this.users = new Map();
+    this.sessions = new Map();
     this.seedData();
   }
 
@@ -340,6 +355,54 @@ export class MemStorage implements IStorage {
     const stat: TeamStat = { ...insertStat, id };
     this.teamStats.set(id, stat);
     return stat;
+  }
+
+  // Users
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    return Array.from(this.users.values()).find(user => user.email === email);
+  }
+
+  async getUserById(id: string): Promise<User | undefined> {
+    return this.users.get(id);
+  }
+
+  async createUser(insertUser: InsertUser): Promise<User> {
+    const id = randomUUID();
+    const user: User = {
+      ...insertUser,
+      id,
+      createdAt: new Date()
+    };
+    this.users.set(id, user);
+    return user;
+  }
+
+  // Sessions
+  async createSession(insertSession: InsertSession): Promise<Session> {
+    const id = randomUUID();
+    const session: Session = {
+      ...insertSession,
+      id
+    };
+    this.sessions.set(id, session);
+    return session;
+  }
+
+  async getSessionByToken(token: string): Promise<Session | undefined> {
+    return Array.from(this.sessions.values()).find(session => session.sessionToken === token);
+  }
+
+  async deleteSession(sessionId: string): Promise<void> {
+    this.sessions.delete(sessionId);
+  }
+
+  async deleteExpiredSessions(): Promise<void> {
+    const now = new Date();
+    for (const [id, session] of this.sessions.entries()) {
+      if (new Date(session.expiresAt) < now) {
+        this.sessions.delete(id);
+      }
+    }
   }
 }
 
