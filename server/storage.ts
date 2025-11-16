@@ -1,5 +1,9 @@
-import { type Game, type InsertGame, type PlayerStat, type InsertPlayerStat, type TeamStat, type InsertTeamStat, type User, type InsertUser, type Session, type InsertSession } from "@shared/schema";
+import { type Game, type InsertGame, type PlayerStat, type InsertPlayerStat, type TeamStat, type InsertTeamStat, type User, type InsertUser, type Session, type InsertSession, games as gamesTable } from "@shared/schema";
 import { randomUUID } from "crypto";
+import { drizzle } from "drizzle-orm/neon-serverless";
+import { Pool, neonConfig } from "@neondatabase/serverless";
+import ws from "ws";
+import { eq } from "drizzle-orm";
 
 export interface IStorage {
   // Games
@@ -51,60 +55,7 @@ export class MemStorage implements IStorage {
   }
 
   private seedData() {
-    // Seed games with realistic starting lineups and game times (sorted chronologically)
-    const todayGames: InsertGame[] = [
-      {
-        awayTeam: "MEM", awayPlayer: "Jaren Jackson Jr.", awayTipCount: 13, awayTipPercent: 46, awayScorePercent: 31,
-        awayStarters: ["Ja Morant", "Desmond Bane", "Jaylen Wells", "Jaren Jackson Jr.", "Zach Edey"],
-        homeTeam: "CLE", homePlayer: "Jarrett Allen", homeTipCount: 11, homeTipPercent: 64, homeScorePercent: 77,
-        homeStarters: ["Darius Garland", "Donovan Mitchell", "Lonzo Ball", "Evan Mobley", "Jarrett Allen"],
-        h2h: "N/A", gameDate: "Today", gameTime: "2025-11-16T19:00:00Z" // 7:00 PM ET
-      },
-      {
-        awayTeam: "TOR", awayPlayer: "Jakob Poeltl", awayTipCount: 8, awayTipPercent: 63, awayScorePercent: 75,
-        awayStarters: ["Immanuel Quickley", "RJ Barrett", "Ochai Agbaji", "Scottie Barnes", "Jakob Poeltl"],
-        homeTeam: "IND", homePlayer: "Isaiah Jackson", homeTipCount: 8, homeTipPercent: 25, homeScorePercent: 50,
-        homeStarters: ["Tyrese Haliburton", "Andrew Nembhard", "Aaron Nesmith", "Pascal Siakam", "Isaiah Jackson"],
-        h2h: "N/A", gameDate: "Today", gameTime: "2025-11-16T19:30:00Z" // 7:30 PM ET
-      },
-      {
-        awayTeam: "LAL", awayPlayer: "Deandre Ayton", awayTipCount: 12, awayTipPercent: 58, awayScorePercent: 62,
-        awayStarters: ["Luka Doncic", "Austin Reaves", "LeBron James", "Rui Hachimura", "Deandre Ayton"],
-        homeTeam: "MIL", homePlayer: "Myles Turner", homeTipCount: 13, homeTipPercent: 31, homeScorePercent: 54,
-        homeStarters: ["Damian Lillard", "Gary Trent Jr.", "Kyle Kuzma", "Giannis Antetokounmpo", "Myles Turner"],
-        h2h: "N/A", gameDate: "Today", gameTime: "2025-11-16T20:00:00Z" // 8:00 PM ET
-      },
-      {
-        awayTeam: "OKC", awayPlayer: "Chet Holmgren", awayTipCount: 9, awayTipPercent: 67, awayScorePercent: 62,
-        awayStarters: ["Shai Gilgeous-Alexander", "Jalen Williams", "Luguentz Dort", "Jaylin Williams", "Chet Holmgren"],
-        homeTeam: "CHA", homePlayer: "Ryan Kalkbrenner", homeTipCount: 11, homeTipPercent: 45, homeScorePercent: 25,
-        homeStarters: ["LaMelo Ball", "Josh Green", "Brandon Miller", "Miles Bridges", "Ryan Kalkbrenner"],
-        h2h: "N/A", gameDate: "Today", gameTime: "2025-11-16T22:00:00Z" // 10:00 PM ET
-      },
-      {
-        awayTeam: "DEN", awayPlayer: "Nikola Jokic", awayTipCount: 11, awayTipPercent: 36, awayScorePercent: 45,
-        awayStarters: ["Jamal Murray", "Christian Braun", "Cameron Johnson", "Aaron Gordon", "Nikola Jokic"],
-        homeTeam: "MIN", homePlayer: "Rudy Gobert", homeTipCount: 12, homeTipPercent: 58, homeScorePercent: 58,
-        homeStarters: ["Mike Conley", "Anthony Edwards", "Jaden McDaniels", "Julius Randle", "Rudy Gobert"],
-        h2h: "0 - 1", gameDate: "Today", gameTime: "2025-11-16T23:00:00Z" // 11:00 PM ET
-      }
-    ];
-
-    todayGames.forEach(game => {
-      const id = randomUUID();
-      this.games.set(id, { 
-        ...game, 
-        id,
-        status: 'scheduled',
-        awayScore: null,
-        homeScore: null,
-        espnGameId: null,
-        lastSynced: null,
-        awayStarters: game.awayStarters || null,
-        homeStarters: game.homeStarters || null,
-        gameTime: game.gameTime || null
-      });
-    });
+    // No seed games - all games will be synced from ESPN API via daily sync
 
     // Seed comprehensive player stats for 2024/2025 season - Full rosters
     const players: InsertPlayerStat[] = [
