@@ -1,5 +1,6 @@
 import type { IStorage } from './storage';
 import { InjurySync } from './injurySync';
+import { LineupSync } from './lineupSync';
 
 interface ESPNCompetitor {
   id: string;
@@ -47,6 +48,7 @@ export class DailySyncService {
     console.log('[DailySync] Starting daily sync process...');
     const results = {
       injuries: false,
+      lineups: false,
       todayGames: false,
       completedGames: false,
       upcomingGames: false
@@ -60,6 +62,16 @@ export class DailySyncService {
       results.injuries = true;
     } catch (error) {
       console.error('[DailySync] Step 1 failed (injuries), continuing:', error);
+    }
+
+    // Step 1.5: Sync starting lineups from lineups.com (resilient to failures)
+    try {
+      console.log('[DailySync] Step 1.5: Syncing starting lineups...');
+      const lineupSync = new LineupSync(this.storage);
+      await lineupSync.syncStartingLineups();
+      results.lineups = true;
+    } catch (error) {
+      console.error('[DailySync] Step 1.5 failed (lineups), continuing:', error);
     }
 
     // Step 2: Fetch today's games from ESPN
@@ -100,7 +112,7 @@ export class DailySyncService {
     const totalSteps = Object.keys(results).length;
     
     if (successCount === totalSteps) {
-      console.log('[DailySync] ✓ Daily sync completed successfully (4/4 steps)');
+      console.log(`[DailySync] ✓ Daily sync completed successfully (${successCount}/${totalSteps} steps)`);
     } else {
       console.log(`[DailySync] ⚠ Daily sync completed with warnings (${successCount}/${totalSteps} steps succeeded)`);
       console.log('[DailySync] Results:', results);

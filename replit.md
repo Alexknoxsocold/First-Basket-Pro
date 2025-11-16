@@ -55,6 +55,8 @@ NBA First Basket PRO is a sports analytics web application that provides predict
 
 **Current Status**: Fully functional with comprehensive daily automation system. Features automatic injury tracking (hourly updates), daily game schedule/score sync (12:30 AM ET), data persistence for completed games, and ESPN API integration. All sync operations resilient with robust error handling.
 
+**Lineup Management**: Starting lineups are seeded manually and should be verified against official sources (Underdog Twitter, sportsbooks, team news) before each game day. The system tracks injury status hourly via ESPN API and displays OUT players with injury details. Users should update starting lineups in `server/storage.ts` when official lineup announcements are made. Future enhancement: automated lineup API integration (requires paid API service or manual verification against free sources).
+
 ## User Preferences
 
 Preferred communication style: Simple, everyday language.

@@ -2,10 +2,12 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { InjurySync } from "./injurySync";
+import { LineupSync } from "./lineupSync";
 import { createDailySyncService } from "./dailySync";
 import cron from "node-cron";
 
 const injurySync = new InjurySync(storage);
+const lineupSync = new LineupSync(storage);
 const dailySyncService = createDailySyncService(storage);
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -104,6 +106,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ message: "Injury sync completed successfully" });
     } catch (error) {
       res.status(500).json({ error: "Failed to sync injuries" });
+    }
+  });
+
+  // Lineup sync endpoint (manual trigger)
+  app.post("/api/sync-lineups", async (_req, res) => {
+    try {
+      console.log('[API] Manual lineup sync triggered');
+      await lineupSync.syncStartingLineups();
+      res.json({ message: "Lineup sync completed successfully" });
+    } catch (error) {
+      console.error('[API] Lineup sync failed:', error);
+      res.status(500).json({ error: "Failed to sync lineups" });
     }
   });
 
