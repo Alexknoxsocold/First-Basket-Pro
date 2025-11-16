@@ -17,7 +17,10 @@ export default function AllGames() {
 
   const games = useMemo(() => {
     if (!allGames) return [];
-    return allGames.filter(game => game.gameDate === "Today");
+    const today = new Date().toISOString().split('T')[0]; // e.g., "2025-11-16"
+    return allGames.filter(game => 
+      game.gameDate === "Today" || game.gameDate === today
+    );
   }, [allGames]);
 
   const stats = useMemo(() => {
