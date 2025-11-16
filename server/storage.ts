@@ -235,7 +235,10 @@ export class MemStorage implements IStorage {
       awayScore: insertGame.awayScore ?? null,
       homeScore: insertGame.homeScore ?? null,
       espnGameId: insertGame.espnGameId ?? null,
-      lastSynced: insertGame.lastSynced ?? null
+      lastSynced: insertGame.lastSynced ?? null,
+      awayStarters: insertGame.awayStarters ?? null,
+      homeStarters: insertGame.homeStarters ?? null,
+      gameTime: insertGame.gameTime ?? null
     };
     this.games.set(id, game);
     return game;
@@ -245,9 +248,14 @@ export class MemStorage implements IStorage {
     const game = this.games.get(gameId);
     if (!game) return undefined;
     
+    // Filter out undefined values to prevent overwriting existing fields
+    const filteredUpdates = Object.fromEntries(
+      Object.entries(updates).filter(([_, value]) => value !== undefined)
+    );
+    
     const updated: Game = {
       ...game,
-      ...updates
+      ...filteredUpdates
     };
     this.games.set(gameId, updated);
     return updated;

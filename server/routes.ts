@@ -39,6 +39,69 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Update game lineups
+  app.put("/api/games/:id/lineups", async (req, res) => {
+    try {
+      const { awayStarters, homeStarters } = req.body;
+      
+      if (!awayStarters || !homeStarters) {
+        return res.status(400).json({ error: "Both awayStarters and homeStarters are required" });
+      }
+
+      if (!Array.isArray(awayStarters) || !Array.isArray(homeStarters)) {
+        return res.status(400).json({ error: "Both awayStarters and homeStarters must be arrays" });
+      }
+
+      if (awayStarters.length !== 5 || homeStarters.length !== 5) {
+        return res.status(400).json({ error: "Each team must have exactly 5 starters" });
+      }
+
+      // Validate all entries are strings before trimming
+      const allUntrimmed = [...awayStarters, ...homeStarters];
+      if (allUntrimmed.some(name => typeof name !== 'string')) {
+        return res.status(400).json({ error: "All starter slots must contain string values" });
+      }
+
+      // Trim and validate all starter slots
+      const trimmedAway = awayStarters.map((name: string) => name.trim());
+      const trimmedHome = homeStarters.map((name: string) => name.trim());
+      const allStarters = [...trimmedAway, ...trimmedHome];
+      
+      if (allStarters.some(name => !name || name === '')) {
+        return res.status(400).json({ error: "All starter slots must have valid player names" });
+      }
+
+      // Check for duplicate names within each team
+      const awayDuplicates = trimmedAway.length !== new Set(trimmedAway).size;
+      const homeDuplicates = trimmedHome.length !== new Set(trimmedHome).size;
+      
+      if (awayDuplicates || homeDuplicates) {
+        return res.status(400).json({ error: "Each player can only start once per team" });
+      }
+
+      const updatedGame = await storage.updateGame(req.params.id, {
+        awayStarters: trimmedAway,
+        homeStarters: trimmedHome
+      });
+
+      if (!updatedGame) {
+        return res.status(404).json({ error: "Game not found" });
+      }
+
+      console.log(`[API] Updated lineups for game ${req.params.id}`);
+      console.log(`[API] Away starters: ${trimmedAway.join(', ')}`);
+      console.log(`[API] Home starters: ${trimmedHome.join(', ')}`);
+      
+      res.json({ 
+        message: "Lineups updated successfully",
+        game: updatedGame
+      });
+    } catch (error) {
+      console.error('[API] Failed to update lineups:', error);
+      res.status(500).json({ error: "Failed to update lineups" });
+    }
+  });
+
   // Player stats endpoints
   app.get("/api/player-stats", async (req, res) => {
     try {

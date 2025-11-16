@@ -10,6 +10,7 @@ import OpeningTips from "@/pages/OpeningTips";
 import PlayerStats from "@/pages/PlayerStats";
 import TeamStats from "@/pages/TeamStats";
 import Parlays from "@/pages/Parlays";
+import Admin from "@/pages/Admin";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -20,6 +21,7 @@ function Router() {
       <Route path="/player-stats" component={PlayerStats} />
       <Route path="/team-stats" component={TeamStats} />
       <Route path="/parlays" component={Parlays} />
+      <Route path="/admin" component={Admin} />
       <Route component={NotFound} />
     </Switch>
   );
