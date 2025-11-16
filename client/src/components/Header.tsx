@@ -31,13 +31,13 @@ export default function Header() {
           <div className="flex items-center gap-2">
             <img 
               src={logoImage} 
-              alt="Prezi logo" 
+              alt="First Basket Pro logo" 
               width={32}
               height={32}
               className="w-8 h-8 rounded-md object-cover"
               data-testid="img-logo"
             />
-            <h1 className="text-xl font-bold">Prezi First Basket Pro</h1>
+            <h1 className="text-xl font-bold">First Basket Pro</h1>
           </div>
 
           <div className="flex items-center gap-3">
