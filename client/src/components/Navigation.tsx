@@ -7,7 +7,6 @@ const navItems = [
   { label: "Player Stats", path: "/player-stats" },
   { label: "Team Stats", path: "/team-stats" },
   { label: "Parlays", path: "/parlays" },
-  { label: "Admin", path: "/admin" },
 ];
 
 export default function Navigation() {
