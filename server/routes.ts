@@ -149,6 +149,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ESPN real player stats for today's starters
+  app.get("/api/espn-player-stats", async (_req, res) => {
+    try {
+      const games = await storage.getGames();
+      const todayGames = games.filter(g => g.gameDate === 'Today');
+      
+      if (todayGames.length === 0) {
+        return res.json([]);
+      }
+
+      // Build list of teams + starters
+      const teamStarters: { team: string; players: string[] }[] = [];
+      for (const game of todayGames) {
+        if (game.awayStarters?.length) {
+          teamStarters.push({ team: game.awayTeam, players: game.awayStarters });
+        }
+        if (game.homeStarters?.length) {
+          teamStarters.push({ team: game.homeTeam, players: game.homeStarters });
+        }
+      }
+
+      const { fetchEspnPlayerStats } = await import('./espnPlayerStats.js');
+      const espnStats = await fetchEspnPlayerStats(teamStarters);
+      res.json(espnStats);
+    } catch (error) {
+      console.error('[ESPN Stats] Error:', error);
+      res.status(500).json({ error: "Failed to fetch ESPN player stats" });
+    }
+  });
+
   // Team stats endpoints
   app.get("/api/team-stats", async (_req, res) => {
     try {
