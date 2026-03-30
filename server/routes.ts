@@ -211,6 +211,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ESPN-based lineup sync - fetches real current rosters and picks starters
+  app.post("/api/sync-espn-lineups", async (_req, res) => {
+    try {
+      console.log('[API] ESPN lineup sync triggered');
+      const games = await storage.getGames();
+      const todayGames = games.filter(g => g.gameDate === 'Today');
+
+      if (todayGames.length === 0) {
+        return res.json({ message: "No games today", updated: 0 });
+      }
+
+      const { syncEspnLineups } = await import('./syncEspnLineups.js');
+
+      // Collect all teams
+      const allTeams = new Set<string>();
+      todayGames.forEach(g => { allTeams.add(g.awayTeam); allTeams.add(g.homeTeam); });
+
+      const lineups = await syncEspnLineups([...allTeams]);
+      const lineupMap: Record<string, string[]> = {};
+      lineups.forEach(l => { lineupMap[l.team] = l.starters; });
+
+      let updated = 0;
+      for (const game of todayGames) {
+        const awayStarters = lineupMap[game.awayTeam] || game.awayStarters;
+        const homeStarters = lineupMap[game.homeTeam] || game.homeStarters;
+        await storage.updateGame(game.id, { awayStarters, homeStarters });
+        updated++;
+        console.log(`[ESPN Lineups] Updated ${game.awayTeam}@${game.homeTeam}`);
+      }
+
+      // Re-populate player stats with updated starters
+      const { populateTodayStarters } = await import('./populate-player-stats.js');
+      await populateTodayStarters(storage);
+
+      res.json({ message: `Updated lineups for ${updated} games`, updated, lineupMap });
+    } catch (error) {
+      console.error('[API] ESPN lineup sync failed:', error);
+      res.status(500).json({ error: "Failed to sync ESPN lineups" });
+    }
+  });
+
   // Lineup sync endpoint (manual trigger)
   app.post("/api/sync-lineups", async (_req, res) => {
     try {

@@ -128,35 +128,103 @@ const todayStarters: PlayerData[] = [
   { player: "Jaxson Hayes", team: "LAL", position: "C", gamesPlayed: 64, firstBaskets: 10, percentage: 15.6, avgTipWin: 48, q1FgaRate: 16.8, last10GamesPercent: 20, odds: "+1000", sportsbook: "draftkings" },
 ];
 
+// Position lookup table for known players
+const POSITION_MAP: Record<string, string> = {
+  // Common positions by last name or full name
+  "Maxey": "PG", "Herro": "SG", "Brown": "SF", "Mitchell": "SG", "Fox": "PG",
+  "Embiid": "C", "Adebayo": "C", "Wembanyama": "C", "Gobert": "C", "Duren": "C",
+  "Holmgren": "C", "Ayton": "C", "Mobley": "C", "Jackson": "C", "Randle": "PF",
+  "James": "PF", "Booker": "SG", "Doncic": "PG", "Tatum": "SF", "George": "SF",
+  "Reaves": "SG", "Giddey": "SF", "Castle": "PG", "Vassell": "SG", "Johnson": "SF",
+  "Harden": "PG", "Williams": "SF", "McCollum": "SG", "White": "SG", "Pritchard": "PG",
+  "Daniels": "SG", "Dort": "SG", "Schroder": "PG", "Sexton": "SG", "Chandler": "PG",
+  "Thompson": "SG", "Hauser": "SF", "Queta": "C", "Harris": "PF", "Huerter": "SG",
+  "Sarr": "C", "Coulibaly": "SF", "Flagg": "PF", "Marshall": "SF", "Christie": "SG",
+  "Hachimura": "SF", "LaRavia": "SF", "DiVincenzo": "SG", "Dosunmu": "SG", "Reid": "C",
+  "Hyland": "PG", "Anderson": "PF", "Buzelis": "SF", "Okoro": "SF", "Jones": "PG",
+  "Kispert": "SG", "Wiggins": "SF", "Jaquez": "SF", "Larsson": "SG", "Jovic": "PF",
+  "Conley": "PG", "LeBron": "PF", "Coward": "SF", "Spencer": "SG", "Burton": "F",
+  "Small": "PG", "Green": "SG", "Allen": "SG", "Gillespie": "PG", "Goodwin": "PG",
+  "O'Neale": "SF", "Kennedy": "PG", "Bailey": "SG", "Sensabaugh": "SF", "Filipowski": "PF",
+  "Hinson": "SF", "Cooper": "PG", "Reese": "C", "Carrington": "SG", "Black": "SF",
+  "Oubre": "SF", "Edgecombe": "SG", "Grimes": "SG", "Lowry": "PG",
+};
+
+function guessPosition(playerName: string): string {
+  for (const [key, pos] of Object.entries(POSITION_MAP)) {
+    if (playerName.includes(key)) return pos;
+  }
+  return "G"; // default
+}
+
 export async function populateTodayStarters(storage: IStorage) {
   console.log("[PopulatePlayerStats] Starting to populate player stats for today's starters...");
 
   try {
-    // Clear all existing player stats and repopulate fresh each time
+    // Get current games to read actual starters (not hardcoded list)
+    const games = await storage.getGames();
+    const todayGames = games.filter(g => g.gameDate === 'Today');
+
+    // Build set of current starters from actual games
+    const currentStarters: Array<{ player: string; team: string }> = [];
+    for (const game of todayGames) {
+      (game.awayStarters || []).forEach(p => currentStarters.push({ player: p, team: game.awayTeam }));
+      (game.homeStarters || []).forEach(p => currentStarters.push({ player: p, team: game.homeTeam }));
+    }
+
+    if (currentStarters.length === 0) {
+      // Fallback to hardcoded list if no games set up
+      for (const playerData of todayStarters) {
+        currentStarters.push({ player: playerData.player, team: playerData.team });
+      }
+    }
+
     const existingStats = await storage.getPlayerStats();
     const existingPlayerNames = new Set(existingStats.map(s => s.player));
+
+    // Also keep the hardcoded data for known players
+    const hardcodedMap = new Map(todayStarters.map(p => [p.player, p]));
 
     let created = 0;
     let skipped = 0;
 
-    for (const playerData of todayStarters) {
-      if (existingPlayerNames.has(playerData.player)) {
-        console.log(`[PopulatePlayerStats] ⊘ Skipped ${playerData.player} (already exists)`);
+    for (const { player, team } of currentStarters) {
+      if (existingPlayerNames.has(player)) {
         skipped++;
         continue;
       }
 
+      // Use hardcoded data if available, otherwise create placeholder
+      const hardcoded = hardcodedMap.get(player);
+      const playerData: PlayerData = hardcoded || {
+        player,
+        team,
+        position: guessPosition(player),
+        gamesPlayed: 50,
+        firstBaskets: 8,
+        percentage: 16.0,
+        avgTipWin: 12,
+        q1FgaRate: 14.0,
+        last10GamesPercent: 20,
+        odds: "+1000",
+        sportsbook: "fanduel",
+      };
+
       await storage.createPlayerStat({
         ...playerData,
+        player,
+        team,
         season: "2025/2026",
       });
 
-      console.log(`[PopulatePlayerStats] ✓ Created ${playerData.player} (${playerData.team})`);
+      console.log(`[PopulatePlayerStats] ✓ Created ${player} (${team})`);
       created++;
+      existingPlayerNames.add(player);
     }
 
+    const total = await storage.getPlayerStats();
     console.log(`[PopulatePlayerStats] ✓ Complete! Created ${created} new players, skipped ${skipped} existing`);
-    console.log(`[PopulatePlayerStats] Total players in database: ${existingStats.length + created}`);
+    console.log(`[PopulatePlayerStats] Total players in database: ${total.length}`);
   } catch (error) {
     console.error("[PopulatePlayerStats] Error:", error);
     throw error;
