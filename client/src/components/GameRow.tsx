@@ -2,6 +2,16 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Star, Clock, Zap } from "lucide-react";
 
+interface EspnPick {
+  player: string;
+  team: string;
+  headshot?: string;
+  firstBasketPct: number;
+  avgPoints: number;
+  odds: string;
+  isStarter?: boolean;
+}
+
 interface GameRowProps {
   awayTeam: string;
   awayPlayer: string;
@@ -20,6 +30,8 @@ interface GameRowProps {
   homeStarters?: string[];
   awayPlayerHeadshot?: string;
   homePlayerHeadshot?: string;
+  awayEspnPick?: EspnPick | null;
+  homeEspnPick?: EspnPick | null;
 }
 
 const TEAM_COLORS: Record<string, { bg: string; text: string }> = {
@@ -137,11 +149,31 @@ export default function GameRow({
   homeTeam, homePlayer, homeTipCount, homeTipPercent, homeScorePercent,
   h2h, gameTime, status, awayStarters, homeStarters,
   awayPlayerHeadshot, homePlayerHeadshot,
+  awayEspnPick, homeEspnPick,
 }: GameRowProps) {
-  const topPickPercent = Math.max(awayScorePercent, homeScorePercent);
-  const isFeatured = topPickPercent >= 60;
-  const isTie = awayScorePercent === homeScorePercent;
-  const awayIsTop = awayScorePercent > homeScorePercent;
+  // Use ESPN FB% if available, fallback to game scorePercent
+  const awayDisplayPct = awayEspnPick ? awayEspnPick.firstBasketPct : awayScorePercent;
+  const homeDisplayPct = homeEspnPick ? homeEspnPick.firstBasketPct : homeScorePercent;
+  const hasEspn = !!(awayEspnPick || homeEspnPick);
+
+  const topPickPercent = Math.max(awayDisplayPct, homeDisplayPct);
+  const isFeatured = hasEspn ? topPickPercent >= 18 : topPickPercent >= 60;
+  const isTie = awayDisplayPct === homeDisplayPct;
+  const awayIsTop = awayDisplayPct > homeDisplayPct;
+
+  // Resolve display player names and headshots
+  const awayDisplayPlayer = awayEspnPick?.player || awayPlayer;
+  const homeDisplayPlayer = homeEspnPick?.player || homePlayer;
+  const awayDisplayHeadshot = awayEspnPick?.headshot || awayPlayerHeadshot;
+  const homeDisplayHeadshot = homeEspnPick?.headshot || homePlayerHeadshot;
+
+  // Score bar scaling: ESPN FB% tops out ~20%, scale to show comparison
+  const scaledAwayPct = hasEspn
+    ? Math.round((awayDisplayPct / Math.max(awayDisplayPct + homeDisplayPct, 1)) * 100)
+    : awayDisplayPct;
+  const scaledHomePct = hasEspn
+    ? Math.round((homeDisplayPct / Math.max(awayDisplayPct + homeDisplayPct, 1)) * 100)
+    : homeDisplayPct;
 
   const formatGameTime = (time?: string) => {
     if (!time) return null;
@@ -210,42 +242,65 @@ export default function GameRow({
           {/* First basket picks column */}
           <div className="flex flex-col gap-2.5 border rounded-md p-2.5 bg-background/50">
             <div className="text-[9px] uppercase tracking-widest text-muted-foreground font-semibold mb-0.5">First Basket Pick</div>
-            <PlayerPick
-              player={awayPlayer}
-              team={awayTeam}
-              headshot={awayPlayerHeadshot}
-              starters={awayStarters}
-              tipPercent={awayTipPercent}
-              isTopTip={awayIsTop}
-            />
+            <div className="flex items-center gap-2.5 min-w-0">
+              <Avatar className="w-9 h-9 shrink-0 ring-2 ring-border">
+                <AvatarImage src={awayDisplayHeadshot} alt={awayDisplayPlayer} className="object-cover object-top" />
+                <AvatarFallback className="text-xs font-bold bg-muted">{awayDisplayPlayer.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase()}</AvatarFallback>
+              </Avatar>
+              <div className="min-w-0 flex-1">
+                <span className={`text-xs font-semibold truncate block ${awayIsTop ? "text-foreground" : "text-muted-foreground"}`}>{awayDisplayPlayer}</span>
+                <div className="text-[10px] text-muted-foreground">
+                  {awayEspnPick ? (
+                    <span className="text-green-400 font-semibold">{awayEspnPick.firstBasketPct.toFixed(1)}% &bull; {awayEspnPick.odds}</span>
+                  ) : (
+                    <span>{awayTeam} &bull; Tip {awayTipPercent}%</span>
+                  )}
+                </div>
+              </div>
+            </div>
             <div className="border-t border-dashed" />
-            <PlayerPick
-              player={homePlayer}
-              team={homeTeam}
-              headshot={homePlayerHeadshot}
-              starters={homeStarters}
-              tipPercent={homeTipPercent}
-              isTopTip={!awayIsTop}
-            />
+            <div className="flex items-center gap-2.5 min-w-0">
+              <Avatar className="w-9 h-9 shrink-0 ring-2 ring-border">
+                <AvatarImage src={homeDisplayHeadshot} alt={homeDisplayPlayer} className="object-cover object-top" />
+                <AvatarFallback className="text-xs font-bold bg-muted">{homeDisplayPlayer.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase()}</AvatarFallback>
+              </Avatar>
+              <div className="min-w-0 flex-1">
+                <span className={`text-xs font-semibold truncate block ${!awayIsTop ? "text-foreground" : "text-muted-foreground"}`}>{homeDisplayPlayer}</span>
+                <div className="text-[10px] text-muted-foreground">
+                  {homeEspnPick ? (
+                    <span className="text-green-400 font-semibold">{homeEspnPick.firstBasketPct.toFixed(1)}% &bull; {homeEspnPick.odds}</span>
+                  ) : (
+                    <span>{homeTeam} &bull; Tip {homeTipPercent}%</span>
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
 
           {/* Score bars column */}
           <div className="flex flex-col gap-2">
-            <div className="text-[9px] uppercase tracking-widest text-muted-foreground font-semibold">1st to Score</div>
+            <div className="text-[9px] uppercase tracking-widest text-muted-foreground font-semibold">
+              {hasEspn ? "Top FB% Pick" : "1st to Score"}
+            </div>
             <div className="flex flex-col gap-1.5">
               <div className="flex items-center gap-2">
                 <span className="text-[10px] text-muted-foreground w-8 shrink-0">{awayTeam}</span>
                 <div className="flex-1">
-                  <ScoreBar percent={awayScorePercent} isFavorite={awayIsTop} isTie={isTie} />
+                  <ScoreBar percent={scaledAwayPct} isFavorite={awayIsTop} isTie={isTie} />
                 </div>
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-[10px] text-muted-foreground w-8 shrink-0">{homeTeam}</span>
                 <div className="flex-1">
-                  <ScoreBar percent={homeScorePercent} isFavorite={!awayIsTop} isTie={isTie} />
+                  <ScoreBar percent={scaledHomePct} isFavorite={!awayIsTop} isTie={isTie} />
                 </div>
               </div>
             </div>
+            {hasEspn && (
+              <div className="text-[9px] text-muted-foreground/50 text-center">
+                Based on top FB% pick per team
+              </div>
+            )}
           </div>
         </div>
       </div>

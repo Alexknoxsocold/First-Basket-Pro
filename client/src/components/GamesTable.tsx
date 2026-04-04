@@ -1,30 +1,29 @@
 import GameRow from "./GameRow";
+import type { Game } from "@shared/schema";
 
-interface Game {
-  id: string;
-  awayTeam: string;
-  awayPlayer: string;
-  awayTipCount: number;
-  awayTipPercent: number;
-  awayScorePercent: number;
-  awayStarters?: string[];
-  homeTeam: string;
-  homePlayer: string;
-  homeTipCount: number;
-  homeTipPercent: number;
-  homeScorePercent: number;
-  homeStarters?: string[];
-  h2h: string;
-  gameTime?: string;
-  status?: string;
+interface EspnPick {
+  player: string;
+  team: string;
+  headshot?: string;
+  firstBasketPct: number;
+  avgPoints: number;
+  odds: string;
+  isStarter?: boolean;
 }
 
 interface GamesTableProps {
   games: Game[];
   headshotMap?: Record<string, string>;
+  espnAwayPicks?: Record<string, EspnPick | null>;
+  espnHomePicks?: Record<string, EspnPick | null>;
 }
 
-export default function GamesTable({ games, headshotMap = {} }: GamesTableProps) {
+export default function GamesTable({
+  games,
+  headshotMap = {},
+  espnAwayPicks = {},
+  espnHomePicks = {},
+}: GamesTableProps) {
   if (games.length === 0) {
     return (
       <div className="border rounded-md bg-card flex items-center justify-center h-40 text-muted-foreground text-sm" data-testid="container-games-table">
@@ -36,14 +35,21 @@ export default function GamesTable({ games, headshotMap = {} }: GamesTableProps)
   return (
     <div className="border rounded-md bg-card overflow-hidden" data-testid="container-games-table">
       <div>
-        {games.map((game) => (
-          <GameRow
-            key={game.id}
-            {...game}
-            awayPlayerHeadshot={headshotMap[game.awayPlayer]}
-            homePlayerHeadshot={headshotMap[game.homePlayer]}
-          />
-        ))}
+        {games.map((game) => {
+          const awayEspn = espnAwayPicks[game.id];
+          const homeEspn = espnHomePicks[game.id];
+
+          return (
+            <GameRow
+              key={game.id}
+              {...game}
+              awayPlayerHeadshot={awayEspn?.headshot || headshotMap[game.awayPlayer]}
+              homePlayerHeadshot={homeEspn?.headshot || headshotMap[game.homePlayer]}
+              awayEspnPick={awayEspn}
+              homeEspnPick={homeEspn}
+            />
+          );
+        })}
       </div>
     </div>
   );

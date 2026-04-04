@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import GamesTable from "@/components/GamesTable";
 import StatsCard from "@/components/StatsCard";
@@ -14,7 +14,9 @@ interface EspnPlayerStat {
   espnId: string;
   headshot?: string;
   firstBasketPct: number;
+  avgPoints: number;
   odds: string;
+  isStarter?: boolean;
 }
 
 const TEAM_COLORS: Record<string, string> = {
@@ -28,18 +30,21 @@ const TEAM_COLORS: Record<string, string> = {
   UTAH: "bg-blue-900", WSH: "bg-blue-900",
 };
 
-function FeaturedPickBanner({ games, headshotMap }: { games: Game[]; headshotMap: Record<string, string> }) {
-  const featured = games
-    .map(g => {
-      const awayIsTop = g.awayScorePercent > g.homeScorePercent;
-      const topTeam = awayIsTop ? g.awayTeam : g.homeTeam;
-      const topPercent = Math.max(g.awayScorePercent, g.homeScorePercent);
-      const topPlayer = awayIsTop ? g.awayPlayer : g.homePlayer;
-      const opponent = awayIsTop ? g.homeTeam : g.awayTeam;
-      return { game: g, topTeam, topPercent, topPlayer, opponent };
-    })
-    .filter(f => f.topPercent >= 55)
-    .sort((a, b) => b.topPercent - a.topPercent)
+interface GamePickSummary {
+  game: Game;
+  topPlayer: EspnPlayerStat | null;
+  awayTop: EspnPlayerStat | null;
+  homeTop: EspnPlayerStat | null;
+}
+
+function FeaturedPickBanner({
+  gamePicks
+}: {
+  gamePicks: GamePickSummary[];
+}) {
+  const featured = gamePicks
+    .filter(gp => gp.topPlayer && gp.topPlayer.firstBasketPct > 0)
+    .sort((a, b) => (b.topPlayer?.firstBasketPct ?? 0) - (a.topPlayer?.firstBasketPct ?? 0))
     .slice(0, 3);
 
   if (featured.length === 0) return null;
@@ -48,20 +53,21 @@ function FeaturedPickBanner({ games, headshotMap }: { games: Game[]; headshotMap
     <div className="rounded-md border bg-card overflow-hidden">
       <div className="px-4 py-3 border-b bg-primary/10 flex items-center gap-2">
         <Star className="w-4 h-4 text-primary fill-current" />
-        <span className="text-sm font-semibold text-primary">Today's Top Picks</span>
-        <Badge variant="secondary" className="text-xs ml-auto">First Basket Analysis</Badge>
+        <span className="text-sm font-semibold text-primary">Today's Top First Basket Picks</span>
+        <Badge variant="secondary" className="text-xs ml-auto">Live ESPN Data</Badge>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x">
-        {featured.map(({ game, topTeam, topPercent, topPlayer, opponent }, i) => {
-          const bg = TEAM_COLORS[topTeam] || "bg-gray-600";
-          const headshot = headshotMap[topPlayer];
-          const initials = topPlayer.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase();
+        {featured.map(({ game, topPlayer }, i) => {
+          if (!topPlayer) return null;
+          const opponent = topPlayer.team === game.awayTeam ? game.homeTeam : game.awayTeam;
+          const bg = TEAM_COLORS[topPlayer.team] || "bg-gray-600";
+          const initials = topPlayer.player.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase();
           return (
             <div key={game.id} className="p-4 flex flex-col gap-3">
               <div className="flex items-start gap-3">
                 <div className="relative shrink-0">
                   <Avatar className="w-14 h-14 ring-2 ring-border">
-                    <AvatarImage src={headshot} alt={topPlayer} className="object-cover object-top" />
+                    <AvatarImage src={topPlayer.headshot} alt={topPlayer.player} className="object-cover object-top" />
                     <AvatarFallback className="text-sm font-bold bg-muted">{initials}</AvatarFallback>
                   </Avatar>
                   <div className={`absolute -bottom-1 -right-1 w-5 h-5 rounded-full ${bg} flex items-center justify-center`}>
@@ -69,24 +75,24 @@ function FeaturedPickBanner({ games, headshotMap }: { games: Game[]; headshotMap
                   </div>
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="font-semibold text-sm leading-tight">{topPlayer}</div>
+                  <div className="font-semibold text-sm leading-tight">{topPlayer.player}</div>
                   <div className="text-xs text-muted-foreground mt-0.5">
-                    {topTeam} vs {opponent}
+                    {topPlayer.team} vs {opponent}
                   </div>
-                  {game.gameTime && (
-                    <div className="text-[10px] text-muted-foreground/60 mt-0.5 font-mono">{game.gameTime}</div>
-                  )}
+                  <div className="text-[10px] text-muted-foreground/60 mt-0.5">
+                    {topPlayer.avgPoints} PPG &bull; {topPlayer.odds} odds
+                  </div>
                 </div>
                 <div className="text-right shrink-0">
-                  <div className="font-mono text-xl font-bold text-primary">{topPercent}%</div>
-                  <div className="text-[10px] text-muted-foreground">1st to score</div>
+                  <div className="font-mono text-xl font-bold text-primary">{topPlayer.firstBasketPct.toFixed(1)}%</div>
+                  <div className="text-[10px] text-muted-foreground">FB%</div>
                 </div>
               </div>
               <div className="flex items-center gap-2 pt-1 border-t">
                 <div className={`w-5 h-5 rounded-md ${bg} flex items-center justify-center shrink-0`}>
-                  <span className="text-white text-[9px] font-bold">{topTeam.slice(0, 3)}</span>
+                  <span className="text-white text-[9px] font-bold">{topPlayer.team.slice(0, 3)}</span>
                 </div>
-                <span className="text-[10px] text-muted-foreground">Top First Basket Pick for this matchup</span>
+                <span className="text-[10px] text-muted-foreground">Top first basket pick for this matchup</span>
               </div>
             </div>
           );
@@ -131,30 +137,42 @@ export default function AllGames() {
     });
   }, [allGames]);
 
+  // Build per-game pick summaries using ESPN stats
+  const gamePicks = useMemo<GamePickSummary[]>(() => {
+    if (!games.length) return [];
+    return games.map(game => {
+      const awayPlayers = espnStats?.filter(s => s.team === game.awayTeam) ?? [];
+      const homePlayers = espnStats?.filter(s => s.team === game.homeTeam) ?? [];
+      const awayTop = awayPlayers.sort((a, b) => b.firstBasketPct - a.firstBasketPct)[0] ?? null;
+      const homeTop = homePlayers.sort((a, b) => b.firstBasketPct - a.firstBasketPct)[0] ?? null;
+      const topPlayer = !awayTop ? homeTop
+        : !homeTop ? awayTop
+        : awayTop.firstBasketPct >= homeTop.firstBasketPct ? awayTop : homeTop;
+      return { game, topPlayer, awayTop, homeTop };
+    });
+  }, [games, espnStats]);
+
   const stats = useMemo(() => {
-    if (!games || games.length === 0) return { avgTipWin: 0, highestScore: 0, highestScoreTeam: "", topPlayer: "" };
+    if (!games || games.length === 0) return { avgFbPct: "0.0", highestFbPct: 0, highestFbMatchup: "", topPlayer: "" };
 
-    const allTipPercents = games.flatMap(g => [g.awayTipPercent, g.homeTipPercent]);
-    const avgTipWin = (allTipPercents.reduce((a, b) => a + b, 0) / allTipPercents.length).toFixed(1);
+    const allFbPcts = espnStats?.map(s => s.firstBasketPct) ?? [];
+    const avgFbPct = allFbPcts.length > 0
+      ? (allFbPcts.reduce((a, b) => a + b, 0) / allFbPcts.length).toFixed(1)
+      : "0.0";
 
-    let highestScore = 0;
-    let highestScoreTeam = "";
+    let highestFbPct = 0;
+    let highestFbMatchup = "";
     let topPlayer = "";
-    games.forEach(game => {
-      if (game.awayScorePercent > highestScore) {
-        highestScore = game.awayScorePercent;
-        highestScoreTeam = `${game.awayTeam} @ ${game.homeTeam}`;
-        topPlayer = game.awayPlayer;
-      }
-      if (game.homeScorePercent > highestScore) {
-        highestScore = game.homeScorePercent;
-        highestScoreTeam = `${game.awayTeam} @ ${game.homeTeam}`;
-        topPlayer = game.homePlayer;
+    gamePicks.forEach(({ game, topPlayer: tp }) => {
+      if (tp && tp.firstBasketPct > highestFbPct) {
+        highestFbPct = tp.firstBasketPct;
+        highestFbMatchup = `${game.awayTeam} @ ${game.homeTeam}`;
+        topPlayer = tp.player;
       }
     });
 
-    return { avgTipWin, highestScore, highestScoreTeam, topPlayer };
-  }, [games]);
+    return { avgFbPct, highestFbPct, highestFbMatchup, topPlayer };
+  }, [games, espnStats, gamePicks]);
 
   if (gamesLoading) {
     return (
@@ -182,21 +200,21 @@ export default function AllGames() {
           icon={Target}
         />
         <StatsCard
-          title="Avg Tip Win %"
-          value={`${stats.avgTipWin}%`}
-          subtitle="Across all matchups today"
+          title="Avg First Basket %"
+          value={`${stats.avgFbPct}%`}
+          subtitle={`Across ${espnStats?.length ?? 0} players today`}
           icon={TrendingUp}
         />
         <StatsCard
-          title="Top Score Probability"
-          value={`${stats.highestScore}%`}
-          subtitle={stats.topPlayer ? `${stats.topPlayer} — ${stats.highestScoreTeam}` : stats.highestScoreTeam}
+          title="Top Pick Probability"
+          value={stats.highestFbPct > 0 ? `${stats.highestFbPct.toFixed(1)}%` : "Loading..."}
+          subtitle={stats.topPlayer ? `${stats.topPlayer} — ${stats.highestFbMatchup}` : stats.highestFbMatchup || "Fetching ESPN data..."}
           icon={Zap}
         />
       </div>
 
       {/* Featured Picks */}
-      <FeaturedPickBanner games={games} headshotMap={headshotMap} />
+      <FeaturedPickBanner gamePicks={gamePicks} />
 
       {/* Games Table */}
       <div>
@@ -206,7 +224,12 @@ export default function AllGames() {
             {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
           </span>
         </div>
-        <GamesTable games={games} headshotMap={headshotMap} />
+        <GamesTable
+          games={games}
+          headshotMap={headshotMap}
+          espnAwayPicks={Object.fromEntries(gamePicks.map(gp => [gp.game.id, gp.awayTop]))}
+          espnHomePicks={Object.fromEntries(gamePicks.map(gp => [gp.game.id, gp.homeTop]))}
+        />
       </div>
     </div>
   );

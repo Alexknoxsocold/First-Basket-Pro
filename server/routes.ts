@@ -149,29 +149,56 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // ESPN real player stats for today's starters
+  // In-memory cache for ESPN player stats (refreshed every 5 minutes or on lineup sync)
+  let espnStatsCache: { data: any[]; timestamp: number; teams: string } | null = null;
+  const ESPN_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+  // ESPN real player stats for today's games — fetches all active players on today's teams
   app.get("/api/espn-player-stats", async (_req, res) => {
     try {
       const games = await storage.getGames();
-      const todayGames = games.filter(g => g.gameDate === 'Today');
-      
+      const now = new Date();
+      const todayISO = now.toISOString().split('T')[0];
+      const todayGames = games.filter(g => {
+        if (g.gameDate === 'Today') return true;
+        if (g.gameTime) {
+          const gt = new Date(g.gameTime);
+          return gt.toISOString().split('T')[0] === todayISO;
+        }
+        return g.gameDate === todayISO;
+      });
+
       if (todayGames.length === 0) {
         return res.json([]);
       }
 
-      // Build list of teams + starters
-      const teamStarters: { team: string; players: string[] }[] = [];
-      for (const game of todayGames) {
-        if (game.awayStarters?.length) {
-          teamStarters.push({ team: game.awayTeam, players: game.awayStarters });
-        }
-        if (game.homeStarters?.length) {
-          teamStarters.push({ team: game.homeTeam, players: game.homeStarters });
-        }
+      // Collect all unique teams playing today
+      const allTeams = [...new Set(todayGames.flatMap(g => [g.awayTeam, g.homeTeam]))].sort();
+      const teamsKey = allTeams.join(',');
+
+      // Return cached data if fresh and for same teams
+      if (espnStatsCache &&
+          espnStatsCache.teams === teamsKey &&
+          (Date.now() - espnStatsCache.timestamp) < ESPN_CACHE_TTL) {
+        console.log(`[ESPN Stats] Serving from cache (${espnStatsCache.data.length} players)`);
+        return res.json(espnStatsCache.data);
       }
 
-      const { fetchEspnPlayerStats } = await import('./espnPlayerStats.js');
-      const espnStats = await fetchEspnPlayerStats(teamStarters);
+      // Build starter map from game records (may be empty if lineups not yet set)
+      const starterMap: Record<string, string[]> = {};
+      for (const game of todayGames) {
+        if (game.awayStarters?.length) starterMap[game.awayTeam] = game.awayStarters;
+        if (game.homeStarters?.length) starterMap[game.homeTeam] = game.homeStarters;
+      }
+
+      console.log(`[ESPN Stats] Fetching stats for ${allTeams.length} teams: ${allTeams.join(', ')}`);
+      const { fetchEspnTeamStats } = await import('./espnPlayerStats.js');
+      const espnStats = await fetchEspnTeamStats(allTeams, starterMap);
+      console.log(`[ESPN Stats] Total players fetched: ${espnStats.length}`);
+
+      // Cache the result
+      espnStatsCache = { data: espnStats, timestamp: Date.now(), teams: teamsKey };
+
       res.json(espnStats);
     } catch (error) {
       console.error('[ESPN Stats] Error:', error);
@@ -244,6 +271,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Re-populate player stats with updated starters
       const { populateTodayStarters } = await import('./populate-player-stats.js');
       await populateTodayStarters(storage);
+
+      // Invalidate ESPN stats cache so next request gets fresh data with updated starters
+      espnStatsCache = null;
 
       res.json({ message: `Updated lineups for ${updated} games`, updated, lineupMap });
     } catch (error) {

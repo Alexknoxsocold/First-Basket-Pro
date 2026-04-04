@@ -1,5 +1,5 @@
 // ESPN Player Stats Service
-// Fetches real season stats from ESPN for today's starters
+// Fetches real season stats from ESPN for today's game teams
 
 const ESPN_TEAM_IDS: Record<string, string> = {
   PHI: "20", MIA: "14", BOS: "2", ATL: "1", PHX: "21", MEM: "29",
@@ -22,12 +22,13 @@ export interface EspnPlayerStat {
   avgMinutes: number;
   avgAssists: number;
   avgRebounds: number;
-  firstBasketPct: number;  // Derived from FGA rate
-  q1FgaRate: number;       // Estimated Q1 FGA rate
+  firstBasketPct: number;
+  q1FgaRate: number;
   odds: string;
   headshot?: string;
   injuryStatus?: string;
   injuryDetail?: string;
+  isStarter?: boolean;
 }
 
 interface RosterEntry {
@@ -35,12 +36,16 @@ interface RosterEntry {
   displayName: string;
   position?: { abbreviation: string };
   headshot?: { href: string };
-  injuries?: Array<{ status: string; type: string }>;
+  injuries?: Array<{ status: string; type: string; shortComment?: string }>;
+  status?: { name: string };
 }
 
 async function fetchJson(url: string): Promise<any> {
   try {
-    const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+    const res = await fetch(url, {
+      headers: { 'User-Agent': 'Mozilla/5.0' },
+      signal: AbortSignal.timeout(8000),
+    });
     if (!res.ok) return null;
     return await res.json();
   } catch {
@@ -49,8 +54,6 @@ async function fetchJson(url: string): Promise<any> {
 }
 
 async function getTeamRoster(teamAbbr: string): Promise<RosterEntry[]> {
-  const espnId = ESPN_TEAM_IDS[teamAbbr];
-  if (!espnId) return [];
   const data = await fetchJson(
     `https://site.api.espn.com/apis/site/v2/sports/basketball/nba/teams/${teamAbbr}/roster`
   );
@@ -59,19 +62,15 @@ async function getTeamRoster(teamAbbr: string): Promise<RosterEntry[]> {
 
 function normalizeName(name: string): string {
   return name.toLowerCase()
-    .replace(/[.''-]/g, '')
+    .replace(/[.''\u2019-]/g, '')
     .replace(/\s+/g, ' ')
     .trim();
 }
 
 function matchPlayer(starterName: string, roster: RosterEntry[]): RosterEntry | null {
   const normalizedStarter = normalizeName(starterName);
-  
-  // Try exact match first
   let match = roster.find(p => normalizeName(p.displayName) === normalizedStarter);
   if (match) return match;
-  
-  // Try last name match
   const starterLastName = normalizedStarter.split(' ').slice(-1)[0];
   match = roster.find(p => {
     const rosterLastName = normalizeName(p.displayName).split(' ').slice(-1)[0];
@@ -85,7 +84,7 @@ async function getPlayerStats(espnId: string): Promise<any> {
     `https://sports.core.api.espn.com/v2/sports/basketball/leagues/nba/seasons/2026/types/2/athletes/${espnId}/statistics/0`
   );
   if (!data?.splits?.categories) return null;
-  
+
   const cats = data.splits.categories;
   const getStat = (catName: string, statName: string): number => {
     const cat = cats.find((c: any) => c.name === catName);
@@ -107,41 +106,22 @@ async function getPlayerStats(espnId: string): Promise<any> {
 
 function deriveFirstBasketPct(stats: any, position: string): { fbPct: number; q1FgaRate: number; odds: string } {
   const { avgFGA, avgPoints, fgPct, avgMinutes } = stats;
-  
-  // First basket probability model:
-  // Base: ~10% per starter (10 players on floor, one scores first)
-  // Adjusted by: scoring volume, efficiency, role, position
-  // Realistic range: 8-28% for most starters, 28-38% for elite high-usage stars
 
-  // Primary: FGA share (player FGA vs typical 85-95 team FGA/game)
-  // More FGA = more shots = higher chance to score the game's first basket
-  const fgaShare = avgFGA / 90; // fraction of team's shots
-  let fbScore = fgaShare * 40; // scale to 0-~18 for typical starters
-  
-  // Secondary: scoring volume adds to early-game impact
+  const fgaShare = avgFGA / 90;
+  let fbScore = fgaShare * 40;
   fbScore += (avgPoints / 45) * 8;
-  
-  // FG% boosts probability (efficient scorers make their shots)
   fbScore += ((fgPct - 43) / 30) * 4;
-  
-  // Starter role (more minutes = more integral to early possession)
   fbScore += (Math.min(avgMinutes, 36) / 36) * 3;
-  
-  // Position modifier: Centers often get early post touches; PGs push pace
+
   if (position === 'C') fbScore *= 1.12;
   else if (position === 'PG') fbScore *= 1.05;
-  
-  // Add a floor and apply small random-like offset (seeded by player stats to be consistent)
-  const offset = ((avgFGA * 7 + avgPoints * 3) % 3.0) - 1.5; // ±1.5 consistent per player
+
+  const offset = ((avgFGA * 7 + avgPoints * 3) % 3.0) - 1.5;
   fbScore = Math.max(fbScore + offset, 3);
-  
-  // Cap at realistic max (elite stars top out around 35%)
   const fbPct = Math.min(Math.round(fbScore * 10) / 10, 35);
-  
-  // Q1 FGA rate: roughly FGA/4 per quarter (first quarter)
+
   const q1FgaRate = Math.round((avgFGA / 4) * 10) / 10;
-  
-  // Convert to American odds
+
   const impliedProb = fbPct / 100;
   let odds: string;
   if (impliedProb >= 0.5) {
@@ -149,59 +129,47 @@ function deriveFirstBasketPct(stats: any, position: string): { fbPct: number; q1
   } else {
     odds = `+${Math.round(((1 - impliedProb) / impliedProb) * 100)}`;
   }
-  
+
   return { fbPct, q1FgaRate, odds };
 }
 
+function getInjuryStatus(entry: RosterEntry): string | undefined {
+  const inj = entry.injuries?.[0];
+  if (!inj) return undefined;
+  return inj.status || undefined;
+}
+
+/**
+ * Fetch stats for specific starters (legacy mode - used when lineups are set)
+ */
 export async function fetchEspnPlayerStats(
   starters: { team: string; players: string[] }[]
 ): Promise<EspnPlayerStat[]> {
   const results: EspnPlayerStat[] = [];
-  
-  // Fetch ALL team rosters for today's games in parallel (to handle trades)
+
   const allTeams = [...new Set(starters.map(s => s.team))];
   const rosterMap: Record<string, RosterEntry[]> = {};
   await Promise.all(
     allTeams.map(async (team) => {
-      const roster = await getTeamRoster(team);
-      rosterMap[team] = roster;
+      rosterMap[team] = await getTeamRoster(team);
     })
   );
-  
-  // Build a global name → player lookup from all rosters (handles traded players)
+
   const globalRoster: RosterEntry[] = Object.values(rosterMap).flat();
-  
-  // Process each starter
+
   for (const { team, players } of starters) {
     await Promise.all(players.map(async (playerName) => {
-      // First try the specific team, then fall back to global search (for traded players)
       const teamRoster = rosterMap[team] || [];
       let matched = matchPlayer(playerName, teamRoster);
-      if (!matched) {
-        matched = matchPlayer(playerName, globalRoster);
-        if (matched) {
-          console.log(`[ESPN] Found ${playerName} via global search (listed team: ${team})`);
-        }
-      }
-      
-      if (!matched) {
-        console.log(`[ESPN] No match for ${playerName} (${team})`);
-        return;
-      }
-      
+      if (!matched) matched = matchPlayer(playerName, globalRoster);
+      if (!matched) return;
+
       const statsData = await getPlayerStats(matched.id);
-      if (!statsData || statsData.gamesPlayed === 0) {
-        console.log(`[ESPN] No stats for ${playerName} (ID: ${matched.id})`);
-        return;
-      }
-      
+      if (!statsData || statsData.gamesPlayed === 0) return;
+
       const position = matched.position?.abbreviation || 'G';
       const { fbPct, q1FgaRate, odds } = deriveFirstBasketPct(statsData, position);
-      
-      // Get injury info from matched player's ESPN data
-      const injury = matched.injuries?.[0];
-      const injuryStatus = injury ? injury.status : undefined;
-      
+
       results.push({
         player: playerName,
         team,
@@ -218,12 +186,88 @@ export async function fetchEspnPlayerStats(
         q1FgaRate,
         odds,
         headshot: matched.headshot?.href,
-        injuryStatus,
+        injuryStatus: getInjuryStatus(matched),
+        isStarter: true,
       });
-      
-      console.log(`[ESPN] ✓ ${playerName} (${team}): ${statsData.avgPoints}ppg, ${statsData.avgFGA}fga, FB%: ${fbPct}%`);
     }));
   }
-  
+
+  return results;
+}
+
+/**
+ * Fetch stats for ALL active players on today's game teams
+ * Works without pre-set starters — just give it team abbreviations
+ */
+export async function fetchEspnTeamStats(
+  teams: string[],
+  starterMap: Record<string, string[]> = {}
+): Promise<EspnPlayerStat[]> {
+  const results: EspnPlayerStat[] = [];
+
+  // Fetch all rosters in parallel
+  const rosterMap: Record<string, RosterEntry[]> = {};
+  await Promise.all(
+    teams.map(async (team) => {
+      rosterMap[team] = await getTeamRoster(team);
+      console.log(`[ESPN] Fetched ${rosterMap[team].length} players for ${team}`);
+    })
+  );
+
+  // Process each team
+  for (const team of teams) {
+    const roster = rosterMap[team] || [];
+    const starters = starterMap[team] || [];
+
+    // Filter: exclude players who are definitively OUT or suspended
+    // Include injured but playing (DTD, Questionable, Probable)
+    const activePlayers = roster.filter(p => {
+      const inj = p.injuries?.[0];
+      if (!inj) return true;
+      const status = inj.status?.toLowerCase() || '';
+      return !status.includes('out') && !status.includes('suspend');
+    });
+
+    // Fetch stats for all active players in parallel (batches of 8)
+    const batchSize = 8;
+    for (let i = 0; i < activePlayers.length; i += batchSize) {
+      const batch = activePlayers.slice(i, i + batchSize);
+      await Promise.all(batch.map(async (player) => {
+        const statsData = await getPlayerStats(player.id);
+        // Only include players with meaningful playing time this season
+        if (!statsData || statsData.gamesPlayed < 3 || statsData.avgMinutes < 8) return;
+
+        const position = player.position?.abbreviation || 'G';
+        const { fbPct, q1FgaRate, odds } = deriveFirstBasketPct(statsData, position);
+
+        const isStarter = starters.length > 0
+          ? starters.some(s => normalizeName(s) === normalizeName(player.displayName))
+          : statsData.avgMinutes >= 25; // Treat high-minutes players as starters if no list
+
+        results.push({
+          player: player.displayName,
+          team,
+          espnId: player.id,
+          position,
+          gamesPlayed: statsData.gamesPlayed,
+          avgPoints: Math.round(statsData.avgPoints * 10) / 10,
+          avgFGA: Math.round(statsData.avgFGA * 10) / 10,
+          fgPct: Math.round(statsData.fgPct * 10) / 10,
+          avgMinutes: Math.round(statsData.avgMinutes * 10) / 10,
+          avgAssists: Math.round(statsData.avgAssists * 10) / 10,
+          avgRebounds: Math.round(statsData.avgRebounds * 10) / 10,
+          firstBasketPct: fbPct,
+          q1FgaRate,
+          odds,
+          headshot: player.headshot?.href,
+          injuryStatus: getInjuryStatus(player),
+          isStarter,
+        });
+      }));
+    }
+
+    console.log(`[ESPN] ✓ ${team}: ${results.filter(r => r.team === team).length} players processed`);
+  }
+
   return results;
 }
