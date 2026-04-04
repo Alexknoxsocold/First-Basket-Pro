@@ -7,6 +7,8 @@ import ws from "ws";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { authMiddleware } from "./auth";
+import { createDailySyncService } from "./dailySync";
+import { storage } from "./storage";
 
 const app = express();
 
@@ -113,10 +115,19 @@ app.use((req, res, next) => {
   }, async () => {
     log(`serving on port ${port}`);
     
-    // Automatically populate player stats on startup
+    // Run full daily sync on startup to populate games + player stats from ESPN
+    try {
+      log('[Startup] Running initial data sync...');
+      const startupSyncService = createDailySyncService(storage);
+      await startupSyncService.runDailySync();
+      log('[Startup] Initial sync complete');
+    } catch (error) {
+      log('[Startup] Initial sync failed:', error);
+    }
+
+    // Populate player stats after games exist
     try {
       const { populateTodayStarters } = await import('./populate-player-stats.js');
-      const { storage } = await import('./storage.js');
       await populateTodayStarters(storage);
       log('[Startup] Player stats populated successfully');
     } catch (error) {
