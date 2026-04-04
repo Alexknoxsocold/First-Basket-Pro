@@ -2,6 +2,50 @@ import type { IStorage } from './storage';
 import { InjurySync } from './injurySync';
 import { LineupSync } from './lineupSync';
 
+async function fetchGameSummary(eventId: string): Promise<any | null> {
+  try {
+    const res = await fetch(
+      `https://site.api.espn.com/apis/site/v2/sports/basketball/nba/summary?event=${eventId}`,
+      { signal: AbortSignal.timeout(8000) }
+    );
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+function extractScorerFromPlayText(text: string): string | null {
+  if (!text) return null;
+  const makeIdx = text.indexOf(' makes ');
+  if (makeIdx > 0) return text.slice(0, makeIdx).trim();
+  return null;
+}
+
+async function detectFirstScorer(espnGameId: string): Promise<{ scorer: string; team: string } | null> {
+  const summary = await fetchGameSummary(espnGameId);
+  if (!summary) return null;
+
+  const plays: any[] = Array.isArray(summary.plays) ? summary.plays : [];
+  const firstScore = plays.find((p: any) => p.scoringPlay === true);
+  if (!firstScore) return null;
+
+  const scorer = extractScorerFromPlayText(firstScore.text);
+  if (!scorer) return null;
+
+  // Try to get team abbreviation from the scoring play's team
+  const teamId = firstScore.team?.id;
+  const competitions = summary.header?.competitions?.[0];
+  let teamAbbr = '';
+  if (teamId && competitions?.competitors) {
+    const competitor = competitions.competitors.find((c: any) => String(c.team?.id) === String(teamId));
+    if (competitor) teamAbbr = competitor.team?.abbreviation || '';
+  }
+
+  console.log(`[FBTracker] First scorer: ${scorer} (${teamAbbr || 'unknown team'})`);
+  return { scorer, team: teamAbbr };
+}
+
 interface ESPNCompetitor {
   id: string;
   team: {
@@ -290,11 +334,27 @@ export class DailySyncService {
       });
       
       console.log(`[DailySync] ✓ Updated game: ${awayTeam.team.displayName} ${awayTeam.score} @ ${homeTeam.team.displayName} ${homeTeam.score}`);
-      
-      // TODO: In a full implementation, we would also:
-      // 1. Fetch play-by-play data to determine first basket scorer and opening tip winner
-      // 2. Recalculate player stats (firstBaskets, percentage) based on actual game data
-      // 3. Recalculate team stats (firstToScore, percentage) based on actual game data
+
+      // Auto-track first basket scorer from play-by-play
+      try {
+        const alreadyProcessed = await this.storage.isGameProcessed(event.id);
+        if (!alreadyProcessed) {
+          const result = await detectFirstScorer(event.id);
+          if (result) {
+            await this.storage.incrementFbScored(result.scorer, result.team);
+            await this.storage.markGameProcessed(event.id, result.scorer, result.team);
+            console.log(`[FBTracker] ✓ Recorded first basket: ${result.scorer} (${result.team}) in game ${event.id}`);
+          } else {
+            // Mark as processed even if we couldn't find scorer (to avoid retrying)
+            await this.storage.markGameProcessed(event.id);
+            console.log(`[FBTracker] Could not detect first scorer for game ${event.id}`);
+          }
+        } else {
+          console.log(`[FBTracker] Game ${event.id} already processed, skipping`);
+        }
+      } catch (err) {
+        console.error(`[FBTracker] Error tracking first scorer for game ${event.id}:`, err);
+      }
     } else {
       console.log(`[DailySync] No matching game found in storage for ${awayTeam.team.abbreviation} @ ${homeTeam.team.abbreviation}`);
     }

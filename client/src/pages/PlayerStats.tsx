@@ -68,6 +68,7 @@ interface EspnPlayerStat {
   avgAssists: number;
   avgRebounds: number;
   firstBasketPct: number;
+  firstBasketsScored?: number;
   q1FgaRate: number;
   odds: string;
   liveOdds?: string;
@@ -139,7 +140,28 @@ function InjuryBadge({ status }: { status?: string }) {
   return null;
 }
 
-function FbBar({ pct, isTopPick = false, isSneakyValue = false }: { pct: number; isTopPick?: boolean; isSneakyValue?: boolean }) {
+function FbCountBar({ count, isReal = false }: { count: number; isReal?: boolean }) {
+  const MAX_COUNT = 20;
+  const barWidth = Math.min(count / MAX_COUNT * 100, 100);
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-[10px] text-muted-foreground shrink-0 w-20">
+        FB Scored{isReal ? "" : " (est.)"}
+      </span>
+      <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
+        <div
+          className={`h-full rounded-full transition-all ${isReal ? "bg-sky-400" : "bg-sky-500/50"}`}
+          style={{ width: `${barWidth}%` }}
+        />
+      </div>
+      <span className={`font-mono text-xs font-semibold w-12 text-right whitespace-nowrap ${isReal ? "text-sky-500 dark:text-sky-300" : "text-sky-600/70 dark:text-sky-400/60"}`}>
+        {isReal ? count : `~${count}`}
+      </span>
+    </div>
+  );
+}
+
+function FbBar({ pct, isTopPick = false, isSneakyValue = false, isDarkHorse = false }: { pct: number; isTopPick?: boolean; isSneakyValue?: boolean; isDarkHorse?: boolean }) {
   const maxPct = 35;
   const barWidth = Math.min(pct / maxPct * 100, 100);
   const isElite = pct >= 28;
@@ -151,8 +173,10 @@ function FbBar({ pct, isTopPick = false, isSneakyValue = false }: { pct: number;
       : isTopPick
         ? "bg-emerald-700"
         : isSneakyValue
-          ? "bg-teal-700"
-          : "bg-red-500/70";
+          ? "bg-blue-700"
+          : isDarkHorse
+            ? "bg-amber-500"
+            : "bg-red-500/70";
   const textColor = isElite
     ? "text-green-700 dark:text-green-400"
     : isGood
@@ -160,10 +184,13 @@ function FbBar({ pct, isTopPick = false, isSneakyValue = false }: { pct: number;
       : isTopPick
         ? "text-emerald-700 dark:text-emerald-500"
         : isSneakyValue
-          ? "text-teal-700 dark:text-teal-400"
-          : "text-red-600 dark:text-red-400";
+          ? "text-blue-700 dark:text-blue-400"
+          : isDarkHorse
+            ? "text-amber-700 dark:text-amber-400"
+            : "text-red-600 dark:text-red-400";
   return (
     <div className="flex items-center gap-2">
+      <span className="text-[10px] text-muted-foreground shrink-0 w-20">FB Rate</span>
       <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
         <div className={`h-full rounded-full transition-all ${barColor}`} style={{ width: `${barWidth}%` }} />
       </div>
@@ -179,6 +206,7 @@ function PlayerCard({
   showLiveOdds = false,
   isTopPick = false,
   isSneakyValue = false,
+  isDarkHorse = false,
 }: {
   stat: EspnPlayerStat;
   rank: number;
@@ -186,12 +214,13 @@ function PlayerCard({
   showLiveOdds?: boolean;
   isTopPick?: boolean;
   isSneakyValue?: boolean;
+  isDarkHorse?: boolean;
 }) {
   const effectiveTeamRank = teamRank ?? rank;
   const isElite = stat.firstBasketPct >= 28;
   const isGood = stat.firstBasketPct >= 20;
   // isLow only applies if not highlighted by another flag
-  const isLow = stat.firstBasketPct < 20 && !isTopPick && !isSneakyValue;
+  const isLow = stat.firstBasketPct < 20 && !isTopPick && !isSneakyValue && !isDarkHorse;
   const initials = stat.player.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase();
   const displayOdds = stat.liveOdds || stat.odds;
   const isLive = !!stat.liveOdds;
@@ -202,10 +231,12 @@ function PlayerCard({
     : isTopPick
       ? "bg-emerald-100/80 dark:bg-emerald-900/30"
       : isSneakyValue
-        ? "bg-teal-100/70 dark:bg-teal-900/25"
-        : isLow
-          ? "bg-red-100/60 dark:bg-red-500/5"
-          : "";
+        ? "bg-blue-100/70 dark:bg-blue-900/25"
+        : isDarkHorse
+          ? "bg-amber-100/90 dark:bg-amber-600/20"
+          : isLow
+            ? "bg-red-100/60 dark:bg-red-500/5"
+            : "";
 
   // Avatar ring
   const avatarRing = isElite
@@ -213,8 +244,10 @@ function PlayerCard({
     : isTopPick
       ? "ring-emerald-600/50"
       : isSneakyValue
-        ? "ring-teal-600/50"
-        : "ring-border";
+        ? "ring-blue-700/50"
+        : isDarkHorse
+          ? "ring-amber-500/80"
+          : "ring-border";
 
   // Odds color — darker in light mode for contrast, bright in dark mode
   const oddsColor = isElite || isGood
@@ -222,8 +255,10 @@ function PlayerCard({
     : isTopPick
       ? "text-emerald-700 dark:text-emerald-500"
       : isSneakyValue
-        ? "text-teal-700 dark:text-teal-400"
-        : "text-red-600 dark:text-red-400";
+        ? "text-blue-700 dark:text-blue-400"
+        : isDarkHorse
+          ? "text-amber-700 dark:text-amber-400"
+          : "text-red-600 dark:text-red-400";
 
   return (
     <div
@@ -240,11 +275,13 @@ function PlayerCard({
             <AvatarImage src={stat.headshot} alt={stat.player} className="object-cover object-top" />
             <AvatarFallback className="text-xs font-bold bg-muted text-muted-foreground">{initials}</AvatarFallback>
           </Avatar>
-          {(isElite || isTopPick || isSneakyValue) && (
-            <span className={`absolute -top-1 -right-1 flex items-center justify-center w-4 h-4 rounded-full ${isElite ? "bg-green-500" : isTopPick ? "bg-emerald-700" : "bg-teal-700"}`}>
+          {(isElite || isTopPick || isSneakyValue || isDarkHorse) && (
+            <span className={`absolute -top-1 -right-1 flex items-center justify-center w-4 h-4 rounded-full ${isElite ? "bg-green-500" : isTopPick ? "bg-emerald-700" : isSneakyValue ? "bg-blue-700" : "bg-amber-500"}`}>
               {isSneakyValue && !isTopPick && !isElite
                 ? <Zap className="w-2.5 h-2.5 text-white" />
-                : <Star className="w-2.5 h-2.5 text-white fill-white" />
+                : isDarkHorse && !isSneakyValue && !isTopPick && !isElite
+                  ? <TrendingUp className="w-2.5 h-2.5 text-white" />
+                  : <Star className="w-2.5 h-2.5 text-white fill-white" />
               }
             </span>
           )}
@@ -271,8 +308,13 @@ function PlayerCard({
             </Badge>
           )}
           {isSneakyValue && !isTopPick && !isElite && (
-            <Badge className="text-[9px] h-4 px-1.5 bg-teal-900/60 text-teal-300 border border-teal-700/40 font-semibold no-default-active-elevate">
+            <Badge className="text-[9px] h-4 px-1.5 bg-blue-900/70 text-blue-300 border border-blue-700/40 font-semibold no-default-active-elevate">
               Value
+            </Badge>
+          )}
+          {isDarkHorse && !isSneakyValue && !isTopPick && !isElite && (
+            <Badge className="text-[9px] h-4 px-1.5 bg-amber-500/20 text-amber-700 dark:text-amber-400 border border-amber-500/40 font-semibold no-default-active-elevate">
+              Dark Horse
             </Badge>
           )}
         </div>
@@ -282,9 +324,13 @@ function PlayerCard({
           {stat.position} &bull; {stat.avgMinutes.toFixed(0)} MIN &bull; {stat.gamesPlayed} GP
         </p>
 
-        {/* FB% bar */}
-        <div className="mt-2">
-          <FbBar pct={stat.firstBasketPct} isTopPick={isTopPick} isSneakyValue={isSneakyValue} />
+        {/* FB bars */}
+        <div className="mt-2 flex flex-col gap-1">
+          <FbCountBar
+            count={stat.firstBasketsScored ?? Math.round(stat.firstBasketPct / 100 * stat.gamesPlayed)}
+            isReal={stat.firstBasketsScored !== undefined}
+          />
+          <FbBar pct={stat.firstBasketPct} isTopPick={isTopPick} isSneakyValue={isSneakyValue} isDarkHorse={isDarkHorse} />
         </div>
 
         {/* Stats row */}
@@ -300,21 +346,6 @@ function PlayerCard({
             )}
           </div>
 
-          <span className="text-[10px] text-muted-foreground/30">|</span>
-
-          {/* Key stats */}
-          <span className="text-[10px] text-muted-foreground">
-            <span className={stat.avgPoints >= 25 ? "text-green-400 font-semibold" : stat.avgPoints < 10 ? "text-red-400 font-semibold" : ""}>{stat.avgPoints.toFixed(1)}</span>
-            {" PPG"}
-          </span>
-          <span className="text-[10px] text-muted-foreground">
-            <span className={stat.avgFGA >= 15 ? "text-green-400 font-semibold" : stat.avgFGA < 6 ? "text-red-400 font-semibold" : ""}>{stat.avgFGA.toFixed(1)}</span>
-            {" FGA"}
-          </span>
-          <span className="text-[10px] text-muted-foreground">
-            <span className={stat.fgPct >= 50 ? "text-green-400 font-semibold" : stat.fgPct < 38 ? "text-red-400 font-semibold" : ""}>{stat.fgPct.toFixed(1)}%</span>
-            {" FG"}
-          </span>
         </div>
       </div>
     </div>
@@ -403,6 +434,7 @@ function MatchupH2H({
                     showLiveOdds={showLiveOdds}
                     isTopPick={i <= 1}
                     isSneakyValue={checkSneakyValue(p, i + 1)}
+                    isDarkHorse={i === 3}
                   />
                 ))
               )}
@@ -431,6 +463,7 @@ function MatchupH2H({
                     showLiveOdds={showLiveOdds}
                     isTopPick={i <= 1}
                     isSneakyValue={checkSneakyValue(p, i + 1)}
+                    isDarkHorse={i === 3}
                   />
                 ))
               )}
@@ -680,7 +713,7 @@ export default function PlayerStats() {
         <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-green-500 inline-block" />Elite 28%+</span>
         <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-yellow-500 inline-block" />Good 20–27%</span>
         <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-emerald-700 inline-block" />Top Pick</span>
-        <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-teal-700 inline-block" />Sneaky Value</span>
+        <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-blue-700 inline-block" />Value</span>
         <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-red-500/70 inline-block" />Low &lt;20%</span>
         <span className="ml-auto flex items-center gap-3 flex-wrap">
           <span className="flex items-center gap-1.5"><DkLogo className="w-3.5 h-3.5" /> = DraftKings live odds</span>
@@ -748,6 +781,7 @@ export default function PlayerStats() {
                     showLiveOdds={hasLiveOdds}
                     isTopPick={teamRank <= 2}
                     isSneakyValue={checkSneakyValue(stat, teamRank)}
+                    isDarkHorse={teamRank === 4}
                   />
                 );
               })

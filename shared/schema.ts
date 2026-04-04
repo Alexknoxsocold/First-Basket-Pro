@@ -70,11 +70,33 @@ export const sessions = pgTable("sessions", {
   expiresAt: timestamp("expires_at").notNull(),
 });
 
+// Persistent first basket tracking — seeded manually, auto-incremented after each game
+export const fbTracking = pgTable("fb_tracking", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  playerName: text("player_name").notNull(),
+  team: text("team").notNull(),
+  fbScored: integer("fb_scored").notNull().default(0),
+  gamesTracked: integer("games_tracked").notNull().default(0),
+  season: text("season").notNull().default("2025/26"),
+  lastUpdated: text("last_updated"),
+});
+
+// Which ESPN game IDs have already been processed (prevents double-counting)
+export const fbProcessedGames = pgTable("fb_processed_games", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  espnGameId: text("espn_game_id").notNull().unique(),
+  firstScorer: text("first_scorer"),
+  firstScorerTeam: text("first_scorer_team"),
+  processedAt: text("processed_at").notNull(),
+});
+
 export const insertGameSchema = createInsertSchema(games).omit({ id: true });
 export const insertPlayerStatSchema = createInsertSchema(playerStats).omit({ id: true });
 export const insertTeamStatSchema = createInsertSchema(teamStats).omit({ id: true });
 export const insertUserSchema = createInsertSchema(users).omit({ id: true, createdAt: true });
 export const insertSessionSchema = createInsertSchema(sessions).omit({ id: true });
+export const insertFbTrackingSchema = createInsertSchema(fbTracking).omit({ id: true });
+export const insertFbProcessedGameSchema = createInsertSchema(fbProcessedGames).omit({ id: true });
 
 export type InsertGame = z.infer<typeof insertGameSchema>;
 export type Game = typeof games.$inferSelect;
@@ -90,3 +112,9 @@ export type User = typeof users.$inferSelect;
 
 export type InsertSession = z.infer<typeof insertSessionSchema>;
 export type Session = typeof sessions.$inferSelect;
+
+export type InsertFbTracking = z.infer<typeof insertFbTrackingSchema>;
+export type FbTracking = typeof fbTracking.$inferSelect;
+
+export type InsertFbProcessedGame = z.infer<typeof insertFbProcessedGameSchema>;
+export type FbProcessedGame = typeof fbProcessedGames.$inferSelect;

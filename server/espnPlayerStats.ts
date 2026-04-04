@@ -1,6 +1,9 @@
 // ESPN Player Stats Service
 // Fetches real season stats + DraftKings first basket odds from ESPN
 
+import { fetchMultiTeamFirstBasketHistory, warmFirstBasketCache } from './firstBasketHistory';
+import { storage } from './storage';
+
 const ESPN_TEAM_IDS: Record<string, string> = {
   PHI: "20", MIA: "14", BOS: "2", ATL: "1", PHX: "21", MEM: "29",
   CHI: "4", SA: "24", MIN: "16", DAL: "6", CLE: "5", UTAH: "26",
@@ -23,6 +26,7 @@ export interface EspnPlayerStat {
   avgAssists: number;
   avgRebounds: number;
   firstBasketPct: number;
+  firstBasketsScored?: number;  // Real count from ESPN play-by-play (null = still loading)
   q1FgaRate: number;
   odds: string;          // Model-derived odds (fallback)
   liveOdds?: string;     // Real DraftKings odds from ESPN propBets
@@ -155,15 +159,17 @@ export async function fetchFirstBasketOdds(eventIds: string[]): Promise<Record<s
 
   await Promise.all(eventIds.map(async (eventId) => {
     // ESPN provider 100 = DraftKings
-    // Page 2 of propBets contains first basket props
-    for (let page = 1; page <= 4; page++) {
+    // First Basket props appear on page 5+ (after Points/Assists/Rebounds props)
+    for (let page = 1; page <= 12; page++) {
       const data = await fetchJson(
         `https://sports.core.api.espn.com/v2/sports/basketball/leagues/nba/events/${eventId}/competitions/${eventId}/odds/100/propBets?lang=en&region=us&limit=100&page=${page}`
       );
       if (!data?.items) break;
 
+      let foundOnPage = false;
       for (const prop of data.items) {
         if (prop.type?.name === 'First Basket') {
+          foundOnPage = true;
           const athleteRef = prop.athlete?.$ref || '';
           const espnId = athleteRef.match(/athletes\/(\d+)/)?.[1];
           const americanOdds = prop.odds?.american?.value;
@@ -175,7 +181,11 @@ export async function fetchFirstBasketOdds(eventIds: string[]): Promise<Record<s
         }
       }
 
-      // Stop if all items found
+      // Stop if we already passed First Basket pages (they don't re-appear later)
+      const passedFirstBasket = Object.keys(oddsMap).length > 0 && !foundOnPage;
+      if (passedFirstBasket && page > 5) break;
+
+      // Stop if all pages fetched
       if ((data.pageIndex || page) >= (data.pageCount || 1)) break;
     }
   }));
@@ -203,6 +213,13 @@ export async function getTodayEspnEventIds(): Promise<string[]> {
   }).filter(Boolean);
 }
 
+function normalizeNameLocal(name: string): string {
+  return name.toLowerCase()
+    .replace(/[.''\u2019-]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 /**
  * Fetch stats for ALL active (non-OUT) players on today's game teams
  */
@@ -212,6 +229,15 @@ export async function fetchEspnTeamStats(
   firstBasketOddsMap: Record<string, string> = {}
 ): Promise<EspnPlayerStat[]> {
   const results: EspnPlayerStat[] = [];
+
+  // Kick off first basket history fetch in parallel with roster fetching.
+  // Uses cached data if available (12h TTL). If not cached, we race with a
+  // 4s timeout — returning empty history so the response isn't blocked.
+  // The full fetch continues in the background and populates cache for next call.
+  const historyPromise = Promise.race<Record<string, number>>([
+    fetchMultiTeamFirstBasketHistory(teams).catch(() => ({})),
+    new Promise<Record<string, number>>(resolve => setTimeout(() => resolve({}), 4000)),
+  ]);
 
   // Fetch all rosters in parallel
   const rosterMap: Record<string, RosterEntry[]> = {};
@@ -290,6 +316,40 @@ export async function fetchEspnTeamStats(
   });
 
   console.log(`[ESPN] After DK confirmation filter: ${filtered.length} confirmed playing players`);
+
+  // Load DB-tracked first basket counts (seeded manually + auto-tracked)
+  let dbTrackingMap: Record<string, number> = {};
+  try {
+    const dbTracking = await storage.getAllFbTracking();
+    for (const rec of dbTracking) {
+      dbTrackingMap[normalizeNameLocal(rec.playerName)] = rec.fbScored;
+    }
+    if (dbTracking.length > 0) {
+      console.log(`[FBTracker] Loaded ${dbTracking.length} DB-tracked players`);
+    }
+  } catch (err) {
+    console.warn('[FBTracker] Could not load DB tracking:', err);
+  }
+
+  // Await ESPN play-by-play history (scraper) as fallback
+  const history = await historyPromise;
+
+  // Attach counts: DB tracking takes priority, fall back to scraper
+  for (const p of filtered) {
+    const key = normalizeNameLocal(p.player);
+    if (dbTrackingMap[key] !== undefined) {
+      p.firstBasketsScored = dbTrackingMap[key]; // authoritative DB value
+    } else if (history[key] !== undefined) {
+      p.firstBasketsScored = history[key]; // scraper fallback
+    }
+  }
+
+  const dbCount = filtered.filter(p => {
+    const key = normalizeNameLocal(p.player);
+    return dbTrackingMap[key] !== undefined;
+  }).length;
+  console.log(`[FBTracker] ${dbCount}/${filtered.length} players have DB-tracked counts`);
+
   return filtered;
 }
 

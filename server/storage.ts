@@ -1,9 +1,9 @@
-import { type Game, type InsertGame, type PlayerStat, type InsertPlayerStat, type TeamStat, type InsertTeamStat, type User, type InsertUser, type Session, type InsertSession, games as gamesTable } from "@shared/schema";
+import { type Game, type InsertGame, type PlayerStat, type InsertPlayerStat, type TeamStat, type InsertTeamStat, type User, type InsertUser, type Session, type InsertSession, type FbTracking, type FbProcessedGame, games as gamesTable, fbTracking as fbTrackingTable, fbProcessedGames as fbProcessedGamesTable } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { drizzle } from "drizzle-orm/neon-serverless";
 import { Pool, neonConfig } from "@neondatabase/serverless";
 import ws from "ws";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 
 export interface IStorage {
   // Games
@@ -36,6 +36,15 @@ export interface IStorage {
   getSessionByToken(token: string): Promise<Session | undefined>;
   deleteSession(sessionId: string): Promise<void>;
   deleteExpiredSessions(): Promise<void>;
+
+  // FB Tracking
+  getAllFbTracking(): Promise<FbTracking[]>;
+  getFbTrackingByPlayer(playerName: string, team: string): Promise<FbTracking | undefined>;
+  upsertFbTracking(playerName: string, team: string, fbScored: number, season?: string): Promise<FbTracking>;
+  incrementFbScored(playerName: string, team: string): Promise<void>;
+  isGameProcessed(espnGameId: string): Promise<boolean>;
+  markGameProcessed(espnGameId: string, firstScorer?: string, firstScorerTeam?: string): Promise<void>;
+  getProcessedGames(): Promise<FbProcessedGame[]>;
 }
 
 // Initialize PostgreSQL connection for games (only if DATABASE_URL is set)
@@ -50,6 +59,8 @@ export class MemStorage implements IStorage {
   private users: Map<string, User>;
   private sessions: Map<string, Session>;
   private gamesMap: Map<string, Game>; // fallback in-memory games store
+  private fbTrackingMap: Map<string, FbTracking>; // in-memory FB tracking (fallback)
+  private fbProcessedMap: Map<string, FbProcessedGame>; // in-memory processed games (fallback)
   private db = db;
 
   constructor() {
@@ -58,6 +69,8 @@ export class MemStorage implements IStorage {
     this.users = new Map();
     this.sessions = new Map();
     this.gamesMap = new Map();
+    this.fbTrackingMap = new Map();
+    this.fbProcessedMap = new Map();
     this.seedData();
   }
 
@@ -369,6 +382,108 @@ export class MemStorage implements IStorage {
         this.sessions.delete(id);
       }
     }
+  }
+
+  // FB Tracking — PostgreSQL-backed, in-memory fallback for local dev
+  async getAllFbTracking(): Promise<FbTracking[]> {
+    if (this.db) {
+      return await this.db.select().from(fbTrackingTable).orderBy(fbTrackingTable.playerName);
+    }
+    return Array.from(this.fbTrackingMap.values()).sort((a, b) => a.playerName.localeCompare(b.playerName));
+  }
+
+  async getFbTrackingByPlayer(playerName: string, team: string): Promise<FbTracking | undefined> {
+    if (this.db) {
+      const rows = await this.db.select().from(fbTrackingTable)
+        .where(and(eq(fbTrackingTable.playerName, playerName), eq(fbTrackingTable.team, team)));
+      return rows[0];
+    }
+    return Array.from(this.fbTrackingMap.values())
+      .find(r => r.playerName === playerName && r.team === team);
+  }
+
+  async upsertFbTracking(playerName: string, team: string, fbScored: number, season = "2025/26"): Promise<FbTracking> {
+    const now = new Date().toISOString();
+    if (this.db) {
+      // Check if exists
+      const existing = await this.getFbTrackingByPlayer(playerName, team);
+      if (existing) {
+        const [updated] = await this.db.update(fbTrackingTable)
+          .set({ fbScored, lastUpdated: now })
+          .where(eq(fbTrackingTable.id, existing.id))
+          .returning();
+        return updated;
+      }
+      const [created] = await this.db.insert(fbTrackingTable)
+        .values({ playerName, team, fbScored, gamesTracked: 0, season, lastUpdated: now })
+        .returning();
+      return created;
+    }
+    const existing = await this.getFbTrackingByPlayer(playerName, team);
+    if (existing) {
+      const updated = { ...existing, fbScored, lastUpdated: now };
+      this.fbTrackingMap.set(existing.id, updated);
+      return updated;
+    }
+    const id = randomUUID();
+    const rec: FbTracking = { id, playerName, team, fbScored, gamesTracked: 0, season, lastUpdated: now };
+    this.fbTrackingMap.set(id, rec);
+    return rec;
+  }
+
+  async incrementFbScored(playerName: string, team: string): Promise<void> {
+    const now = new Date().toISOString();
+    if (this.db) {
+      const existing = await this.getFbTrackingByPlayer(playerName, team);
+      if (existing) {
+        await this.db.update(fbTrackingTable)
+          .set({ fbScored: existing.fbScored + 1, gamesTracked: existing.gamesTracked + 1, lastUpdated: now })
+          .where(eq(fbTrackingTable.id, existing.id));
+      } else {
+        await this.db.insert(fbTrackingTable)
+          .values({ playerName, team, fbScored: 1, gamesTracked: 1, season: "2025/26", lastUpdated: now });
+      }
+      return;
+    }
+    const existing = await this.getFbTrackingByPlayer(playerName, team);
+    if (existing) {
+      const updated = { ...existing, fbScored: existing.fbScored + 1, gamesTracked: existing.gamesTracked + 1, lastUpdated: now };
+      this.fbTrackingMap.set(existing.id, updated);
+    } else {
+      const id = randomUUID();
+      const rec: FbTracking = { id, playerName, team, fbScored: 1, gamesTracked: 1, season: "2025/26", lastUpdated: now };
+      this.fbTrackingMap.set(id, rec);
+    }
+  }
+
+  async isGameProcessed(espnGameId: string): Promise<boolean> {
+    if (this.db) {
+      const rows = await this.db.select().from(fbProcessedGamesTable)
+        .where(eq(fbProcessedGamesTable.espnGameId, espnGameId));
+      return rows.length > 0;
+    }
+    return Array.from(this.fbProcessedMap.values()).some(r => r.espnGameId === espnGameId);
+  }
+
+  async markGameProcessed(espnGameId: string, firstScorer?: string, firstScorerTeam?: string): Promise<void> {
+    const now = new Date().toISOString();
+    if (this.db) {
+      await this.db.insert(fbProcessedGamesTable)
+        .values({ espnGameId, firstScorer: firstScorer ?? null, firstScorerTeam: firstScorerTeam ?? null, processedAt: now })
+        .onConflictDoNothing();
+      return;
+    }
+    const id = randomUUID();
+    this.fbProcessedMap.set(id, { id, espnGameId, firstScorer: firstScorer ?? null, firstScorerTeam: firstScorerTeam ?? null, processedAt: now });
+  }
+
+  async getProcessedGames(): Promise<FbProcessedGame[]> {
+    if (this.db) {
+      return await this.db.select().from(fbProcessedGamesTable)
+        .orderBy(fbProcessedGamesTable.processedAt);
+    }
+    return Array.from(this.fbProcessedMap.values())
+      .sort((a, b) => b.processedAt.localeCompare(a.processedAt));
   }
 }
 

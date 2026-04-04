@@ -4,7 +4,7 @@ import { storage } from "./storage";
 import { InjurySync } from "./injurySync";
 import { LineupSync } from "./lineupSync";
 import { createDailySyncService } from "./dailySync";
-import { signup, login, logout, getSession, inviteAccess, requireAuth } from "./auth";
+import { signup, login, logout, getSession, inviteAccess, requireAuth, requireAdmin } from "./auth";
 import cron from "node-cron";
 
 const injurySync = new InjurySync(storage);
@@ -22,23 +22,59 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/auth/invite", inviteAccess);
   app.get("/api/auth/session", getSession);
 
-  // Admin password verify endpoint
-  app.post("/api/admin/verify", (req, res) => {
-    const { password } = req.body;
-    const adminPassword = process.env.ADMIN_PASSWORD;
-    if (!adminPassword) {
-      return res.status(500).json({ error: "Admin password not configured" });
+  // Simple in-memory rate limiter for admin verify (max 10 attempts per 15 min per IP)
+  const adminVerifyAttempts = new Map<string, { count: number; resetAt: number }>();
+  const ADMIN_RATE_LIMIT = 10;
+  const ADMIN_RATE_WINDOW = 15 * 60 * 1000;
+
+  // Admin password verify endpoint — sets server-side session flag on success
+  app.post("/api/admin/verify", async (req, res) => {
+    const ip = req.ip || req.socket.remoteAddress || "unknown";
+    const now = Date.now();
+
+    // Check rate limit
+    const entry = adminVerifyAttempts.get(ip);
+    if (entry && now < entry.resetAt) {
+      if (entry.count >= ADMIN_RATE_LIMIT) {
+        return res.status(429).json({ error: "Too many attempts. Please try again later." });
+      }
+      entry.count++;
+    } else {
+      adminVerifyAttempts.set(ip, { count: 1, resetAt: now + ADMIN_RATE_WINDOW });
     }
-    if (password === adminPassword) {
+
+    try {
+      const { password } = req.body;
+      const adminPassword = process.env.ADMIN_PASSWORD;
+      if (!adminPassword) {
+        return res.status(500).json({ error: "Admin password not configured" });
+      }
+      if (password !== adminPassword) {
+        return res.status(401).json({ error: "Incorrect password" });
+      }
+      req.session.isAdminVerified = true;
+      await new Promise<void>((resolve, reject) => {
+        req.session.save((err) => { if (err) reject(err); else resolve(); });
+      });
+      // Clear rate limit on success
+      adminVerifyAttempts.delete(ip);
       return res.json({ success: true });
+    } catch (err) {
+      console.error('[Admin] Verify error:', err);
+      return res.status(500).json({ error: "Failed to verify admin password" });
     }
-    return res.status(401).json({ error: "Incorrect password" });
+  });
+
+  // Admin session check — frontend calls this to verify server-side admin status
+  app.get("/api/admin/session", (req, res) => {
+    res.json({ isAdmin: !!req.session?.isAdminVerified });
   });
 
   // Games endpoints
   app.get("/api/games", async (_req, res) => {
     try {
       const games = await storage.getGames();
+      // Sort games by gameTime (earliest first), then by gameDate
       const sortedGames = games.sort((a, b) => {
         if (a.gameTime && b.gameTime) {
           return new Date(a.gameTime).getTime() - new Date(b.gameTime).getTime();
@@ -60,26 +96,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Update game lineups (protected - requires authentication)
-  app.put("/api/games/:id/lineups", requireAuth, async (req, res) => {
+  // Update game lineups (protected - requires admin password verification)
+  app.put("/api/games/:id/lineups", requireAdmin, async (req, res) => {
     try {
       const { awayStarters, homeStarters } = req.body;
       
       if (!awayStarters || !homeStarters) {
         return res.status(400).json({ error: "Both awayStarters and homeStarters are required" });
       }
+
       if (!Array.isArray(awayStarters) || !Array.isArray(homeStarters)) {
         return res.status(400).json({ error: "Both awayStarters and homeStarters must be arrays" });
       }
+
       if (awayStarters.length !== 5 || homeStarters.length !== 5) {
         return res.status(400).json({ error: "Each team must have exactly 5 starters" });
       }
 
+      // Validate all entries are strings before trimming
       const allUntrimmed = [...awayStarters, ...homeStarters];
       if (allUntrimmed.some(name => typeof name !== 'string')) {
         return res.status(400).json({ error: "All starter slots must contain string values" });
       }
 
+      // Trim and validate all starter slots
       const trimmedAway = awayStarters.map((name: string) => name.trim());
       const trimmedHome = homeStarters.map((name: string) => name.trim());
       const allStarters = [...trimmedAway, ...trimmedHome];
@@ -88,6 +128,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "All starter slots must have valid player names" });
       }
 
+      // Check for duplicate names within each team
       const awayDuplicates = trimmedAway.length !== new Set(trimmedAway).size;
       const homeDuplicates = trimmedHome.length !== new Set(trimmedHome).size;
       
@@ -105,7 +146,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       console.log(`[API] Updated lineups for game ${req.params.id}`);
-      res.json({ message: "Lineups updated successfully", game: updatedGame });
+      console.log(`[API] Away starters: ${trimmedAway.join(', ')}`);
+      console.log(`[API] Home starters: ${trimmedHome.join(', ')}`);
+      
+      res.json({ 
+        message: "Lineups updated successfully",
+        game: updatedGame
+      });
     } catch (error) {
       console.error('[API] Failed to update lineups:', error);
       res.status(500).json({ error: "Failed to update lineups" });
@@ -150,10 +197,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // In-memory cache for ESPN player stats
+  // In-memory cache for ESPN player stats (refreshed every 5 minutes or on lineup sync)
   let espnStatsCache: { data: any[]; timestamp: number; teams: string } | null = null;
-  const ESPN_CACHE_TTL = 5 * 60 * 1000;
+  const ESPN_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
+  // ESPN real player stats for today's games — fetches all active players on today's teams
   app.get("/api/espn-player-stats", async (_req, res) => {
     try {
       const games = await storage.getGames();
@@ -168,37 +216,90 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return g.gameDate === todayISO;
       });
 
-      if (todayGames.length === 0) return res.json([]);
+      if (todayGames.length === 0) {
+        return res.json([]);
+      }
 
+      // Collect all unique teams playing today
       const allTeams = [...new Set(todayGames.flatMap(g => [g.awayTeam, g.homeTeam]))].sort();
       const teamsKey = allTeams.join(',');
 
-      if (espnStatsCache && espnStatsCache.teams === teamsKey && (Date.now() - espnStatsCache.timestamp) < ESPN_CACHE_TTL) {
+      // Return cached data if fresh and for same teams
+      if (espnStatsCache &&
+          espnStatsCache.teams === teamsKey &&
+          (Date.now() - espnStatsCache.timestamp) < ESPN_CACHE_TTL) {
+        console.log(`[ESPN Stats] Serving from cache (${espnStatsCache.data.length} players)`);
         return res.json(espnStatsCache.data);
       }
 
+      // Build starter map from game records (may be empty if lineups not yet set)
       const starterMap: Record<string, string[]> = {};
       for (const game of todayGames) {
         if (game.awayStarters?.length) starterMap[game.awayTeam] = game.awayStarters;
         if (game.homeStarters?.length) starterMap[game.homeTeam] = game.homeStarters;
       }
 
+      console.log(`[ESPN Stats] Fetching stats for ${allTeams.length} teams: ${allTeams.join(', ')}`);
       const { fetchEspnTeamStats, fetchFirstBasketOdds, getTodayEspnEventIds } = await import('./espnPlayerStats.js');
 
+      // Fetch real DraftKings first basket odds from ESPN propBets in parallel
       let firstBasketOddsMap: Record<string, string> = {};
       try {
         const eventIds = await getTodayEspnEventIds();
+        console.log(`[ESPN Stats] Got ${eventIds.length} event IDs, fetching first basket odds...`);
         firstBasketOddsMap = await fetchFirstBasketOdds(eventIds);
       } catch (err) {
         console.warn('[ESPN Stats] Could not fetch live odds:', err);
       }
 
       const espnStats = await fetchEspnTeamStats(allTeams, starterMap, firstBasketOddsMap);
+      console.log(`[ESPN Stats] Total players fetched: ${espnStats.length}`);
+
+      // Cache the result
       espnStatsCache = { data: espnStats, timestamp: Date.now(), teams: teamsKey };
+
       res.json(espnStats);
     } catch (error) {
       console.error('[ESPN Stats] Error:', error);
       res.status(500).json({ error: "Failed to fetch ESPN player stats" });
+    }
+  });
+
+  // FB Tracking endpoints
+  app.get("/api/fb-tracking", async (_req, res) => {
+    try {
+      const tracking = await storage.getAllFbTracking();
+      res.json(tracking);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch FB tracking data" });
+    }
+  });
+
+  // Admin: upsert a player's FB scored count (seed/manual edit)
+  app.post("/api/admin/fb-tracking", requireAdmin, async (req, res) => {
+    try {
+      const { playerName, team, fbScored } = req.body;
+      if (!playerName || !team || typeof fbScored !== 'number') {
+        return res.status(400).json({ error: "playerName, team, and fbScored (number) are required" });
+      }
+      const record = await storage.upsertFbTracking(playerName.trim(), team.trim().toUpperCase(), Math.max(0, Math.round(fbScored)));
+      // Invalidate ESPN stats cache
+      espnStatsCache = null;
+      console.log(`[FBTracker] Admin set ${playerName} (${team}) to ${fbScored} FB scored`);
+      res.json(record);
+    } catch (error) {
+      console.error('[FBTracker] Upsert error:', error);
+      res.status(500).json({ error: "Failed to update FB tracking" });
+    }
+  });
+
+  // Admin: get log of auto-processed games
+  app.get("/api/admin/fb-tracking/processed-games", requireAdmin, async (_req, res) => {
+    try {
+      const processed = await storage.getProcessedGames();
+      res.json(processed);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch processed games" });
     }
   });
 
@@ -215,13 +316,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/team-stats/:team", async (req, res) => {
     try {
       const stat = await storage.getTeamStatByTeam(req.params.team);
-      if (!stat) return res.status(404).json({ error: "Team stat not found" });
+      if (!stat) {
+        return res.status(404).json({ error: "Team stat not found" });
+      }
       res.json(stat);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch team stat" });
     }
   });
 
+  // Injury sync endpoint (manual trigger)
   app.post("/api/sync-injuries", async (_req, res) => {
     try {
       await injurySync.syncInjuries();
@@ -231,13 +335,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ESPN-based lineup sync - fetches real current rosters and picks starters
   app.post("/api/sync-espn-lineups", async (_req, res) => {
     try {
+      console.log('[API] ESPN lineup sync triggered');
       const games = await storage.getGames();
       const todayGames = games.filter(g => g.gameDate === 'Today');
-      if (todayGames.length === 0) return res.json({ message: "No games today", updated: 0 });
+
+      if (todayGames.length === 0) {
+        return res.json({ message: "No games today", updated: 0 });
+      }
 
       const { syncEspnLineups } = await import('./syncEspnLineups.js');
+
+      // Collect all teams
       const allTeams = new Set<string>();
       todayGames.forEach(g => { allTeams.add(g.awayTeam); allTeams.add(g.homeTeam); });
 
@@ -251,10 +362,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const homeStarters = lineupMap[game.homeTeam] || game.homeStarters;
         await storage.updateGame(game.id, { awayStarters, homeStarters });
         updated++;
+        console.log(`[ESPN Lineups] Updated ${game.awayTeam}@${game.homeTeam}`);
       }
 
+      // Re-populate player stats with updated starters
       const { populateTodayStarters } = await import('./populate-player-stats.js');
       await populateTodayStarters(storage);
+
+      // Invalidate ESPN stats cache so next request gets fresh data with updated starters
       espnStatsCache = null;
 
       res.json({ message: `Updated lineups for ${updated} games`, updated, lineupMap });
@@ -264,49 +379,74 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Lineup sync endpoint (manual trigger)
   app.post("/api/sync-lineups", async (_req, res) => {
     try {
+      console.log('[API] Manual lineup sync triggered');
       await lineupSync.syncStartingLineups();
       res.json({ message: "Lineup sync completed successfully" });
     } catch (error) {
+      console.error('[API] Lineup sync failed:', error);
       res.status(500).json({ error: "Failed to sync lineups" });
     }
   });
 
+  // Daily sync endpoint (manual trigger)
   app.post("/api/sync/daily", async (_req, res) => {
     try {
+      console.log('[API] Manual daily sync triggered');
       await dailySyncService.runDailySync();
       res.json({ message: "Daily sync completed successfully" });
     } catch (error) {
+      console.error('[API] Daily sync failed:', error);
       res.status(500).json({ error: "Failed to run daily sync" });
     }
   });
 
+  // Populate player stats endpoint (manual trigger)
   app.post("/api/populate-player-stats", async (_req, res) => {
     try {
+      console.log('[API] Manual player stats population triggered');
       const { populateTodayStarters } = await import('./populate-player-stats.js');
       await populateTodayStarters(storage);
       res.json({ message: "Player stats populated successfully" });
     } catch (error) {
+      console.error('[API] Player stats population failed:', error);
       res.status(500).json({ error: "Failed to populate player stats" });
     }
   });
 
+  // Configure daily sync cron job
+  // Runs at 12:30 AM ET every day (30 0 * * *)
+  // Using America/New_York timezone handles DST automatically
   cron.schedule('30 0 * * *', async () => {
+    console.log('[Cron] Running scheduled daily sync at 12:30 AM ET...');
     try {
       await dailySyncService.runDailySync();
+      console.log('[Cron] ✓ Daily sync completed successfully');
     } catch (error) {
       console.error('[Cron] Daily sync failed:', error);
     }
-  }, { timezone: 'America/New_York' });
+  }, {
+    timezone: 'America/New_York'
+  });
 
+  // Configure lineup sync to run every 30 minutes during game hours (9 AM - 11 PM ET)
+  // This ensures lineups are updated throughout the day as they become available
   cron.schedule('*/30 9-23 * * *', async () => {
+    console.log('[Cron] Running scheduled lineup sync...');
     try {
       await lineupSync.syncStartingLineups();
+      console.log('[Cron] ✓ Lineup sync completed successfully');
     } catch (error) {
       console.error('[Cron] Lineup sync failed:', error);
     }
-  }, { timezone: 'America/New_York' });
+  }, {
+    timezone: 'America/New_York'
+  });
+
+  console.log('[Cron] Daily sync scheduled for 12:30 AM ET every day');
+  console.log('[Cron] Lineup sync scheduled every 30 minutes (9 AM - 11 PM ET)');
 
   const httpServer = createServer(app);
   return httpServer;
