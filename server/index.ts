@@ -18,16 +18,17 @@ app.set('trust proxy', 1);
 // Configure Neon to use WebSocket for serverless environments
 neonConfig.webSocketConstructor = ws;
 
-// Set up PostgreSQL session store
-const PgSession = connectPgSimple(session);
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+// Set up session store — PostgreSQL in production, in-memory locally
+const sessionStore = process.env.DATABASE_URL
+  ? (() => {
+      const PgSession = connectPgSimple(session);
+      const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+      return new PgSession({ pool, tableName: 'session', createTableIfMissing: true });
+    })()
+  : undefined; // express-session defaults to MemoryStore when no store is provided
 
 const sessionMiddleware = session({
-  store: new PgSession({
-    pool,
-    tableName: 'session',
-    createTableIfMissing: true
-  }),
+  ...(sessionStore ? { store: sessionStore } : {}),
   secret: process.env.SESSION_SECRET || 'firstbasket-secret-key-change-in-production',
   resave: false,
   saveUninitialized: false,

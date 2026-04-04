@@ -38,23 +38,26 @@ export interface IStorage {
   deleteExpiredSessions(): Promise<void>;
 }
 
-// Initialize PostgreSQL connection for games
+// Initialize PostgreSQL connection for games (only if DATABASE_URL is set)
 neonConfig.webSocketConstructor = ws;
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-const db = drizzle(pool);
+const hasDatabase = !!process.env.DATABASE_URL;
+const pool = hasDatabase ? new Pool({ connectionString: process.env.DATABASE_URL }) : null;
+const db = pool ? drizzle(pool) : null;
 
 export class MemStorage implements IStorage {
   private playerStats: Map<string, PlayerStat>;
   private teamStats: Map<string, TeamStat>;
   private users: Map<string, User>;
   private sessions: Map<string, Session>;
-  private db = db; // PostgreSQL connection
+  private gamesMap: Map<string, Game>; // fallback in-memory games store
+  private db = db;
 
   constructor() {
     this.playerStats = new Map();
     this.teamStats = new Map();
     this.users = new Map();
     this.sessions = new Map();
+    this.gamesMap = new Map();
     this.seedData();
   }
 
@@ -189,37 +192,52 @@ export class MemStorage implements IStorage {
     });
   }
 
-  // Games - Using PostgreSQL
+  // Games - PostgreSQL when available, in-memory fallback for local dev
   async getGames(): Promise<Game[]> {
-    return await this.db.select().from(gamesTable);
+    if (this.db) return await this.db.select().from(gamesTable);
+    return Array.from(this.gamesMap.values()).sort((a, b) => {
+      if (a.gameTime && b.gameTime) return new Date(a.gameTime).getTime() - new Date(b.gameTime).getTime();
+      return 0;
+    });
   }
 
   async getGamesByDate(date: string): Promise<Game[]> {
-    return await this.db.select().from(gamesTable).where(eq(gamesTable.gameDate, date));
+    if (this.db) return await this.db.select().from(gamesTable).where(eq(gamesTable.gameDate, date));
+    return Array.from(this.gamesMap.values()).filter(g => g.gameDate === date);
   }
 
   async createGame(insertGame: InsertGame): Promise<Game> {
-    const [game] = await this.db.insert(gamesTable).values(insertGame).returning();
+    if (this.db) {
+      const [game] = await this.db.insert(gamesTable).values(insertGame).returning();
+      return game;
+    }
+    const id = randomUUID();
+    const game: Game = { ...insertGame, id, awayScore: insertGame.awayScore ?? null, homeScore: insertGame.homeScore ?? null, h2h: insertGame.h2h ?? null, gameTime: insertGame.gameTime ?? null, espnGameId: insertGame.espnGameId ?? null, lastSynced: insertGame.lastSynced ?? null };
+    this.gamesMap.set(id, game);
     return game;
   }
 
   async updateGame(gameId: string, updates: Partial<Omit<Game, 'id'>>): Promise<Game | undefined> {
-    // Filter out undefined values to prevent overwriting existing fields
     const filteredUpdates = Object.fromEntries(
       Object.entries(updates).filter(([_, value]) => value !== undefined)
     );
-    
-    const [updated] = await this.db
-      .update(gamesTable)
-      .set(filteredUpdates)
-      .where(eq(gamesTable.id, gameId))
-      .returning();
-    
+    if (this.db) {
+      const [updated] = await this.db.update(gamesTable).set(filteredUpdates).where(eq(gamesTable.id, gameId)).returning();
+      return updated;
+    }
+    const existing = this.gamesMap.get(gameId);
+    if (!existing) return undefined;
+    const updated = { ...existing, ...filteredUpdates };
+    this.gamesMap.set(gameId, updated);
     return updated;
   }
 
   async deleteGame(gameId: string): Promise<void> {
-    await this.db.delete(gamesTable).where(eq(gamesTable.id, gameId));
+    if (this.db) {
+      await this.db.delete(gamesTable).where(eq(gamesTable.id, gameId));
+      return;
+    }
+    this.gamesMap.delete(gameId);
   }
 
   // Player Stats
