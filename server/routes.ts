@@ -192,8 +192,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       console.log(`[ESPN Stats] Fetching stats for ${allTeams.length} teams: ${allTeams.join(', ')}`);
-      const { fetchEspnTeamStats } = await import('./espnPlayerStats.js');
-      const espnStats = await fetchEspnTeamStats(allTeams, starterMap);
+      const { fetchEspnTeamStats, fetchFirstBasketOdds, getTodayEspnEventIds } = await import('./espnPlayerStats.js');
+
+      // Fetch real DraftKings first basket odds from ESPN propBets in parallel
+      let firstBasketOddsMap: Record<string, string> = {};
+      try {
+        const eventIds = await getTodayEspnEventIds();
+        console.log(`[ESPN Stats] Got ${eventIds.length} event IDs, fetching first basket odds...`);
+        firstBasketOddsMap = await fetchFirstBasketOdds(eventIds);
+      } catch (err) {
+        console.warn('[ESPN Stats] Could not fetch live odds:', err);
+      }
+
+      const espnStats = await fetchEspnTeamStats(allTeams, starterMap, firstBasketOddsMap);
       console.log(`[ESPN Stats] Total players fetched: ${espnStats.length}`);
 
       // Cache the result
