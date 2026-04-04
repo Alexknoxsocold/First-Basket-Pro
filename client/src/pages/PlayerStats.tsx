@@ -13,6 +13,7 @@ import {
 
 import type { Game } from "@shared/schema";
 import { getTeamLogoUrl } from "@/components/GameRow";
+import dkLogoImg from "@assets/fyz4mydi8ceuovtoaooy_1775294282507.avif";
 
 function TeamLogo({ team, size = "sm" }: { team: string; size?: "sm" | "md" }) {
   const logoUrl = getTeamLogoUrl(team);
@@ -29,28 +30,15 @@ function TeamLogo({ team, size = "sm" }: { team: string; size?: "sm" | "md" }) {
   );
 }
 
-// DraftKings logo — crown mark with DK green brand colors
+// DraftKings logo badge
 function DkLogo({ className = "w-5 h-5", dimmed = false }: { className?: string; dimmed?: boolean }) {
   return (
-    <svg
-      viewBox="0 0 32 32"
-      className={className}
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
+    <img
+      src={dkLogoImg}
+      alt="DraftKings"
+      className={`${className} rounded object-contain`}
       style={{ opacity: dimmed ? 0.45 : 1 }}
-    >
-      <rect width="32" height="32" rx="5" fill="#1a3a1a" />
-      {/* DK Crown: 5-point crown shape */}
-      <path
-        d="M16 5
-           L19 11 L26 8 L22 16
-           L26 17 L16 27 L6 17 L10 16
-           L6 8 L13 11 Z"
-        fill="#53d337"
-      />
-      {/* Crown base bar */}
-      <rect x="9" y="20" width="14" height="3" rx="1.5" fill="#53d337" />
-    </svg>
+    />
   );
 }
 

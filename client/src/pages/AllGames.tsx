@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import GamesTable from "@/components/GamesTable";
 import StatsCard from "@/components/StatsCard";
 import { getTeamLogoUrl } from "@/components/GameRow";
+import dkLogoImg from "@assets/fyz4mydi8ceuovtoaooy_1775294282507.avif";
 import { Target, TrendingUp, Zap, Star } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
@@ -23,11 +24,12 @@ interface EspnPlayerStat {
 
 function DkLogo({ dimmed = false }: { dimmed?: boolean }) {
   return (
-    <svg viewBox="0 0 32 32" className="w-4 h-4 shrink-0" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ opacity: dimmed ? 0.4 : 1 }}>
-      <rect width="32" height="32" rx="5" fill="#1a3a1a" />
-      <path d="M16 5 L19 11 L26 8 L22 16 L26 17 L16 27 L6 17 L10 16 L6 8 L13 11 Z" fill="#53d337" />
-      <rect x="9" y="20" width="14" height="3" rx="1.5" fill="#53d337" />
-    </svg>
+    <img
+      src={dkLogoImg}
+      alt="DraftKings"
+      className="w-4 h-4 shrink-0 rounded object-contain"
+      style={{ opacity: dimmed ? 0.4 : 1 }}
+    />
   );
 }
 
