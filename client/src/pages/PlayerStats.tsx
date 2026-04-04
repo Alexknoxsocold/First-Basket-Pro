@@ -102,13 +102,25 @@ function InjuryBadge({ status }: { status?: string }) {
   return null;
 }
 
-function FbBar({ pct }: { pct: number }) {
+function FbBar({ pct, isTopPick = false }: { pct: number; isTopPick?: boolean }) {
   const maxPct = 35;
   const barWidth = Math.min(pct / maxPct * 100, 100);
   const isElite = pct >= 28;
   const isGood = pct >= 20;
-  const barColor = isElite ? "bg-green-500" : isGood ? "bg-yellow-500" : "bg-red-500/70";
-  const textColor = isElite ? "text-green-400" : isGood ? "text-yellow-400" : "text-red-400";
+  const barColor = isElite
+    ? "bg-green-500"
+    : isGood
+      ? "bg-yellow-500"
+      : isTopPick
+        ? "bg-emerald-700"
+        : "bg-red-500/70";
+  const textColor = isElite
+    ? "text-green-400"
+    : isGood
+      ? "text-yellow-400"
+      : isTopPick
+        ? "text-emerald-500"
+        : "text-red-400";
   return (
     <div className="flex items-center gap-2">
       <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
@@ -123,22 +135,46 @@ function PlayerCard({
   stat,
   rank,
   showLiveOdds = false,
+  isTopPick = false,
 }: {
   stat: EspnPlayerStat;
   rank: number;
   showLiveOdds?: boolean;
+  isTopPick?: boolean;
 }) {
   const isElite = stat.firstBasketPct >= 28;
   const isGood = stat.firstBasketPct >= 20;
+  const isLow = stat.firstBasketPct < 20 && !isTopPick;
   const initials = stat.player.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase();
   const displayOdds = stat.liveOdds || stat.odds;
   const isLive = !!stat.liveOdds;
 
-  const isLow = stat.firstBasketPct < 20;
+  // Card tint: elite=bright green, top pick=dark green tint, low=red tint
+  const cardBg = isElite
+    ? "bg-green-500/5"
+    : isTopPick
+      ? "bg-emerald-900/30"
+      : isLow
+        ? "bg-red-500/5"
+        : "";
+
+  // Avatar ring: green for top-tier, muted otherwise
+  const avatarRing = isElite
+    ? "ring-green-500/60"
+    : isTopPick
+      ? "ring-emerald-600/50"
+      : "ring-border";
+
+  // Odds color
+  const oddsColor = isElite || isGood
+    ? "text-green-400"
+    : isTopPick
+      ? "text-emerald-500"
+      : "text-red-400";
 
   return (
     <div
-      className={`flex gap-3 p-3 rounded-md transition-colors hover-elevate ${isElite ? "bg-green-500/5" : isLow ? "bg-red-500/5" : ""}`}
+      className={`flex gap-3 p-3 rounded-md transition-colors hover-elevate ${cardBg}`}
       data-testid={`card-player-${stat.player.replace(/\s/g, '-')}`}
     >
       {/* Rank + Avatar */}
@@ -147,12 +183,12 @@ function PlayerCard({
           {rank}
         </span>
         <div className="relative">
-          <Avatar className={`w-11 h-11 ring-1 ${isElite ? "ring-green-500/60" : "ring-border"}`}>
+          <Avatar className={`w-11 h-11 ring-1 ${avatarRing}`}>
             <AvatarImage src={stat.headshot} alt={stat.player} className="object-cover object-top" />
             <AvatarFallback className="text-xs font-bold bg-muted text-muted-foreground">{initials}</AvatarFallback>
           </Avatar>
-          {isElite && (
-            <span className="absolute -top-1 -right-1 flex items-center justify-center w-4 h-4 bg-green-500 rounded-full">
+          {(isElite || isTopPick) && (
+            <span className={`absolute -top-1 -right-1 flex items-center justify-center w-4 h-4 rounded-full ${isElite ? "bg-green-500" : "bg-emerald-700"}`}>
               <Star className="w-2.5 h-2.5 text-white fill-white" />
             </span>
           )}
@@ -168,6 +204,11 @@ function PlayerCard({
           {stat.isStarter && (
             <Badge className="text-[9px] h-4 px-1 bg-primary/15 text-primary border border-primary/20 font-medium no-default-active-elevate">S</Badge>
           )}
+          {isTopPick && !isElite && (
+            <Badge className="text-[9px] h-4 px-1.5 bg-emerald-900/60 text-emerald-400 border border-emerald-700/40 font-semibold no-default-active-elevate">
+              Top Pick
+            </Badge>
+          )}
         </div>
 
         {/* Position + GP */}
@@ -177,7 +218,7 @@ function PlayerCard({
 
         {/* FB% bar */}
         <div className="mt-2">
-          <FbBar pct={stat.firstBasketPct} />
+          <FbBar pct={stat.firstBasketPct} isTopPick={isTopPick} />
         </div>
 
         {/* Stats row */}
@@ -185,7 +226,7 @@ function PlayerCard({
           {/* Odds — always show DK logo, dimmed if estimated */}
           <div className="flex items-center gap-1.5">
             <DkLogo className="w-4 h-4 shrink-0" dimmed={!isLive} />
-            <span className={`font-mono text-xs font-bold ${isElite ? "text-green-400" : isGood ? "text-green-400" : isLow ? "text-red-400" : "text-muted-foreground"}`}>
+            <span className={`font-mono text-xs font-bold ${oddsColor}`}>
               {displayOdds}
             </span>
             {!isLive && (
@@ -289,7 +330,7 @@ function MatchupH2H({
                 <p className="px-4 py-6 text-sm text-muted-foreground text-center">No players found</p>
               ) : (
                 awayPlayers.map((p, i) => (
-                  <PlayerCard key={`${p.team}-${p.player}`} stat={p} rank={i + 1} showLiveOdds={showLiveOdds} />
+                  <PlayerCard key={`${p.team}-${p.player}`} stat={p} rank={i + 1} showLiveOdds={showLiveOdds} isTopPick={i === 0} />
                 ))
               )}
             </div>
@@ -310,7 +351,7 @@ function MatchupH2H({
                 <p className="px-4 py-6 text-sm text-muted-foreground text-center">No players found</p>
               ) : (
                 homePlayers.map((p, i) => (
-                  <PlayerCard key={`${p.team}-${p.player}`} stat={p} rank={i + 1} showLiveOdds={showLiveOdds} />
+                  <PlayerCard key={`${p.team}-${p.player}`} stat={p} rank={i + 1} showLiveOdds={showLiveOdds} isTopPick={i === 0} />
                 ))
               )}
             </div>
@@ -599,7 +640,7 @@ export default function PlayerStats() {
               <p className="px-6 py-8 text-sm text-muted-foreground text-center">No players match your filter.</p>
             ) : (
               allActivePlayers.map((stat, i) => (
-                <PlayerCard key={`${stat.team}-${stat.player}`} stat={stat} rank={i + 1} showLiveOdds={hasLiveOdds} />
+                <PlayerCard key={`${stat.team}-${stat.player}`} stat={stat} rank={i + 1} showLiveOdds={hasLiveOdds} isTopPick={i === 0} />
               ))
             )}
           </div>
