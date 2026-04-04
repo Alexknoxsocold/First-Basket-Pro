@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2 } from "lucide-react";
+import { Loader2, ArrowLeft } from "lucide-react";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -42,9 +42,10 @@ export default function Login() {
     <div className="flex items-center justify-center min-h-[calc(100vh-16rem)]">
       <Card className="w-full max-w-md">
         <CardHeader>
-          <CardTitle>Login</CardTitle>
+          <CardTitle>Sign In</CardTitle>
           <CardDescription>
-            Enter your credentials to access First Basket PRO
+            All stats and picks are free to browse — no account needed.
+            Sign in to save preferences and access admin tools.
           </CardDescription>
         </CardHeader>
         <form onSubmit={handleSubmit}>
@@ -59,6 +60,7 @@ export default function Login() {
                 onChange={(e) => setEmail(e.target.value)}
                 required
                 disabled={isLoading}
+                autoComplete="email"
                 data-testid="input-email"
               />
             </div>
@@ -72,11 +74,12 @@ export default function Login() {
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 disabled={isLoading}
+                autoComplete="current-password"
                 data-testid="input-password"
               />
             </div>
           </CardContent>
-          <CardFooter className="flex flex-col gap-4">
+          <CardFooter className="flex flex-col gap-3">
             <Button
               type="submit"
               className="w-full"
@@ -86,18 +89,24 @@ export default function Login() {
               {isLoading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Logging in...
+                  Signing in...
                 </>
               ) : (
-                "Login"
+                "Sign In"
               )}
             </Button>
             <p className="text-sm text-muted-foreground text-center">
               Don't have an account?{" "}
-              <Link href="/signup" className="text-primary hover:underline" data-testid="link-signup">
-                Sign up
+              <Link href="/signup" className="text-primary hover:underline font-medium" data-testid="link-signup">
+                Sign up free
               </Link>
             </p>
+            <Link href="/" className="w-full" data-testid="link-browse-without-account">
+              <Button type="button" variant="ghost" className="w-full gap-1.5 text-muted-foreground">
+                <ArrowLeft className="h-3.5 w-3.5" />
+                Browse without signing in
+              </Button>
+            </Link>
           </CardFooter>
         </form>
       </Card>

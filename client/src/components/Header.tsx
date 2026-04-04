@@ -1,4 +1,4 @@
-import { Moon, Sun, LogIn, LogOut, User } from "lucide-react";
+import { Moon, Sun, LogIn, LogOut, User, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useState, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
 import logoImage from "@assets/i5GAK_1775293448252.jpg";
@@ -18,6 +18,7 @@ import logoImage from "@assets/i5GAK_1775293448252.jpg";
 export default function Header() {
   const { user, logout } = useAuth();
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
   const [theme, setTheme] = useState<"light" | "dark">(() => {
     const savedTheme = localStorage.getItem("theme");
     return (savedTheme as "light" | "dark") || "dark";
@@ -84,12 +85,28 @@ export default function Header() {
                 </DropdownMenuContent>
               </DropdownMenu>
             ) : (
-              <Link href="/login">
-                <Button size="sm" variant="ghost" className="gap-1.5 text-xs" data-testid="button-login">
-                  <LogIn className="h-3.5 w-3.5" />
-                  Sign In
-                </Button>
-              </Link>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button size="sm" variant="ghost" className="gap-1.5 text-xs" data-testid="button-login">
+                    <LogIn className="h-3.5 w-3.5" />
+                    Sign In
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-44">
+                  <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
+                    Optional — data is free to browse
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => setLocation("/login")} data-testid="menu-item-login">
+                    <LogIn className="mr-2 h-4 w-4" />
+                    Sign In
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setLocation("/signup")} data-testid="menu-item-signup">
+                    <UserPlus className="mr-2 h-4 w-4" />
+                    Create Account
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             )}
 
             <Button

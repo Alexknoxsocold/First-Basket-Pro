@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2 } from "lucide-react";
+import { Loader2, ArrowLeft } from "lucide-react";
 
 export default function Signup() {
   const [email, setEmail] = useState("");
@@ -62,9 +62,10 @@ export default function Signup() {
     <div className="flex items-center justify-center min-h-[calc(100vh-16rem)]">
       <Card className="w-full max-w-md">
         <CardHeader>
-          <CardTitle>Sign Up</CardTitle>
+          <CardTitle>Create an Account</CardTitle>
           <CardDescription>
-            Create an account to access First Basket PRO
+            Completely optional — all stats and picks are free to browse without signing up.
+            An account lets you access admin tools and save preferences.
           </CardDescription>
         </CardHeader>
         <form onSubmit={handleSubmit}>
@@ -79,6 +80,7 @@ export default function Signup() {
                 onChange={(e) => setEmail(e.target.value)}
                 required
                 disabled={isLoading}
+                autoComplete="email"
                 data-testid="input-email"
               />
             </div>
@@ -92,6 +94,7 @@ export default function Signup() {
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 disabled={isLoading}
+                autoComplete="new-password"
                 data-testid="input-password"
               />
               <p className="text-xs text-muted-foreground">
@@ -108,11 +111,12 @@ export default function Signup() {
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 required
                 disabled={isLoading}
+                autoComplete="new-password"
                 data-testid="input-confirm-password"
               />
             </div>
           </CardContent>
-          <CardFooter className="flex flex-col gap-4">
+          <CardFooter className="flex flex-col gap-3">
             <Button
               type="submit"
               className="w-full"
@@ -125,15 +129,21 @@ export default function Signup() {
                   Creating account...
                 </>
               ) : (
-                "Sign Up"
+                "Create Account"
               )}
             </Button>
             <p className="text-sm text-muted-foreground text-center">
               Already have an account?{" "}
-              <Link href="/login" className="text-primary hover:underline" data-testid="link-login">
-                Log in
+              <Link href="/login" className="text-primary hover:underline font-medium" data-testid="link-login">
+                Sign in
               </Link>
             </p>
+            <Link href="/" className="w-full" data-testid="link-browse-without-account">
+              <Button type="button" variant="ghost" className="w-full gap-1.5 text-muted-foreground">
+                <ArrowLeft className="h-3.5 w-3.5" />
+                Browse without an account
+              </Button>
+            </Link>
           </CardFooter>
         </form>
       </Card>
