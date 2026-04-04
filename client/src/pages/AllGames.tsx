@@ -4,11 +4,11 @@ import GamesTable from "@/components/GamesTable";
 import StatsCard from "@/components/StatsCard";
 import { getTeamLogoUrl } from "@/components/GameRow";
 import dkLogoImg from "@assets/fyz4mydi8ceuovtoaooy_1775294282507.avif";
-import fdLogoImg from "@assets/Daniel+Frumhoff_FanDuel+9_1775294382033.jpg";
-import { Target, TrendingUp, Zap, Star } from "lucide-react";
+
+import { Target, TrendingUp, Zap } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+
 import type { Game } from "@shared/schema";
 
 interface EspnPlayerStat {
@@ -60,93 +60,6 @@ interface GamePickSummary {
   homeTop: EspnPlayerStat | null;
 }
 
-function FeaturedPickBanner({
-  gamePicks
-}: {
-  gamePicks: GamePickSummary[];
-}) {
-  const featured = gamePicks
-    .filter(gp => gp.topPlayer && gp.topPlayer.firstBasketPct > 0)
-    .sort((a, b) => (b.topPlayer?.firstBasketPct ?? 0) - (a.topPlayer?.firstBasketPct ?? 0))
-    .slice(0, 3);
-
-  if (featured.length === 0) return null;
-
-  return (
-    <div className="rounded-md border bg-card overflow-hidden">
-      <div className="px-4 py-3 border-b bg-primary/10 flex items-center gap-2 flex-wrap">
-        <Star className="w-4 h-4 text-primary fill-current" />
-        <span className="text-sm font-semibold text-primary">Today's Top First Basket Picks</span>
-        <div className="ml-auto flex items-center gap-3">
-          <div className="flex items-center gap-1.5">
-            <img src={dkLogoImg} alt="DraftKings" className="w-5 h-5 rounded object-contain" />
-            <span className="text-[10px] text-green-400 font-semibold">Live Odds</span>
-          </div>
-          <span className="text-muted-foreground/40 text-xs">|</span>
-          <a
-            href="https://www.fanduel.com/sports/nba"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-1.5 text-[10px] text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <img src={fdLogoImg} alt="FanDuel" className="w-5 h-5 rounded object-contain" />
-            <span>Compare FanDuel</span>
-          </a>
-        </div>
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x">
-        {featured.map(({ game, topPlayer }, i) => {
-          if (!topPlayer) return null;
-          const opponent = topPlayer.team === game.awayTeam ? game.homeTeam : game.awayTeam;
-          const initials = topPlayer.player.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase();
-          const displayOdds = topPlayer.liveOdds || topPlayer.odds;
-          return (
-            <div key={game.id} className="p-4 flex flex-col gap-3">
-              <div className="flex items-start gap-3">
-                <div className="relative shrink-0">
-                  <Avatar className="w-14 h-14 ring-2 ring-border">
-                    <AvatarImage src={topPlayer.headshot} alt={topPlayer.player} className="object-cover object-top" />
-                    <AvatarFallback className="text-sm font-bold bg-muted">{initials}</AvatarFallback>
-                  </Avatar>
-                  {/* Team logo overlay badge */}
-                  <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-md bg-card border border-border overflow-hidden flex items-center justify-center">
-                    <img
-                      src={getTeamLogoUrl(topPlayer.team)}
-                      alt={topPlayer.team}
-                      className="w-5 h-5 object-contain"
-                      onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
-                    />
-                  </div>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="font-semibold text-sm leading-tight">{topPlayer.player}</div>
-                  <div className="text-xs text-muted-foreground mt-0.5">
-                    {topPlayer.team} vs {opponent}
-                  </div>
-                  <div className="flex items-center gap-1 mt-0.5">
-                    <DkLogo dimmed={!topPlayer.liveOdds} />
-                    <span className="text-[10px] text-muted-foreground/60">
-                      {topPlayer.avgPoints} PPG &bull; <span className="text-green-400 font-mono font-semibold">{displayOdds}</span>
-                      {!topPlayer.liveOdds && <span className="text-muted-foreground/40 ml-1">Est</span>}
-                    </span>
-                  </div>
-                </div>
-                <div className="text-right shrink-0">
-                  <div className="font-mono text-xl font-bold text-primary">{topPlayer.firstBasketPct.toFixed(1)}%</div>
-                  <div className="text-[10px] text-muted-foreground">FB%</div>
-                </div>
-              </div>
-              <div className="flex items-center gap-2 pt-1 border-t">
-                <TeamLogo team={topPlayer.team} size="sm" />
-                <span className="text-[10px] text-muted-foreground">Top first basket pick for this matchup</span>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
 
 export default function AllGames() {
   const { data: allGames, isLoading: gamesLoading } = useQuery<Game[]>({
@@ -258,9 +171,6 @@ export default function AllGames() {
           icon={Zap}
         />
       </div>
-
-      {/* Featured Picks */}
-      <FeaturedPickBanner gamePicks={gamePicks} />
 
       {/* Games Table */}
       <div>
