@@ -76,6 +76,43 @@ interface EspnPlayerStat {
   isStarter?: boolean;
 }
 
+// Parse American odds string → implied probability (0–100)
+function parseOddsToImplied(odds: string): number {
+  const match = odds?.match(/^([+-]?\d+)/);
+  if (!match) return 0;
+  const num = parseInt(match[1]);
+  if (num > 0) return (100 / (num + 100)) * 100;
+  if (num < 0) return (Math.abs(num) / (Math.abs(num) + 100)) * 100;
+  return 0;
+}
+
+// Sneaky Value: player is NOT the top pick on their team but has compelling
+// first-basket indicators. Uses 5 independent signals; needs ≥ 2 to qualify.
+function checkSneakyValue(stat: EspnPlayerStat, teamRank: number): boolean {
+  if (teamRank === 1) return false;          // already highlighted as top pick
+  if (teamRank > 5) return false;            // too deep in the rotation
+  if (stat.firstBasketPct < 5) return false; // negligible probability
+  const inj = stat.injuryStatus?.toLowerCase() || "";
+  if (inj.includes("out")) return false;
+
+  const displayOdds = stat.liveOdds || stat.odds;
+  const impliedPct = parseOddsToImplied(displayOdds);
+
+  let score = 0;
+  // Signal 1: starter who gets into rhythm early
+  if (stat.isStarter) score++;
+  // Signal 2: high shot volume — shoots a lot, likely to attempt first basket
+  if (stat.avgFGA >= 10) score++;
+  // Signal 3: long floor time — more possessions = more shots
+  if (stat.avgMinutes >= 28) score++;
+  // Signal 4: model sees more value than DK's odds imply
+  if (impliedPct > 0 && stat.firstBasketPct > impliedPct + 1.5) score++;
+  // Signal 5: efficient high-volume shooter — goes for shots confidently
+  if (stat.avgFGA >= 8 && stat.fgPct >= 44) score++;
+
+  return score >= 2;
+}
+
 function InjuryBadge({ status }: { status?: string }) {
   if (!status) return null;
   const upper = status.toUpperCase();
@@ -102,7 +139,7 @@ function InjuryBadge({ status }: { status?: string }) {
   return null;
 }
 
-function FbBar({ pct, isTopPick = false }: { pct: number; isTopPick?: boolean }) {
+function FbBar({ pct, isTopPick = false, isSneakyValue = false }: { pct: number; isTopPick?: boolean; isSneakyValue?: boolean }) {
   const maxPct = 35;
   const barWidth = Math.min(pct / maxPct * 100, 100);
   const isElite = pct >= 28;
@@ -113,14 +150,18 @@ function FbBar({ pct, isTopPick = false }: { pct: number; isTopPick?: boolean })
       ? "bg-yellow-500"
       : isTopPick
         ? "bg-emerald-700"
-        : "bg-red-500/70";
+        : isSneakyValue
+          ? "bg-teal-700"
+          : "bg-red-500/70";
   const textColor = isElite
     ? "text-green-400"
     : isGood
       ? "text-yellow-400"
       : isTopPick
         ? "text-emerald-500"
-        : "text-red-400";
+        : isSneakyValue
+          ? "text-teal-400"
+          : "text-red-400";
   return (
     <div className="flex items-center gap-2">
       <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
@@ -136,41 +177,50 @@ function PlayerCard({
   rank,
   showLiveOdds = false,
   isTopPick = false,
+  isSneakyValue = false,
 }: {
   stat: EspnPlayerStat;
   rank: number;
   showLiveOdds?: boolean;
   isTopPick?: boolean;
+  isSneakyValue?: boolean;
 }) {
   const isElite = stat.firstBasketPct >= 28;
   const isGood = stat.firstBasketPct >= 20;
-  const isLow = stat.firstBasketPct < 20 && !isTopPick;
+  // isLow only applies if not highlighted by another flag
+  const isLow = stat.firstBasketPct < 20 && !isTopPick && !isSneakyValue;
   const initials = stat.player.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase();
   const displayOdds = stat.liveOdds || stat.odds;
   const isLive = !!stat.liveOdds;
 
-  // Card tint: elite=bright green, top pick=dark green tint, low=red tint
+  // Card tint
   const cardBg = isElite
     ? "bg-green-500/5"
     : isTopPick
       ? "bg-emerald-900/30"
-      : isLow
-        ? "bg-red-500/5"
-        : "";
+      : isSneakyValue
+        ? "bg-teal-900/25"
+        : isLow
+          ? "bg-red-500/5"
+          : "";
 
-  // Avatar ring: green for top-tier, muted otherwise
+  // Avatar ring
   const avatarRing = isElite
     ? "ring-green-500/60"
     : isTopPick
       ? "ring-emerald-600/50"
-      : "ring-border";
+      : isSneakyValue
+        ? "ring-teal-600/50"
+        : "ring-border";
 
   // Odds color
   const oddsColor = isElite || isGood
     ? "text-green-400"
     : isTopPick
       ? "text-emerald-500"
-      : "text-red-400";
+      : isSneakyValue
+        ? "text-teal-400"
+        : "text-red-400";
 
   return (
     <div
@@ -187,9 +237,12 @@ function PlayerCard({
             <AvatarImage src={stat.headshot} alt={stat.player} className="object-cover object-top" />
             <AvatarFallback className="text-xs font-bold bg-muted text-muted-foreground">{initials}</AvatarFallback>
           </Avatar>
-          {(isElite || isTopPick) && (
-            <span className={`absolute -top-1 -right-1 flex items-center justify-center w-4 h-4 rounded-full ${isElite ? "bg-green-500" : "bg-emerald-700"}`}>
-              <Star className="w-2.5 h-2.5 text-white fill-white" />
+          {(isElite || isTopPick || isSneakyValue) && (
+            <span className={`absolute -top-1 -right-1 flex items-center justify-center w-4 h-4 rounded-full ${isElite ? "bg-green-500" : isTopPick ? "bg-emerald-700" : "bg-teal-700"}`}>
+              {isSneakyValue && !isTopPick && !isElite
+                ? <Zap className="w-2.5 h-2.5 text-white" />
+                : <Star className="w-2.5 h-2.5 text-white fill-white" />
+              }
             </span>
           )}
         </div>
@@ -209,6 +262,11 @@ function PlayerCard({
               Top Pick
             </Badge>
           )}
+          {isSneakyValue && !isTopPick && !isElite && (
+            <Badge className="text-[9px] h-4 px-1.5 bg-teal-900/60 text-teal-300 border border-teal-700/40 font-semibold no-default-active-elevate">
+              Value
+            </Badge>
+          )}
         </div>
 
         {/* Position + GP */}
@@ -218,7 +276,7 @@ function PlayerCard({
 
         {/* FB% bar */}
         <div className="mt-2">
-          <FbBar pct={stat.firstBasketPct} isTopPick={isTopPick} />
+          <FbBar pct={stat.firstBasketPct} isTopPick={isTopPick} isSneakyValue={isSneakyValue} />
         </div>
 
         {/* Stats row */}
@@ -330,7 +388,14 @@ function MatchupH2H({
                 <p className="px-4 py-6 text-sm text-muted-foreground text-center">No players found</p>
               ) : (
                 awayPlayers.map((p, i) => (
-                  <PlayerCard key={`${p.team}-${p.player}`} stat={p} rank={i + 1} showLiveOdds={showLiveOdds} isTopPick={i === 0} />
+                  <PlayerCard
+                    key={`${p.team}-${p.player}`}
+                    stat={p}
+                    rank={i + 1}
+                    showLiveOdds={showLiveOdds}
+                    isTopPick={i === 0}
+                    isSneakyValue={checkSneakyValue(p, i + 1)}
+                  />
                 ))
               )}
             </div>
@@ -351,7 +416,14 @@ function MatchupH2H({
                 <p className="px-4 py-6 text-sm text-muted-foreground text-center">No players found</p>
               ) : (
                 homePlayers.map((p, i) => (
-                  <PlayerCard key={`${p.team}-${p.player}`} stat={p} rank={i + 1} showLiveOdds={showLiveOdds} isTopPick={i === 0} />
+                  <PlayerCard
+                    key={`${p.team}-${p.player}`}
+                    stat={p}
+                    rank={i + 1}
+                    showLiveOdds={showLiveOdds}
+                    isTopPick={i === 0}
+                    isSneakyValue={checkSneakyValue(p, i + 1)}
+                  />
                 ))
               )}
             </div>
@@ -417,6 +489,22 @@ export default function PlayerStats() {
   }, [todayGames, allActivePlayers]);
 
   const hasLiveOdds = useMemo(() => espnStats?.some((p) => !!p.liveOdds) ?? false, [espnStats]);
+
+  // Map each player to their rank within their own team (for sneaky value detection in list view)
+  const teamRankMap = useMemo<Record<string, number>>(() => {
+    if (!espnStats) return {};
+    const byTeam: Record<string, EspnPlayerStat[]> = {};
+    espnStats.forEach(s => {
+      if (!byTeam[s.team]) byTeam[s.team] = [];
+      byTeam[s.team].push(s);
+    });
+    const map: Record<string, number> = {};
+    Object.values(byTeam).forEach(players => {
+      [...players].sort((a, b) => b.firstBasketPct - a.firstBasketPct)
+        .forEach((p, i) => { map[`${p.team}-${p.player}`] = i + 1; });
+    });
+    return map;
+  }, [espnStats]);
 
   const topPicks = useMemo(() => {
     if (!espnStats) return [];
@@ -583,6 +671,8 @@ export default function PlayerStats() {
         <span className="font-semibold uppercase tracking-wider">FB% key:</span>
         <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-green-500 inline-block" />Elite 28%+</span>
         <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-yellow-500 inline-block" />Good 20–27%</span>
+        <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-emerald-700 inline-block" />Top Pick</span>
+        <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-teal-700 inline-block" />Sneaky Value</span>
         <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-red-500/70 inline-block" />Low &lt;20%</span>
         <span className="ml-auto flex items-center gap-3 flex-wrap">
           <span className="flex items-center gap-1.5"><DkLogo className="w-3.5 h-3.5" /> = DraftKings live odds</span>
@@ -639,9 +729,19 @@ export default function PlayerStats() {
             {allActivePlayers.length === 0 ? (
               <p className="px-6 py-8 text-sm text-muted-foreground text-center">No players match your filter.</p>
             ) : (
-              allActivePlayers.map((stat, i) => (
-                <PlayerCard key={`${stat.team}-${stat.player}`} stat={stat} rank={i + 1} showLiveOdds={hasLiveOdds} isTopPick={i === 0} />
-              ))
+              allActivePlayers.map((stat, i) => {
+                const teamRank = teamRankMap[`${stat.team}-${stat.player}`] ?? 999;
+                return (
+                  <PlayerCard
+                    key={`${stat.team}-${stat.player}`}
+                    stat={stat}
+                    rank={i + 1}
+                    showLiveOdds={hasLiveOdds}
+                    isTopPick={i === 0}
+                    isSneakyValue={checkSneakyValue(stat, teamRank)}
+                  />
+                );
+              })
             )}
           </div>
           <div className="px-4 py-2 border-t bg-muted/30">
