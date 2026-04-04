@@ -14,6 +14,7 @@ import {
 import type { Game } from "@shared/schema";
 import { getTeamLogoUrl } from "@/components/GameRow";
 import dkLogoImg from "@assets/fyz4mydi8ceuovtoaooy_1775294282507.avif";
+import fdLogoImg from "@assets/Daniel+Frumhoff_FanDuel+9_1775294382033.jpg";
 
 function TeamLogo({ team, size = "sm" }: { team: string; size?: "sm" | "md" }) {
   const logoUrl = getTeamLogoUrl(team);
@@ -38,6 +39,18 @@ function DkLogo({ className = "w-5 h-5", dimmed = false }: { className?: string;
       alt="DraftKings"
       className={`${className} rounded object-contain`}
       style={{ opacity: dimmed ? 0.45 : 1 }}
+    />
+  );
+}
+
+// FanDuel logo badge
+function FdLogo({ className = "w-5 h-5", dimmed = false }: { className?: string; dimmed?: boolean }) {
+  return (
+    <img
+      src={fdLogoImg}
+      alt="FanDuel"
+      className={`${className} rounded object-contain`}
+      style={{ opacity: dimmed ? 0.4 : 1 }}
     />
   );
 }
@@ -466,14 +479,27 @@ export default function PlayerStats() {
       {/* Top 5 Picks banner */}
       {topPicks.length > 0 && (
         <div className="rounded-md border bg-card overflow-hidden">
-          <div className="px-4 py-2.5 border-b bg-primary/10 flex items-center gap-2">
+          <div className="px-4 py-2.5 border-b bg-primary/10 flex items-center gap-2 flex-wrap">
             <Star className="w-3.5 h-3.5 text-primary fill-current" />
             <span className="text-xs font-semibold text-primary uppercase tracking-wider">Top 5 First Basket Picks</span>
-            {hasLiveOdds && (
-              <Badge className="text-[9px] h-4 px-1.5 bg-green-500/15 text-green-400 border border-green-500/20 ml-auto no-default-active-elevate">
-                DraftKings Odds
-              </Badge>
-            )}
+            <div className="ml-auto flex items-center gap-2">
+              {hasLiveOdds && (
+                <span className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+                  <DkLogo className="w-4 h-4" />
+                  <span className="text-green-400 font-semibold">Live DK Odds</span>
+                </span>
+              )}
+              <span className="text-muted-foreground/40 text-xs">|</span>
+              <a
+                href="https://www.fanduel.com/sports/nba"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1.5 text-[10px] text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <FdLogo className="w-4 h-4" />
+                <span>FanDuel</span>
+              </a>
+            </div>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-5 divide-x divide-y sm:divide-y-0 divide-border">
             {topPicks.map((p, i) => {
@@ -515,10 +541,20 @@ export default function PlayerStats() {
         <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-green-500 inline-block" />Elite 28%+</span>
         <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-yellow-500 inline-block" />Good 20–27%</span>
         <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-muted-foreground/40 inline-block" />Low &lt;20%</span>
-        <span className="ml-auto flex items-center gap-2">
+        <span className="ml-auto flex items-center gap-3 flex-wrap">
           <span className="flex items-center gap-1.5"><DkLogo className="w-3.5 h-3.5" /> = DraftKings live odds</span>
           <span className="text-muted-foreground/40">|</span>
           <span className="flex items-center gap-1"><span className="text-muted-foreground/60 font-bold text-[10px]">Est</span> = model estimate</span>
+          <span className="text-muted-foreground/40">|</span>
+          <a
+            href="https://www.fanduel.com/sports/nba"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1.5 hover:text-foreground transition-colors"
+          >
+            <FdLogo className="w-3.5 h-3.5" />
+            <span>Compare on FanDuel</span>
+          </a>
         </span>
       </div>
 

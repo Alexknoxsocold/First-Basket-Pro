@@ -4,6 +4,7 @@ import GamesTable from "@/components/GamesTable";
 import StatsCard from "@/components/StatsCard";
 import { getTeamLogoUrl } from "@/components/GameRow";
 import dkLogoImg from "@assets/fyz4mydi8ceuovtoaooy_1775294282507.avif";
+import fdLogoImg from "@assets/Daniel+Frumhoff_FanDuel+9_1775294382033.jpg";
 import { Target, TrendingUp, Zap, Star } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
@@ -73,10 +74,25 @@ function FeaturedPickBanner({
 
   return (
     <div className="rounded-md border bg-card overflow-hidden">
-      <div className="px-4 py-3 border-b bg-primary/10 flex items-center gap-2">
+      <div className="px-4 py-3 border-b bg-primary/10 flex items-center gap-2 flex-wrap">
         <Star className="w-4 h-4 text-primary fill-current" />
         <span className="text-sm font-semibold text-primary">Today's Top First Basket Picks</span>
-        <Badge variant="secondary" className="text-xs ml-auto">Live ESPN Data</Badge>
+        <div className="ml-auto flex items-center gap-3">
+          <div className="flex items-center gap-1.5">
+            <img src={dkLogoImg} alt="DraftKings" className="w-5 h-5 rounded object-contain" />
+            <span className="text-[10px] text-green-400 font-semibold">Live Odds</span>
+          </div>
+          <span className="text-muted-foreground/40 text-xs">|</span>
+          <a
+            href="https://www.fanduel.com/sports/nba"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1.5 text-[10px] text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <img src={fdLogoImg} alt="FanDuel" className="w-5 h-5 rounded object-contain" />
+            <span>Compare FanDuel</span>
+          </a>
+        </div>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x">
         {featured.map(({ game, topPlayer }, i) => {
