@@ -21,9 +21,10 @@ interface Game {
 
 interface GamesTableProps {
   games: Game[];
+  headshotMap?: Record<string, string>;
 }
 
-export default function GamesTable({ games }: GamesTableProps) {
+export default function GamesTable({ games, headshotMap = {} }: GamesTableProps) {
   if (games.length === 0) {
     return (
       <div className="border rounded-md bg-card flex items-center justify-center h-40 text-muted-foreground text-sm" data-testid="container-games-table">
@@ -34,19 +35,14 @@ export default function GamesTable({ games }: GamesTableProps) {
 
   return (
     <div className="border rounded-md bg-card overflow-hidden" data-testid="container-games-table">
-      <div className="px-4 py-3 border-b bg-muted/50">
-        <div className="grid grid-cols-12 gap-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          <div className="col-span-12 md:col-span-3">Matchup</div>
-          <div className="col-span-12 md:col-span-3">First Basket Pick</div>
-          <div className="col-span-4 md:col-span-1 text-center">Tips</div>
-          <div className="col-span-4 md:col-span-2 text-center">Tip Win %</div>
-          <div className="col-span-4 md:col-span-2 text-center">1st To Score</div>
-          <div className="col-span-12 md:col-span-1 text-center md:text-right">H2H</div>
-        </div>
-      </div>
       <div>
         {games.map((game) => (
-          <GameRow key={game.id} {...game} />
+          <GameRow
+            key={game.id}
+            {...game}
+            awayPlayerHeadshot={headshotMap[game.awayPlayer]}
+            homePlayerHeadshot={headshotMap[game.homePlayer]}
+          />
         ))}
       </div>
     </div>

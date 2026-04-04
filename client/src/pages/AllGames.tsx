@@ -5,7 +5,17 @@ import StatsCard from "@/components/StatsCard";
 import { Target, TrendingUp, Zap, Star } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import type { Game } from "@shared/schema";
+
+interface EspnPlayerStat {
+  player: string;
+  team: string;
+  espnId: string;
+  headshot?: string;
+  firstBasketPct: number;
+  odds: string;
+}
 
 const TEAM_COLORS: Record<string, string> = {
   ATL: "bg-red-600", BOS: "bg-green-700", BKN: "bg-gray-800", CHA: "bg-teal-600",
@@ -18,13 +28,15 @@ const TEAM_COLORS: Record<string, string> = {
   UTAH: "bg-blue-900", WSH: "bg-blue-900",
 };
 
-function FeaturedPickBanner({ games }: { games: Game[] }) {
+function FeaturedPickBanner({ games, headshotMap }: { games: Game[]; headshotMap: Record<string, string> }) {
   const featured = games
     .map(g => {
-      const topTeam = g.awayScorePercent > g.homeScorePercent ? g.awayTeam : g.homeTeam;
+      const awayIsTop = g.awayScorePercent > g.homeScorePercent;
+      const topTeam = awayIsTop ? g.awayTeam : g.homeTeam;
       const topPercent = Math.max(g.awayScorePercent, g.homeScorePercent);
-      const topPlayer = g.awayScorePercent > g.homeScorePercent ? g.awayPlayer : g.homePlayer;
-      return { game: g, topTeam, topPercent, topPlayer, opponent: g.awayScorePercent > g.homeScorePercent ? g.homeTeam : g.awayTeam };
+      const topPlayer = awayIsTop ? g.awayPlayer : g.homePlayer;
+      const opponent = awayIsTop ? g.homeTeam : g.awayTeam;
+      return { game: g, topTeam, topPercent, topPlayer, opponent };
     })
     .filter(f => f.topPercent >= 55)
     .sort((a, b) => b.topPercent - a.topPercent)
@@ -40,25 +52,41 @@ function FeaturedPickBanner({ games }: { games: Game[] }) {
         <Badge variant="secondary" className="text-xs ml-auto">First Basket Analysis</Badge>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x">
-        {featured.map(({ game, topTeam, topPercent, topPlayer, opponent }) => {
+        {featured.map(({ game, topTeam, topPercent, topPlayer, opponent }, i) => {
           const bg = TEAM_COLORS[topTeam] || "bg-gray-600";
+          const headshot = headshotMap[topPlayer];
+          const initials = topPlayer.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase();
           return (
-            <div key={game.id} className="p-4 flex flex-col gap-2">
-              <div className="flex items-center gap-2">
-                <div className={`w-8 h-8 rounded-md ${bg} flex items-center justify-center shrink-0`}>
-                  <span className="text-white text-xs font-bold">{topTeam.slice(0, 3)}</span>
+            <div key={game.id} className="p-4 flex flex-col gap-3">
+              <div className="flex items-start gap-3">
+                <div className="relative shrink-0">
+                  <Avatar className="w-14 h-14 ring-2 ring-border">
+                    <AvatarImage src={headshot} alt={topPlayer} className="object-cover object-top" />
+                    <AvatarFallback className="text-sm font-bold bg-muted">{initials}</AvatarFallback>
+                  </Avatar>
+                  <div className={`absolute -bottom-1 -right-1 w-5 h-5 rounded-full ${bg} flex items-center justify-center`}>
+                    <span className="text-white text-[8px] font-bold">#{i + 1}</span>
+                  </div>
                 </div>
-                <div>
-                  <div className="font-semibold text-sm">{topTeam} <span className="text-muted-foreground font-normal">vs {opponent}</span></div>
-                  <div className="text-xs text-muted-foreground">{game.gameTime}</div>
+                <div className="flex-1 min-w-0">
+                  <div className="font-semibold text-sm leading-tight">{topPlayer}</div>
+                  <div className="text-xs text-muted-foreground mt-0.5">
+                    {topTeam} vs {opponent}
+                  </div>
+                  {game.gameTime && (
+                    <div className="text-[10px] text-muted-foreground/60 mt-0.5 font-mono">{game.gameTime}</div>
+                  )}
                 </div>
-                <div className="ml-auto text-right">
-                  <div className="font-mono text-lg font-bold text-primary">{topPercent}%</div>
-                  <div className="text-xs text-muted-foreground">1st to score</div>
+                <div className="text-right shrink-0">
+                  <div className="font-mono text-xl font-bold text-primary">{topPercent}%</div>
+                  <div className="text-[10px] text-muted-foreground">1st to score</div>
                 </div>
               </div>
-              <div className="text-xs text-muted-foreground border-t pt-2">
-                <span className="font-medium text-foreground">{topPlayer}</span> — Top First Basket Pick
+              <div className="flex items-center gap-2 pt-1 border-t">
+                <div className={`w-5 h-5 rounded-md ${bg} flex items-center justify-center shrink-0`}>
+                  <span className="text-white text-[9px] font-bold">{topTeam.slice(0, 3)}</span>
+                </div>
+                <span className="text-[10px] text-muted-foreground">Top First Basket Pick for this matchup</span>
               </div>
             </div>
           );
@@ -69,9 +97,22 @@ function FeaturedPickBanner({ games }: { games: Game[] }) {
 }
 
 export default function AllGames() {
-  const { data: allGames, isLoading } = useQuery<Game[]>({
+  const { data: allGames, isLoading: gamesLoading } = useQuery<Game[]>({
     queryKey: ["/api/games"],
   });
+
+  const { data: espnStats } = useQuery<EspnPlayerStat[]>({
+    queryKey: ["/api/espn-player-stats"],
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const headshotMap = useMemo<Record<string, string>>(() => {
+    if (!espnStats) return {};
+    return espnStats.reduce((acc, s) => {
+      if (s.headshot) acc[s.player] = s.headshot;
+      return acc;
+    }, {} as Record<string, string>);
+  }, [espnStats]);
 
   const games = useMemo(() => {
     if (!allGames) return [];
@@ -115,7 +156,7 @@ export default function AllGames() {
     return { avgTipWin, highestScore, highestScoreTeam, topPlayer };
   }, [games]);
 
-  if (isLoading) {
+  if (gamesLoading) {
     return (
       <div className="space-y-6">
         <div className="grid gap-4 md:grid-cols-3">
@@ -123,7 +164,7 @@ export default function AllGames() {
           <Skeleton className="h-28" />
           <Skeleton className="h-28" />
         </div>
-        <Skeleton className="h-36" />
+        <Skeleton className="h-44" />
         <Skeleton className="h-96" />
       </div>
     );
@@ -155,7 +196,7 @@ export default function AllGames() {
       </div>
 
       {/* Featured Picks */}
-      <FeaturedPickBanner games={games} />
+      <FeaturedPickBanner games={games} headshotMap={headshotMap} />
 
       {/* Games Table */}
       <div>
@@ -165,7 +206,7 @@ export default function AllGames() {
             {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
           </span>
         </div>
-        <GamesTable games={games} />
+        <GamesTable games={games} headshotMap={headshotMap} />
       </div>
     </div>
   );
