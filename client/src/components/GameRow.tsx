@@ -75,10 +75,10 @@ function ScoreBar({ percent, isFavorite, isTie }: { percent: number; isFavorite:
     ? "bg-muted-foreground/30"
     : isFavorite
       ? percent >= 65 ? "bg-green-500" : percent >= 55 ? "bg-primary" : "bg-primary/60"
-      : "bg-muted-foreground/15";
+      : "bg-red-500/40";
   const textColor = isTie
     ? "text-muted-foreground"
-    : isFavorite ? "text-foreground" : "text-muted-foreground";
+    : isFavorite ? "text-foreground" : "text-red-400";
   return (
     <div className="relative w-full h-7 rounded-md overflow-hidden bg-muted">
       <div
@@ -217,7 +217,7 @@ export default function GameRow({
                 <div className="font-semibold text-sm leading-tight" data-testid={`text-away-team-${awayTeam}`}>{awayTeam}</div>
                 <div className="text-[10px] text-muted-foreground uppercase tracking-wider">Away &bull; {awayTipCount} tips</div>
               </div>
-              <div className={`font-mono text-sm font-bold ${awayTipPercent > homeTipPercent ? "text-primary" : "text-muted-foreground"}`} data-testid={`text-tip-percent-${awayTeam}`}>
+              <div className={`font-mono text-sm font-bold ${awayTipPercent > homeTipPercent ? "text-primary" : awayTipPercent < homeTipPercent ? "text-red-400" : "text-muted-foreground"}`} data-testid={`text-tip-percent-${awayTeam}`}>
                 {awayTipPercent}%
               </div>
             </div>
@@ -227,7 +227,7 @@ export default function GameRow({
                 <div className="font-semibold text-sm leading-tight" data-testid={`text-home-team-${homeTeam}`}>{homeTeam}</div>
                 <div className="text-[10px] text-muted-foreground uppercase tracking-wider">Home &bull; {homeTipCount} tips</div>
               </div>
-              <div className={`font-mono text-sm font-bold ${homeTipPercent > awayTipPercent ? "text-primary" : "text-muted-foreground"}`} data-testid={`text-tip-percent-${homeTeam}`}>
+              <div className={`font-mono text-sm font-bold ${homeTipPercent > awayTipPercent ? "text-primary" : homeTipPercent < awayTipPercent ? "text-red-400" : "text-muted-foreground"}`} data-testid={`text-tip-percent-${homeTeam}`}>
                 {homeTipPercent}%
               </div>
             </div>
@@ -245,7 +245,7 @@ export default function GameRow({
                 <span className={`text-xs font-semibold truncate block ${awayIsTop ? "text-foreground" : "text-muted-foreground"}`}>{awayDisplayPlayer}</span>
                 <div className="text-[10px] text-muted-foreground">
                   {awayEspnPick ? (
-                    <span className="text-green-400 font-semibold">{awayEspnPick.firstBasketPct.toFixed(1)}% &bull; {awayEspnPick.odds}</span>
+                    <span className={`font-semibold ${awayIsTop || isTie ? "text-green-400" : "text-red-400"}`}>{awayEspnPick.firstBasketPct.toFixed(1)}% &bull; {awayEspnPick.odds}</span>
                   ) : (
                     <span>{awayTeam} &bull; Tip {awayTipPercent}%</span>
                   )}
@@ -262,7 +262,7 @@ export default function GameRow({
                 <span className={`text-xs font-semibold truncate block ${!awayIsTop ? "text-foreground" : "text-muted-foreground"}`}>{homeDisplayPlayer}</span>
                 <div className="text-[10px] text-muted-foreground">
                   {homeEspnPick ? (
-                    <span className="text-green-400 font-semibold">{homeEspnPick.firstBasketPct.toFixed(1)}% &bull; {homeEspnPick.odds}</span>
+                    <span className={`font-semibold ${!awayIsTop || isTie ? "text-green-400" : "text-red-400"}`}>{homeEspnPick.firstBasketPct.toFixed(1)}% &bull; {homeEspnPick.odds}</span>
                   ) : (
                     <span>{homeTeam} &bull; Tip {homeTipPercent}%</span>
                   )}

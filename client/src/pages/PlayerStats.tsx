@@ -107,8 +107,8 @@ function FbBar({ pct }: { pct: number }) {
   const barWidth = Math.min(pct / maxPct * 100, 100);
   const isElite = pct >= 28;
   const isGood = pct >= 20;
-  const barColor = isElite ? "bg-green-500" : isGood ? "bg-yellow-500" : "bg-muted-foreground/40";
-  const textColor = isElite ? "text-green-400" : isGood ? "text-yellow-400" : "text-muted-foreground";
+  const barColor = isElite ? "bg-green-500" : isGood ? "bg-yellow-500" : "bg-red-500/70";
+  const textColor = isElite ? "text-green-400" : isGood ? "text-yellow-400" : "text-red-400";
   return (
     <div className="flex items-center gap-2">
       <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
@@ -134,9 +134,11 @@ function PlayerCard({
   const displayOdds = stat.liveOdds || stat.odds;
   const isLive = !!stat.liveOdds;
 
+  const isLow = stat.firstBasketPct < 20;
+
   return (
     <div
-      className={`flex gap-3 p-3 rounded-md transition-colors hover-elevate ${isElite ? "bg-green-500/5" : ""}`}
+      className={`flex gap-3 p-3 rounded-md transition-colors hover-elevate ${isElite ? "bg-green-500/5" : isLow ? "bg-red-500/5" : ""}`}
       data-testid={`card-player-${stat.player.replace(/\s/g, '-')}`}
     >
       {/* Rank + Avatar */}
@@ -183,7 +185,7 @@ function PlayerCard({
           {/* Odds — always show DK logo, dimmed if estimated */}
           <div className="flex items-center gap-1.5">
             <DkLogo className="w-4 h-4 shrink-0" dimmed={!isLive} />
-            <span className={`font-mono text-xs font-bold ${(isGood || isLive) ? "text-green-400" : "text-muted-foreground"}`}>
+            <span className={`font-mono text-xs font-bold ${isElite ? "text-green-400" : isGood ? "text-green-400" : isLow ? "text-red-400" : "text-muted-foreground"}`}>
               {displayOdds}
             </span>
             {!isLive && (
@@ -195,15 +197,15 @@ function PlayerCard({
 
           {/* Key stats */}
           <span className="text-[10px] text-muted-foreground">
-            <span className={stat.avgPoints >= 25 ? "text-green-400 font-semibold" : ""}>{stat.avgPoints.toFixed(1)}</span>
+            <span className={stat.avgPoints >= 25 ? "text-green-400 font-semibold" : stat.avgPoints < 10 ? "text-red-400 font-semibold" : ""}>{stat.avgPoints.toFixed(1)}</span>
             {" PPG"}
           </span>
           <span className="text-[10px] text-muted-foreground">
-            <span className={stat.avgFGA >= 15 ? "text-green-400 font-semibold" : ""}>{stat.avgFGA.toFixed(1)}</span>
+            <span className={stat.avgFGA >= 15 ? "text-green-400 font-semibold" : stat.avgFGA < 6 ? "text-red-400 font-semibold" : ""}>{stat.avgFGA.toFixed(1)}</span>
             {" FGA"}
           </span>
           <span className="text-[10px] text-muted-foreground">
-            <span className={stat.fgPct >= 50 ? "text-green-400 font-semibold" : ""}>{stat.fgPct.toFixed(1)}%</span>
+            <span className={stat.fgPct >= 50 ? "text-green-400 font-semibold" : stat.fgPct < 38 ? "text-red-400 font-semibold" : ""}>{stat.fgPct.toFixed(1)}%</span>
             {" FG"}
           </span>
         </div>
@@ -540,7 +542,7 @@ export default function PlayerStats() {
         <span className="font-semibold uppercase tracking-wider">FB% key:</span>
         <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-green-500 inline-block" />Elite 28%+</span>
         <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-yellow-500 inline-block" />Good 20–27%</span>
-        <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-muted-foreground/40 inline-block" />Low &lt;20%</span>
+        <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-red-500/70 inline-block" />Low &lt;20%</span>
         <span className="ml-auto flex items-center gap-3 flex-wrap">
           <span className="flex items-center gap-1.5"><DkLogo className="w-3.5 h-3.5" /> = DraftKings live odds</span>
           <span className="text-muted-foreground/40">|</span>
