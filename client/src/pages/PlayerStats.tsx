@@ -198,13 +198,13 @@ function PlayerCard({
 
   // Card tint — uses light/dark explicit variants so both modes look correct
   const cardBg = isElite
-    ? "bg-green-500/5 dark:bg-green-500/5"
+    ? "bg-green-100/70 dark:bg-green-500/5"
     : isTopPick
-      ? "bg-emerald-50 dark:bg-emerald-900/30"
+      ? "bg-emerald-100/80 dark:bg-emerald-900/30"
       : isSneakyValue
-        ? "bg-teal-50 dark:bg-teal-900/25"
+        ? "bg-teal-100/70 dark:bg-teal-900/25"
         : isLow
-          ? "bg-red-50/60 dark:bg-red-500/5"
+          ? "bg-red-100/60 dark:bg-red-500/5"
           : "";
 
   // Avatar ring
