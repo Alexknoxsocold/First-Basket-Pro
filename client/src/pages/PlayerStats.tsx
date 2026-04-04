@@ -89,7 +89,7 @@ function parseOddsToImplied(odds: string): number {
 // Sneaky Value: player is NOT the top pick on their team but has compelling
 // first-basket indicators. Uses 5 independent signals; needs ≥ 2 to qualify.
 function checkSneakyValue(stat: EspnPlayerStat, teamRank: number): boolean {
-  if (teamRank === 1) return false;          // already highlighted as top pick
+  if (teamRank <= 2) return false;           // already highlighted as top picks
   if (teamRank > 5) return false;            // too deep in the rotation
   if (stat.firstBasketPct < 5) return false; // negligible probability
   const inj = stat.injuryStatus?.toLowerCase() || "";
@@ -393,7 +393,7 @@ function MatchupH2H({
                     stat={p}
                     rank={i + 1}
                     showLiveOdds={showLiveOdds}
-                    isTopPick={i === 0}
+                    isTopPick={i <= 1}
                     isSneakyValue={checkSneakyValue(p, i + 1)}
                   />
                 ))
@@ -421,7 +421,7 @@ function MatchupH2H({
                     stat={p}
                     rank={i + 1}
                     showLiveOdds={showLiveOdds}
-                    isTopPick={i === 0}
+                    isTopPick={i <= 1}
                     isSneakyValue={checkSneakyValue(p, i + 1)}
                   />
                 ))
@@ -737,7 +737,7 @@ export default function PlayerStats() {
                     stat={stat}
                     rank={i + 1}
                     showLiveOdds={hasLiveOdds}
-                    isTopPick={i === 0}
+                    isTopPick={teamRank <= 2}
                     isSneakyValue={checkSneakyValue(stat, teamRank)}
                   />
                 );
