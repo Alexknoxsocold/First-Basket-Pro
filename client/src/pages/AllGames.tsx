@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import GamesTable from "@/components/GamesTable";
 import StatsCard from "@/components/StatsCard";
+import { getTeamLogoUrl } from "@/components/GameRow";
 import { Target, TrendingUp, Zap, Star } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
@@ -16,19 +17,28 @@ interface EspnPlayerStat {
   firstBasketPct: number;
   avgPoints: number;
   odds: string;
+  liveOdds?: string;
   isStarter?: boolean;
 }
 
-const TEAM_COLORS: Record<string, string> = {
-  ATL: "bg-red-600", BOS: "bg-green-700", BKN: "bg-gray-800", CHA: "bg-teal-600",
-  CHI: "bg-red-700", CLE: "bg-red-800", DAL: "bg-blue-700", DEN: "bg-blue-800",
-  DET: "bg-blue-600", GS: "bg-yellow-500", HOU: "bg-red-600", IND: "bg-yellow-600",
-  LAC: "bg-blue-700", LAL: "bg-purple-700", MEM: "bg-blue-800", MIA: "bg-red-700",
-  MIL: "bg-green-800", MIN: "bg-blue-900", NO: "bg-blue-900", NYK: "bg-orange-600",
-  OKC: "bg-blue-500", ORL: "bg-blue-600", PHI: "bg-blue-600", PHX: "bg-purple-700",
-  POR: "bg-red-700", SAC: "bg-purple-600", SA: "bg-gray-700", TOR: "bg-red-600",
-  UTAH: "bg-blue-900", WSH: "bg-blue-900",
-};
+function TeamLogo({ team, size = "md" }: { team: string; size?: "sm" | "md" | "lg" }) {
+  const logoUrl = getTeamLogoUrl(team);
+  const sizeClass = size === "sm" ? "w-6 h-6" : size === "lg" ? "w-14 h-14" : "w-9 h-9";
+  return (
+    <div className={`${sizeClass} rounded-md bg-muted/40 flex items-center justify-center shrink-0 overflow-hidden`}>
+      {logoUrl ? (
+        <img
+          src={logoUrl}
+          alt={`${team} logo`}
+          className="w-full h-full object-contain p-0.5"
+          onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+        />
+      ) : (
+        <span className="text-[10px] font-bold text-muted-foreground">{team.slice(0, 3)}</span>
+      )}
+    </div>
+  );
+}
 
 interface GamePickSummary {
   game: Game;
@@ -60,8 +70,8 @@ function FeaturedPickBanner({
         {featured.map(({ game, topPlayer }, i) => {
           if (!topPlayer) return null;
           const opponent = topPlayer.team === game.awayTeam ? game.homeTeam : game.awayTeam;
-          const bg = TEAM_COLORS[topPlayer.team] || "bg-gray-600";
           const initials = topPlayer.player.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase();
+          const displayOdds = topPlayer.liveOdds || topPlayer.odds;
           return (
             <div key={game.id} className="p-4 flex flex-col gap-3">
               <div className="flex items-start gap-3">
@@ -70,8 +80,14 @@ function FeaturedPickBanner({
                     <AvatarImage src={topPlayer.headshot} alt={topPlayer.player} className="object-cover object-top" />
                     <AvatarFallback className="text-sm font-bold bg-muted">{initials}</AvatarFallback>
                   </Avatar>
-                  <div className={`absolute -bottom-1 -right-1 w-5 h-5 rounded-full ${bg} flex items-center justify-center`}>
-                    <span className="text-white text-[8px] font-bold">#{i + 1}</span>
+                  {/* Team logo overlay badge */}
+                  <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-md bg-card border border-border overflow-hidden flex items-center justify-center">
+                    <img
+                      src={getTeamLogoUrl(topPlayer.team)}
+                      alt={topPlayer.team}
+                      className="w-5 h-5 object-contain"
+                      onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                    />
                   </div>
                 </div>
                 <div className="flex-1 min-w-0">
@@ -80,7 +96,7 @@ function FeaturedPickBanner({
                     {topPlayer.team} vs {opponent}
                   </div>
                   <div className="text-[10px] text-muted-foreground/60 mt-0.5">
-                    {topPlayer.avgPoints} PPG &bull; {topPlayer.odds} odds
+                    {topPlayer.avgPoints} PPG &bull; {displayOdds} odds
                   </div>
                 </div>
                 <div className="text-right shrink-0">
@@ -89,9 +105,7 @@ function FeaturedPickBanner({
                 </div>
               </div>
               <div className="flex items-center gap-2 pt-1 border-t">
-                <div className={`w-5 h-5 rounded-md ${bg} flex items-center justify-center shrink-0`}>
-                  <span className="text-white text-[9px] font-bold">{topPlayer.team.slice(0, 3)}</span>
-                </div>
+                <TeamLogo team={topPlayer.team} size="sm" />
                 <span className="text-[10px] text-muted-foreground">Top first basket pick for this matchup</span>
               </div>
             </div>

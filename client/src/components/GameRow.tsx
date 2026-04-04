@@ -34,44 +34,38 @@ interface GameRowProps {
   homeEspnPick?: EspnPick | null;
 }
 
-const TEAM_COLORS: Record<string, { bg: string; text: string }> = {
-  ATL: { bg: "bg-red-600", text: "text-white" },
-  BOS: { bg: "bg-green-700", text: "text-white" },
-  BKN: { bg: "bg-gray-900", text: "text-white" },
-  CHA: { bg: "bg-teal-600", text: "text-white" },
-  CHI: { bg: "bg-red-700", text: "text-white" },
-  CLE: { bg: "bg-red-800", text: "text-white" },
-  DAL: { bg: "bg-blue-700", text: "text-white" },
-  DEN: { bg: "bg-blue-800", text: "text-yellow-400" },
-  DET: { bg: "bg-blue-600", text: "text-white" },
-  GS: { bg: "bg-yellow-500", text: "text-blue-900" },
-  HOU: { bg: "bg-red-600", text: "text-white" },
-  IND: { bg: "bg-yellow-600", text: "text-blue-900" },
-  LAC: { bg: "bg-blue-700", text: "text-white" },
-  LAL: { bg: "bg-purple-700", text: "text-yellow-400" },
-  MEM: { bg: "bg-blue-800", text: "text-yellow-400" },
-  MIA: { bg: "bg-red-700", text: "text-white" },
-  MIL: { bg: "bg-green-800", text: "text-white" },
-  MIN: { bg: "bg-blue-900", text: "text-green-400" },
-  NO: { bg: "bg-blue-900", text: "text-yellow-400" },
-  NYK: { bg: "bg-orange-600", text: "text-white" },
-  OKC: { bg: "bg-blue-500", text: "text-white" },
-  ORL: { bg: "bg-blue-600", text: "text-white" },
-  PHI: { bg: "bg-blue-600", text: "text-white" },
-  PHX: { bg: "bg-purple-700", text: "text-orange-400" },
-  POR: { bg: "bg-red-700", text: "text-white" },
-  SAC: { bg: "bg-purple-600", text: "text-white" },
-  SA: { bg: "bg-gray-700", text: "text-white" },
-  TOR: { bg: "bg-red-600", text: "text-white" },
-  UTAH: { bg: "bg-blue-900", text: "text-yellow-400" },
-  WSH: { bg: "bg-blue-900", text: "text-red-400" },
+// ESPN team ID map for logo URLs
+const ESPN_TEAM_IDS: Record<string, string> = {
+  ATL: "1", BOS: "2", BKN: "17", CHA: "30", CHI: "4", CLE: "5",
+  DAL: "6", DEN: "7", DET: "8", GS: "9", HOU: "10", IND: "11",
+  LAC: "12", LAL: "13", MEM: "29", MIA: "14", MIL: "15", MIN: "16",
+  NO: "3", NYK: "18", OKC: "25", ORL: "19", PHI: "20", PHX: "21",
+  POR: "22", SAC: "23", SA: "24", TOR: "28", UTAH: "26", WSH: "27",
 };
 
-function TeamBadge({ team }: { team: string }) {
-  const colors = TEAM_COLORS[team] || { bg: "bg-gray-600", text: "text-white" };
+export function getTeamLogoUrl(team: string): string {
+  const id = ESPN_TEAM_IDS[team];
+  if (!id) return "";
+  return `https://a.espncdn.com/i/teamlogos/nba/500/${id}.png`;
+}
+
+function TeamLogo({ team, size = "md" }: { team: string; size?: "sm" | "md" | "lg" }) {
+  const logoUrl = getTeamLogoUrl(team);
+  const sizeClass = size === "sm" ? "w-7 h-7" : size === "lg" ? "w-12 h-12" : "w-9 h-9";
   return (
-    <div className={`w-9 h-9 rounded-md ${colors.bg} flex items-center justify-center shrink-0`}>
-      <span className={`text-xs font-bold tracking-tight ${colors.text}`}>{team.length > 3 ? team.slice(0, 3) : team}</span>
+    <div className={`${sizeClass} rounded-md bg-muted/40 flex items-center justify-center shrink-0 overflow-hidden`}>
+      {logoUrl ? (
+        <img
+          src={logoUrl}
+          alt={`${team} logo`}
+          className="w-full h-full object-contain p-0.5"
+          onError={(e) => {
+            (e.target as HTMLImageElement).style.display = "none";
+          }}
+        />
+      ) : (
+        <span className="text-[10px] font-bold text-muted-foreground">{team.slice(0, 3)}</span>
+      )}
     </div>
   );
 }
@@ -217,23 +211,23 @@ export default function GameRow({
 
           {/* Teams column */}
           <div className="flex flex-col gap-2.5">
-            <div className="flex items-center gap-2">
-              <TeamBadge team={awayTeam} />
-              <div>
+            <div className="flex items-center gap-2.5">
+              <TeamLogo team={awayTeam} />
+              <div className="flex-1 min-w-0">
                 <div className="font-semibold text-sm leading-tight" data-testid={`text-away-team-${awayTeam}`}>{awayTeam}</div>
                 <div className="text-[10px] text-muted-foreground uppercase tracking-wider">Away &bull; {awayTipCount} tips</div>
               </div>
-              <div className={`ml-auto font-mono text-sm font-bold ${awayTipPercent > homeTipPercent ? "text-primary" : "text-muted-foreground"}`} data-testid={`text-tip-percent-${awayTeam}`}>
+              <div className={`font-mono text-sm font-bold ${awayTipPercent > homeTipPercent ? "text-primary" : "text-muted-foreground"}`} data-testid={`text-tip-percent-${awayTeam}`}>
                 {awayTipPercent}%
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              <TeamBadge team={homeTeam} />
-              <div>
+            <div className="flex items-center gap-2.5">
+              <TeamLogo team={homeTeam} />
+              <div className="flex-1 min-w-0">
                 <div className="font-semibold text-sm leading-tight" data-testid={`text-home-team-${homeTeam}`}>{homeTeam}</div>
                 <div className="text-[10px] text-muted-foreground uppercase tracking-wider">Home &bull; {homeTipCount} tips</div>
               </div>
-              <div className={`ml-auto font-mono text-sm font-bold ${homeTipPercent > awayTipPercent ? "text-primary" : "text-muted-foreground"}`} data-testid={`text-tip-percent-${homeTeam}`}>
+              <div className={`font-mono text-sm font-bold ${homeTipPercent > awayTipPercent ? "text-primary" : "text-muted-foreground"}`} data-testid={`text-tip-percent-${homeTeam}`}>
                 {homeTipPercent}%
               </div>
             </div>
@@ -284,13 +278,13 @@ export default function GameRow({
             </div>
             <div className="flex flex-col gap-1.5">
               <div className="flex items-center gap-2">
-                <span className="text-[10px] text-muted-foreground w-8 shrink-0">{awayTeam}</span>
+                <TeamLogo team={awayTeam} size="sm" />
                 <div className="flex-1">
                   <ScoreBar percent={scaledAwayPct} isFavorite={awayIsTop} isTie={isTie} />
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-[10px] text-muted-foreground w-8 shrink-0">{homeTeam}</span>
+                <TeamLogo team={homeTeam} size="sm" />
                 <div className="flex-1">
                   <ScoreBar percent={scaledHomePct} isFavorite={!awayIsTop} isTie={isTie} />
                 </div>

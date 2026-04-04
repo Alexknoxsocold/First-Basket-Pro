@@ -12,6 +12,22 @@ import {
 } from "lucide-react";
 
 import type { Game } from "@shared/schema";
+import { getTeamLogoUrl } from "@/components/GameRow";
+
+function TeamLogo({ team, size = "sm" }: { team: string; size?: "sm" | "md" }) {
+  const logoUrl = getTeamLogoUrl(team);
+  const sizeClass = size === "md" ? "w-8 h-8" : "w-6 h-6";
+  return (
+    <div className={`${sizeClass} rounded-md bg-muted/40 overflow-hidden flex items-center justify-center shrink-0`}>
+      {logoUrl ? (
+        <img src={logoUrl} alt={`${team} logo`} className="w-full h-full object-contain p-0.5"
+          onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+      ) : (
+        <span className="text-[9px] font-bold text-muted-foreground">{team.slice(0, 3)}</span>
+      )}
+    </div>
+  );
+}
 
 // DraftKings SVG crown logo badge
 function DkLogo({ className = "w-5 h-5" }: { className?: string }) {
@@ -251,6 +267,7 @@ function MatchupH2H({
           <div>
             <div className="px-4 py-2 border-b bg-muted/20 flex items-center justify-between">
               <div className="flex items-center gap-2">
+                <TeamLogo team={game.awayTeam} size="sm" />
                 <span className="text-xs text-muted-foreground font-medium">AWAY</span>
                 <span className="font-bold text-sm">{game.awayTeam}</span>
               </div>
@@ -271,6 +288,7 @@ function MatchupH2H({
           <div>
             <div className="px-4 py-2 border-b bg-muted/20 flex items-center justify-between">
               <div className="flex items-center gap-2">
+                <TeamLogo team={game.homeTeam} size="sm" />
                 <span className="text-xs text-muted-foreground font-medium">HOME</span>
                 <span className="font-bold text-sm">{game.homeTeam}</span>
               </div>
