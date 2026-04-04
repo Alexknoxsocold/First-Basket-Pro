@@ -175,16 +175,19 @@ function FbBar({ pct, isTopPick = false, isSneakyValue = false }: { pct: number;
 function PlayerCard({
   stat,
   rank,
+  teamRank,
   showLiveOdds = false,
   isTopPick = false,
   isSneakyValue = false,
 }: {
   stat: EspnPlayerStat;
   rank: number;
+  teamRank?: number;
   showLiveOdds?: boolean;
   isTopPick?: boolean;
   isSneakyValue?: boolean;
 }) {
+  const effectiveTeamRank = teamRank ?? rank;
   const isElite = stat.firstBasketPct >= 28;
   const isGood = stat.firstBasketPct >= 20;
   // isLow only applies if not highlighted by another flag
@@ -257,9 +260,14 @@ function PlayerCard({
           {stat.isStarter && (
             <Badge className="text-[9px] h-4 px-1 bg-primary/15 text-primary border border-primary/20 font-medium no-default-active-elevate">S</Badge>
           )}
-          {isTopPick && !isElite && (
+          {isTopPick && !isElite && effectiveTeamRank === 1 && (
             <Badge className="text-[9px] h-4 px-1.5 bg-emerald-900/60 text-emerald-400 border border-emerald-700/40 font-semibold no-default-active-elevate">
               Top Pick
+            </Badge>
+          )}
+          {isTopPick && !isElite && effectiveTeamRank === 2 && (
+            <Badge className="text-[9px] h-4 px-1.5 bg-emerald-900/40 text-emerald-500 border border-emerald-700/30 font-semibold no-default-active-elevate">
+              2nd Pick
             </Badge>
           )}
           {isSneakyValue && !isTopPick && !isElite && (
@@ -736,6 +744,7 @@ export default function PlayerStats() {
                     key={`${stat.team}-${stat.player}`}
                     stat={stat}
                     rank={i + 1}
+                    teamRank={teamRank}
                     showLiveOdds={hasLiveOdds}
                     isTopPick={teamRank <= 2}
                     isSneakyValue={checkSneakyValue(stat, teamRank)}
