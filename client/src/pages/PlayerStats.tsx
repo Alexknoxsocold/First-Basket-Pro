@@ -29,18 +29,27 @@ function TeamLogo({ team, size = "sm" }: { team: string; size?: "sm" | "md" }) {
   );
 }
 
-// DraftKings SVG crown logo badge
-function DkLogo({ className = "w-5 h-5" }: { className?: string }) {
+// DraftKings logo — crown mark with DK green brand colors
+function DkLogo({ className = "w-5 h-5", dimmed = false }: { className?: string; dimmed?: boolean }) {
   return (
-    <svg viewBox="0 0 28 28" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
-      <rect width="28" height="28" rx="4" fill="#1A1A2E" />
+    <svg
+      viewBox="0 0 32 32"
+      className={className}
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      style={{ opacity: dimmed ? 0.45 : 1 }}
+    >
+      <rect width="32" height="32" rx="5" fill="#1a3a1a" />
+      {/* DK Crown: 5-point crown shape */}
       <path
-        d="M14 4L17.5 10.5L24.5 11.5L19.5 16.5L20.5 23.5L14 20L7.5 23.5L8.5 16.5L3.5 11.5L10.5 10.5L14 4Z"
-        fill="#4CAF50"
-        stroke="#4CAF50"
-        strokeWidth="0.5"
-        strokeLinejoin="round"
+        d="M16 5
+           L19 11 L26 8 L22 16
+           L26 17 L16 27 L6 17 L10 16
+           L6 8 L13 11 Z"
+        fill="#53d337"
       />
+      {/* Crown base bar */}
+      <rect x="9" y="20" width="14" height="3" rx="1.5" fill="#53d337" />
     </svg>
   );
 }
@@ -170,16 +179,15 @@ function PlayerCard({
 
         {/* Stats row */}
         <div className="flex items-center gap-3 mt-1.5 flex-wrap">
-          {/* Odds */}
+          {/* Odds — always show DK logo, dimmed if estimated */}
           <div className="flex items-center gap-1.5">
-            {isLive ? (
-              <DkLogo className="w-4 h-4 shrink-0" />
-            ) : (
-              <span className="text-[9px] uppercase tracking-wider text-muted-foreground/50 font-semibold">Est</span>
-            )}
+            <DkLogo className="w-4 h-4 shrink-0" dimmed={!isLive} />
             <span className={`font-mono text-xs font-bold ${(isGood || isLive) ? "text-green-400" : "text-muted-foreground"}`}>
               {displayOdds}
             </span>
+            {!isLive && (
+              <span className="text-[9px] text-muted-foreground/40 font-medium">Est</span>
+            )}
           </div>
 
           <span className="text-[10px] text-muted-foreground/30">|</span>

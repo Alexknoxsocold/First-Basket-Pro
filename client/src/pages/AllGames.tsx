@@ -21,6 +21,16 @@ interface EspnPlayerStat {
   isStarter?: boolean;
 }
 
+function DkLogo({ dimmed = false }: { dimmed?: boolean }) {
+  return (
+    <svg viewBox="0 0 32 32" className="w-4 h-4 shrink-0" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ opacity: dimmed ? 0.4 : 1 }}>
+      <rect width="32" height="32" rx="5" fill="#1a3a1a" />
+      <path d="M16 5 L19 11 L26 8 L22 16 L26 17 L16 27 L6 17 L10 16 L6 8 L13 11 Z" fill="#53d337" />
+      <rect x="9" y="20" width="14" height="3" rx="1.5" fill="#53d337" />
+    </svg>
+  );
+}
+
 function TeamLogo({ team, size = "md" }: { team: string; size?: "sm" | "md" | "lg" }) {
   const logoUrl = getTeamLogoUrl(team);
   const sizeClass = size === "sm" ? "w-6 h-6" : size === "lg" ? "w-14 h-14" : "w-9 h-9";
@@ -95,8 +105,12 @@ function FeaturedPickBanner({
                   <div className="text-xs text-muted-foreground mt-0.5">
                     {topPlayer.team} vs {opponent}
                   </div>
-                  <div className="text-[10px] text-muted-foreground/60 mt-0.5">
-                    {topPlayer.avgPoints} PPG &bull; {displayOdds} odds
+                  <div className="flex items-center gap-1 mt-0.5">
+                    <DkLogo dimmed={!topPlayer.liveOdds} />
+                    <span className="text-[10px] text-muted-foreground/60">
+                      {topPlayer.avgPoints} PPG &bull; <span className="text-green-400 font-mono font-semibold">{displayOdds}</span>
+                      {!topPlayer.liveOdds && <span className="text-muted-foreground/40 ml-1">Est</span>}
+                    </span>
                   </div>
                 </div>
                 <div className="text-right shrink-0">
