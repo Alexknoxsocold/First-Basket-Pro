@@ -150,10 +150,11 @@ export default function GameRow({
   const homeDisplayPct = homeEspnPick ? homeEspnPick.firstBasketPct : homeScorePercent;
   const hasEspn = !!(awayEspnPick || homeEspnPick);
 
+  // Whether there's real user tip data (not just the 50/50 default)
+  const hasRealTipData = awayTipCount > 0 || homeTipCount > 0;
+
   const topPickPercent = Math.max(awayDisplayPct, homeDisplayPct);
   const isFeatured = hasEspn ? topPickPercent >= 18 : topPickPercent >= 60;
-  const isTie = awayDisplayPct === homeDisplayPct;
-  const awayIsTop = awayDisplayPct > homeDisplayPct;
 
   // Resolve display player names and headshots
   const awayDisplayPlayer = awayEspnPick?.player || awayPlayer;
@@ -161,13 +162,28 @@ export default function GameRow({
   const awayDisplayHeadshot = awayEspnPick?.headshot || awayPlayerHeadshot;
   const homeDisplayHeadshot = homeEspnPick?.headshot || homePlayerHeadshot;
 
-  // Score bar scaling: ESPN FB% tops out ~20%, scale to show comparison
-  const scaledAwayPct = hasEspn
-    ? Math.round((awayDisplayPct / Math.max(awayDisplayPct + homeDisplayPct, 1)) * 100)
-    : awayDisplayPct;
-  const scaledHomePct = hasEspn
-    ? Math.round((homeDisplayPct / Math.max(awayDisplayPct + homeDisplayPct, 1)) * 100)
-    : homeDisplayPct;
+  // H2H score bar: ESPN FB% with home-court advantage baked in.
+  // NBA home teams win ~53% of tip-offs historically; weight accordingly.
+  let scaledAwayPct: number;
+  let scaledHomePct: number;
+  if (hasEspn) {
+    // Apply home-court factor: home team gets a 6% boost, away gets a 6% penalty
+    const awayAdj = awayDisplayPct * 0.94;
+    const homeAdj = homeDisplayPct * 1.06;
+    const total = Math.max(awayAdj + homeAdj, 0.01);
+    scaledAwayPct = Math.round((awayAdj / total) * 100);
+    scaledHomePct = 100 - scaledAwayPct;
+  } else if (hasRealTipData) {
+    scaledAwayPct = awayTipPercent;
+    scaledHomePct = homeTipPercent;
+  } else {
+    // No data at all — use historical home-court baseline (47/53)
+    scaledAwayPct = 47;
+    scaledHomePct = 53;
+  }
+
+  const isTie = scaledAwayPct === scaledHomePct;
+  const awayIsTop = awayDisplayPct > homeDisplayPct;
 
   const formatGameTime = (time?: string) => {
     if (!time) return null;
@@ -215,21 +231,39 @@ export default function GameRow({
               <TeamLogo team={awayTeam} />
               <div className="flex-1 min-w-0">
                 <div className="font-semibold text-sm leading-tight" data-testid={`text-away-team-${awayTeam}`}>{awayTeam}</div>
-                <div className="text-[10px] text-muted-foreground uppercase tracking-wider">Away &bull; {awayTipCount} tips</div>
+                <div className="text-[10px] text-muted-foreground uppercase tracking-wider">
+                  Away{hasRealTipData ? ` \u2022 ${awayTipCount} tips` : ""}
+                </div>
               </div>
-              <div className={`font-mono text-sm font-bold ${awayTipPercent > homeTipPercent ? "text-primary" : awayTipPercent < homeTipPercent ? "text-red-400" : "text-muted-foreground"}`} data-testid={`text-tip-percent-${awayTeam}`}>
-                {awayTipPercent}%
-              </div>
+              {hasRealTipData && (
+                <div className={`font-mono text-sm font-bold ${awayTipPercent > homeTipPercent ? "text-primary" : awayTipPercent < homeTipPercent ? "text-red-400" : "text-muted-foreground"}`} data-testid={`text-tip-percent-${awayTeam}`}>
+                  {awayTipPercent}%
+                </div>
+              )}
+              {!hasRealTipData && hasEspn && (
+                <div className={`font-mono text-sm font-bold ${scaledAwayPct > scaledHomePct ? "text-primary" : "text-red-400"}`} data-testid={`text-tip-percent-${awayTeam}`}>
+                  {scaledAwayPct}%
+                </div>
+              )}
             </div>
             <div className="flex items-center gap-2.5">
               <TeamLogo team={homeTeam} />
               <div className="flex-1 min-w-0">
                 <div className="font-semibold text-sm leading-tight" data-testid={`text-home-team-${homeTeam}`}>{homeTeam}</div>
-                <div className="text-[10px] text-muted-foreground uppercase tracking-wider">Home &bull; {homeTipCount} tips</div>
+                <div className="text-[10px] text-muted-foreground uppercase tracking-wider">
+                  Home{hasRealTipData ? ` \u2022 ${homeTipCount} tips` : ""}
+                </div>
               </div>
-              <div className={`font-mono text-sm font-bold ${homeTipPercent > awayTipPercent ? "text-primary" : homeTipPercent < awayTipPercent ? "text-red-400" : "text-muted-foreground"}`} data-testid={`text-tip-percent-${homeTeam}`}>
-                {homeTipPercent}%
-              </div>
+              {hasRealTipData && (
+                <div className={`font-mono text-sm font-bold ${homeTipPercent > awayTipPercent ? "text-primary" : homeTipPercent < awayTipPercent ? "text-red-400" : "text-muted-foreground"}`} data-testid={`text-tip-percent-${homeTeam}`}>
+                  {homeTipPercent}%
+                </div>
+              )}
+              {!hasRealTipData && hasEspn && (
+                <div className={`font-mono text-sm font-bold ${scaledHomePct > scaledAwayPct ? "text-primary" : "text-red-400"}`} data-testid={`text-tip-percent-${homeTeam}`}>
+                  {scaledHomePct}%
+                </div>
+              )}
             </div>
           </div>
 
@@ -290,11 +324,9 @@ export default function GameRow({
                 </div>
               </div>
             </div>
-            {hasEspn && (
-              <div className="text-[9px] text-muted-foreground/50 text-center">
-                Based on top FB% pick per team
-              </div>
-            )}
+            <div className="text-[9px] text-muted-foreground/50 text-center">
+              {hasEspn ? "ESPN FB% + home-court factor" : "Historical home-court baseline"}
+            </div>
           </div>
         </div>
       </div>
