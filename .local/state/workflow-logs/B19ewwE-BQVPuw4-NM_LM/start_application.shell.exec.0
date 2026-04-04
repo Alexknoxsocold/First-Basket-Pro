@@ -1,0 +1,262 @@
+
+> rest-express@1.0.0 dev
+> NODE_ENV=development tsx server/index.ts
+
+[1G[0K[InjurySync] Starting automatic injury sync (every 1 hour)...
+[InjurySync] Starting injury sync from ESPN...
+[Cron] Daily sync scheduled for 12:30 AM ET every day
+[Cron] Lineup sync scheduled every 30 minutes (9 AM - 11 PM ET)
+8:21:45 AM [express] serving on port 5000
+[PopulatePlayerStats] Starting to populate player stats for today's starters...
+[InjurySync] Sync complete. Updated 0 players, cleared 0 recovered players.
+[InjurySync] Total injuries from ESPN: 121
+Browserslist: browsers data (caniuse-lite) is 6 months old. Please run:
+  npx update-browserslist-db@latest
+  Why you should do it regularly: https://github.com/browserslist/update-db#readme
+
+A PostCSS plugin did not pass the `from` option to `postcss.parse`. This may cause imported assets to be incorrectly transformed. If you've recently added a PostCSS plugin that raised this warning, please contact the package author to fix the issue.
+[PopulatePlayerStats] Error: error: relation "games" does not exist
+    at [90mfile:///home/runner/workspace/[39mnode_modules/[4m@neondatabase/serverless[24m/index.mjs:1345:74
+[90m    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)[39m
+    at async NeonPreparedQuery.execute [90m(/home/runner/workspace/[39mnode_modules/[4msrc[24m/neon-serverless/session.ts:102:18[90m)[39m
+    at async MemStorage.getGames [90m(/home/runner/workspace/[39mserver/storage.ts:194:12[90m)[39m
+    at async populateTodayStarters [90m(/home/runner/workspace/[39mserver/populate-player-stats.ts:165:19[90m)[39m
+    at async Server.<anonymous> [90m(/home/runner/workspace/[39mserver/index.ts:120:7[90m)[39m {
+  length: [33m105[39m,
+  severity: [32m'ERROR'[39m,
+  code: [32m'42P01'[39m,
+  detail: [90mundefined[39m,
+  hint: [90mundefined[39m,
+  position: [32m'330'[39m,
+  internalPosition: [90mundefined[39m,
+  internalQuery: [90mundefined[39m,
+  where: [90mundefined[39m,
+  schema: [90mundefined[39m,
+  table: [90mundefined[39m,
+  column: [90mundefined[39m,
+  dataType: [90mundefined[39m,
+  constraint: [90mundefined[39m,
+  file: [32m'parse_relation.c'[39m,
+  line: [32m'1452'[39m,
+  routine: [32m'parserOpenTable'[39m
+}
+8:21:48 AM [error: relation "games" does not exist] [Startup] Failed to populate player stats:
+8:21:49 AM [express] GET /api/auth/session 401 in 1ms :: {"user":null}
+8:21:49 AM [express] GET /api/games 500 in 20ms :: {"error":"Failed to fetch games"}
+8:21:51 AM [express] GET /api/auth/session 401 in 1ms :: {"user":null}
+8:21:51 AM [express] GET /api/games 500 in 20ms :: {"error":"Failed to fetch games"}
+8:23:16 AM [express] GET /api/auth/session 401 in 1ms :: {"user":null}
+8:23:16 AM [express] GET /api/games 500 in 18ms :: {"error":"Failed to fetch games"}
+8:23:29 AM [express] GET /api/games 500 in 15ms :: {"error":"Failed to fetch games"}
+[ESPN Stats] Error: error: relation "games" does not exist
+    at [90mfile:///home/runner/workspace/[39mnode_modules/[4m@neondatabase/serverless[24m/index.mjs:1345:74
+[90m    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)[39m
+    at async NeonPreparedQuery.execute [90m(/home/runner/workspace/[39mnode_modules/[4msrc[24m/neon-serverless/session.ts:102:18[90m)[39m
+    at async MemStorage.getGames [90m(/home/runner/workspace/[39mserver/storage.ts:194:12[90m)[39m
+    at async <anonymous> [90m(/home/runner/workspace/[39mserver/routes.ts:155:21[90m)[39m {
+  length: [33m105[39m,
+  severity: [32m'ERROR'[39m,
+  code: [32m'42P01'[39m,
+  detail: [90mundefined[39m,
+  hint: [90mundefined[39m,
+  position: [32m'330'[39m,
+  internalPosition: [90mundefined[39m,
+  internalQuery: [90mundefined[39m,
+  where: [90mundefined[39m,
+  schema: [90mundefined[39m,
+  table: [90mundefined[39m,
+  column: [90mundefined[39m,
+  dataType: [90mundefined[39m,
+  constraint: [90mundefined[39m,
+  file: [32m'parse_relation.c'[39m,
+  line: [32m'1452'[39m,
+  routine: [32m'parserOpenTable'[39m
+}
+8:23:29 AM [express] GET /api/espn-player-stats 500 in 17ms :: {"error":"Failed to fetch ESPN player…
+8:23:29 AM [express] GET /api/games 500 in 15ms :: {"error":"Failed to fetch games"}
+8:23:32 AM [express] GET /api/games 500 in 13ms :: {"error":"Failed to fetch games"}
+8:23:33 AM [express] GET /api/games 500 in 15ms :: {"error":"Failed to fetch games"}
+8:23:58 AM [express] GET /api/auth/session 401 in 1ms :: {"user":null}
+8:23:58 AM [express] GET /api/games 500 in 14ms :: {"error":"Failed to fetch games"}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+[1;1H[0J[2m8:24:44 AM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/GameRow.tsx, /src/index.css?v=7UFsgyZVdVPXWmqoh76kw[22m
+[2m8:24:45 AM[22m [36m[1m[vite][22m[39m [32m✨ new dependencies optimized: [33m@radix-ui/react-avatar[32m[39m
+[2m8:24:45 AM[22m [36m[1m[vite][22m[39m [32m✨ optimized dependencies changed. reloading[39m
+8:24:47 AM [express] GET /api/auth/session 401 in 0ms :: {"user":null}
+8:24:47 AM [express] GET /api/games 500 in 17ms :: {"error":"Failed to fetch games"}
+8:24:47 AM [express] GET /api/auth/session 401 in 0ms :: {"user":null}
+8:24:47 AM [express] GET /api/games 500 in 12ms :: {"error":"Failed to fetch games"}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+[1;1H[0J[2m8:24:52 AM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/GamesTable.tsx, /src/index.css?v=7UFsgyZVdVPXWmqoh76kw[22m
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+[1;1H[0J[2m8:25:32 AM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/AllGames.tsx, /src/index.css?v=7UFsgyZVdVPXWmqoh76kw[22m
+8:25:33 AM [express] GET /api/games 500 in 20ms :: {"error":"Failed to fetch games"}
+[ESPN Stats] Error: error: relation "games" does not exist
+    at [90mfile:///home/runner/workspace/[39mnode_modules/[4m@neondatabase/serverless[24m/index.mjs:1345:74
+[90m    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)[39m
+    at async NeonPreparedQuery.execute [90m(/home/runner/workspace/[39mnode_modules/[4msrc[24m/neon-serverless/session.ts:102:18[90m)[39m
+    at async MemStorage.getGames [90m(/home/runner/workspace/[39mserver/storage.ts:194:12[90m)[39m
+    at async <anonymous> [90m(/home/runner/workspace/[39mserver/routes.ts:155:21[90m)[39m {
+  length: [33m105[39m,
+  severity: [32m'ERROR'[39m,
+  code: [32m'42P01'[39m,
+  detail: [90mundefined[39m,
+  hint: [90mundefined[39m,
+  position: [32m'330'[39m,
+  internalPosition: [90mundefined[39m,
+  internalQuery: [90mundefined[39m,
+  where: [90mundefined[39m,
+  schema: [90mundefined[39m,
+  table: [90mundefined[39m,
+  column: [90mundefined[39m,
+  dataType: [90mundefined[39m,
+  constraint: [90mundefined[39m,
+  file: [32m'parse_relation.c'[39m,
+  line: [32m'1452'[39m,
+  routine: [32m'parserOpenTable'[39m
+}
+8:25:33 AM [express] GET /api/espn-player-stats 500 in 20ms :: {"error":"Failed to fetch ESPN player…
+[ESPN Stats] Error: error: relation "games" does not exist
+    at [90mfile:///home/runner/workspace/[39mnode_modules/[4m@neondatabase/serverless[24m/index.mjs:1345:74
+[90m    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)[39m
+    at async NeonPreparedQuery.execute [90m(/home/runner/workspace/[39mnode_modules/[4msrc[24m/neon-serverless/session.ts:102:18[90m)[39m
+    at async MemStorage.getGames [90m(/home/runner/workspace/[39mserver/storage.ts:194:12[90m)[39m
+    at async <anonymous> [90m(/home/runner/workspace/[39mserver/routes.ts:155:21[90m)[39m {
+  length: [33m105[39m,
+  severity: [32m'ERROR'[39m,
+  code: [32m'42P01'[39m,
+  detail: [90mundefined[39m,
+  hint: [90mundefined[39m,
+  position: [32m'330'[39m,
+  internalPosition: [90mundefined[39m,
+  internalQuery: [90mundefined[39m,
+  where: [90mundefined[39m,
+  schema: [90mundefined[39m,
+  table: [90mundefined[39m,
+  column: [90mundefined[39m,
+  dataType: [90mundefined[39m,
+  constraint: [90mundefined[39m,
+  file: [32m'parse_relation.c'[39m,
+  line: [32m'1452'[39m,
+  routine: [32m'parserOpenTable'[39m
+}
+8:25:33 AM [express] GET /api/espn-player-stats 500 in 17ms :: {"error":"Failed to fetch ESPN player…
+8:25:33 AM [express] GET /api/games 500 in 22ms :: {"error":"Failed to fetch games"}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+[1;1H[0J[2m8:26:45 AM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/PlayerStats.tsx, /src/index.css?v=7UFsgyZVdVPXWmqoh76kw[22m
+8:27:01 AM [express] GET /api/auth/session 401 in 0ms :: {"user":null}
+[ESPN Stats] Error: error: relation "games" does not exist
+    at [90mfile:///home/runner/workspace/[39mnode_modules/[4m@neondatabase/serverless[24m/index.mjs:1345:74
+[90m    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)[39m
+    at async NeonPreparedQuery.execute [90m(/home/runner/workspace/[39mnode_modules/[4msrc[24m/neon-serverless/session.ts:102:18[90m)[39m
+    at async MemStorage.getGames [90m(/home/runner/workspace/[39mserver/storage.ts:194:12[90m)[39m
+    at async <anonymous> [90m(/home/runner/workspace/[39mserver/routes.ts:155:21[90m)[39m {
+  length: [33m105[39m,
+  severity: [32m'ERROR'[39m,
+  code: [32m'42P01'[39m,
+  detail: [90mundefined[39m,
+  hint: [90mundefined[39m,
+  position: [32m'330'[39m,
+  internalPosition: [90mundefined[39m,
+  internalQuery: [90mundefined[39m,
+  where: [90mundefined[39m,
+  schema: [90mundefined[39m,
+  table: [90mundefined[39m,
+  column: [90mundefined[39m,
+  dataType: [90mundefined[39m,
+  constraint: [90mundefined[39m,
+  file: [32m'parse_relation.c'[39m,
+  line: [32m'1452'[39m,
+  routine: [32m'parserOpenTable'[39m
+}
+8:27:01 AM [express] GET /api/espn-player-stats 500 in 20ms :: {"error":"Failed to fetch ESPN player…
+8:27:01 AM [express] GET /api/games 500 in 23ms :: {"error":"Failed to fetch games"}
+[1G[0K⠙[1G[0K

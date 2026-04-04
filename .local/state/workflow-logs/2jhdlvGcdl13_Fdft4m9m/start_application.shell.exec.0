@@ -1,0 +1,492 @@
+
+> rest-express@1.0.0 dev
+> NODE_ENV=development tsx server/index.ts
+
+[1G[0K[InjurySync] Starting automatic injury sync (every 1 hour)...
+[InjurySync] Starting injury sync from ESPN...
+[Cron] Daily sync scheduled for 12:30 AM ET every day
+[Cron] Lineup sync scheduled every 30 minutes (9 AM - 11 PM ET)
+8:37:58 AM [express] serving on port 5000
+[PopulatePlayerStats] Starting to populate player stats for today's starters...
+[PopulatePlayerStats] ✓ Created Tyrese Maxey (PHI)
+[PopulatePlayerStats] ✓ Created Paul George (PHI)
+[PopulatePlayerStats] ✓ Created Kelly Oubre Jr. (PHI)
+[PopulatePlayerStats] ✓ Created Tobias Harris (PHI)
+[PopulatePlayerStats] ✓ Created Joel Embiid (PHI)
+[PopulatePlayerStats] ✓ Created Terry Rozier (MIA)
+[PopulatePlayerStats] ✓ Created Tyler Herro (MIA)
+[PopulatePlayerStats] ✓ Created Jimmy Butler (MIA)
+[PopulatePlayerStats] ✓ Created Nikola Jovic (MIA)
+[PopulatePlayerStats] ✓ Created Bam Adebayo (MIA)
+[PopulatePlayerStats] ✓ Created Jrue Holiday (BOS)
+[PopulatePlayerStats] ✓ Created Derrick White (BOS)
+[PopulatePlayerStats] ✓ Created Jaylen Brown (BOS)
+[PopulatePlayerStats] ✓ Created Jayson Tatum (BOS)
+[PopulatePlayerStats] ✓ Created Al Horford (BOS)
+[PopulatePlayerStats] ✓ Created Trae Young (ATL)
+[PopulatePlayerStats] ✓ Created Dyson Daniels (ATL)
+[PopulatePlayerStats] ✓ Created De Andre Hunter (ATL)
+[PopulatePlayerStats] ✓ Created Jalen Johnson (ATL)
+[PopulatePlayerStats] ✓ Created Clint Capela (ATL)
+[PopulatePlayerStats] ✓ Created Devin Booker (PHX)
+[PopulatePlayerStats] ✓ Created Grayson Allen (PHX)
+[PopulatePlayerStats] ✓ Created Kevin Durant (PHX)
+[PopulatePlayerStats] ✓ Created Oso Ighodaro (PHX)
+[PopulatePlayerStats] ✓ Created Jusuf Nurkic (PHX)
+[PopulatePlayerStats] ✓ Created Ja Morant (MEM)
+[PopulatePlayerStats] ✓ Created Desmond Bane (MEM)
+[PopulatePlayerStats] ✓ Created Jaren Jackson Jr. (MEM)
+[PopulatePlayerStats] ✓ Created Ziaire Williams (MEM)
+[PopulatePlayerStats] ✓ Created Scotty Pippen Jr. (MEM)
+[PopulatePlayerStats] ✓ Created Coby White (CHI)
+[PopulatePlayerStats] ✓ Created Ayo Dosunmu (CHI)
+[PopulatePlayerStats] ✓ Created Josh Giddey (CHI)
+[PopulatePlayerStats] ✓ Created Patrick Williams (CHI)
+[PopulatePlayerStats] ✓ Created Nikola Vucevic (CHI)
+[PopulatePlayerStats] ✓ Created Stephon Castle (SA)
+[PopulatePlayerStats] ✓ Created Devin Vassell (SA)
+[PopulatePlayerStats] ✓ Created Harrison Barnes (SA)
+[PopulatePlayerStats] ✓ Created Keldon Johnson (SA)
+[PopulatePlayerStats] ✓ Created Victor Wembanyama (SA)
+[PopulatePlayerStats] ✓ Created Mike Conley (MIN)
+[PopulatePlayerStats] ✓ Created Anthony Edwards (MIN)
+[PopulatePlayerStats] ✓ Created Jaden McDaniels (MIN)
+[PopulatePlayerStats] ✓ Created Naz Reid (MIN)
+[PopulatePlayerStats] ✓ Created Rudy Gobert (MIN)
+[PopulatePlayerStats] ✓ Created Kyrie Irving (DAL)
+[PopulatePlayerStats] ✓ Created Klay Thompson (DAL)
+[PopulatePlayerStats] ✓ Created Naji Marshall (DAL)
+[PopulatePlayerStats] ✓ Created PJ Washington (DAL)
+[PopulatePlayerStats] ✓ Created Anthony Davis (DAL)
+[PopulatePlayerStats] ✓ Created Darius Garland (CLE)
+[PopulatePlayerStats] ✓ Created Donovan Mitchell (CLE)
+[PopulatePlayerStats] ✓ Created Caris LeVert (CLE)
+[PopulatePlayerStats] ✓ Created Evan Mobley (CLE)
+[PopulatePlayerStats] ✓ Created Jarrett Allen (CLE)
+[PopulatePlayerStats] ✓ Created Keyonte George (UTAH)
+[PopulatePlayerStats] ✓ Created Collin Sexton (UTAH)
+[PopulatePlayerStats] ✓ Created Cody Williams (UTAH)
+[PopulatePlayerStats] ✓ Created Lauri Markkanen (UTAH)
+[PopulatePlayerStats] ✓ Created Walker Kessler (UTAH)
+[PopulatePlayerStats] ✓ Created Cade Cunningham (DET)
+[PopulatePlayerStats] ✓ Created Jaden Ivey (DET)
+[PopulatePlayerStats] ✓ Created Ausar Thompson (DET)
+[PopulatePlayerStats] ✓ Created Isaiah Stewart (DET)
+[PopulatePlayerStats] ✓ Created Jalen Duren (DET)
+[PopulatePlayerStats] ✓ Created Shai Gilgeous-Alexander (OKC)
+[PopulatePlayerStats] ✓ Created Jalen Williams (OKC)
+[PopulatePlayerStats] ✓ Created Luguentz Dort (OKC)
+[PopulatePlayerStats] ✓ Created Chet Holmgren (OKC)
+[PopulatePlayerStats] ✓ Created Isaiah Hartenstein (OKC)
+[PopulatePlayerStats] ✓ Created Jordan Poole (WSH)
+[PopulatePlayerStats] ✓ Created Bilal Coulibaly (WSH)
+[PopulatePlayerStats] ✓ Created Corey Kispert (WSH)
+[PopulatePlayerStats] ✓ Created Alexandre Sarr (WSH)
+[PopulatePlayerStats] ✓ Created Jonas Valanciunas (WSH)
+[PopulatePlayerStats] ✓ Created Luka Doncic (LAL)
+[PopulatePlayerStats] ✓ Created Austin Reaves (LAL)
+[PopulatePlayerStats] ✓ Created Rui Hachimura (LAL)
+[PopulatePlayerStats] ✓ Created LeBron James (LAL)
+[PopulatePlayerStats] ✓ Created Jaxson Hayes (LAL)
+[PopulatePlayerStats] ✓ Complete! Created 80 new players, skipped 0 existing
+[PopulatePlayerStats] Total players in database: 80
+8:37:58 AM [express] [Startup] Player stats populated successfully
+[InjurySync] Updated Anthony Davis: OUT (Sprain)
+[InjurySync] Updated Luka Doncic: OUT (Not Specified)
+[InjurySync] Updated Lauri Markkanen: OUT (Pinched Nerve)
+[InjurySync] Updated Tyler Herro: DAY-TO-DAY (INJURY_STATUS_DAYTODAY)
+[InjurySync] Updated Ja Morant: OUT (Sprain)
+[InjurySync] Updated Kyrie Irving: OUT (Surgery)
+[InjurySync] Updated Cade Cunningham: OUT (Not Specified)
+[InjurySync] Updated Trae Young: OUT (Bruise)
+[InjurySync] Updated Jaren Jackson Jr.: OUT (Surgery)
+[InjurySync] Updated Nikola Vucevic: OUT (Surgery)
+[InjurySync] Updated Walker Kessler: OUT (Surgery)
+[InjurySync] Updated Terry Rozier: OUT (Not Specified)
+[InjurySync] Updated Jusuf Nurkic: OUT (Surgery)
+[InjurySync] Updated Austin Reaves: DAY-TO-DAY (INJURY_STATUS_DAYTODAY)
+[InjurySync] Updated Keyonte George: OUT (Strain)
+[InjurySync] Updated Al Horford: OUT (Strain)
+[InjurySync] Updated Scotty Pippen Jr.: OUT (Surgery)
+[InjurySync] Updated Jaden McDaniels: OUT (Tendinitis)
+[InjurySync] Updated Isaiah Stewart: OUT (Strain)
+[InjurySync] Updated Tobias Harris: DAY-TO-DAY (Bruise)
+[InjurySync] Updated Luguentz Dort: DAY-TO-DAY (Not Specified)
+[InjurySync] Updated Bilal Coulibaly: DAY-TO-DAY (INJURY_STATUS_DAYTODAY)
+[InjurySync] Sync complete. Updated 22 players, cleared 0 recovered players.
+[InjurySync] Total injuries from ESPN: 121
+Browserslist: browsers data (caniuse-lite) is 6 months old. Please run:
+  npx update-browserslist-db@latest
+  Why you should do it regularly: https://github.com/browserslist/update-db#readme
+
+A PostCSS plugin did not pass the `from` option to `postcss.parse`. This may cause imported assets to be incorrectly transformed. If you've recently added a PostCSS plugin that raised this warning, please contact the package author to fix the issue.
+8:38:01 AM [express] GET /api/auth/session 401 in 1ms :: {"user":null}
+[ESPN Stats] Fetching stats for 6 teams: WSH, MIA, SA, DEN, DET, PHI
+8:38:01 AM [express] GET /api/games 304 in 3ms :: [{"id":"91dccb7b-7ac6-46e0-948f-948b38265065","awa…
+[ESPN Stats] Fetching stats for 6 teams: WSH, MIA, SA, DEN, DET, PHI
+8:38:01 AM [express] GET /api/games 304 in 29ms :: [{"id":"91dccb7b-7ac6-46e0-948f-948b38265065","aw…
+8:38:01 AM [express] GET /api/auth/session 401 in 1ms :: {"user":null}
+[ESPN] Fetched 18 players for WSH
+[ESPN] Fetched 18 players for WSH
+[ESPN] Fetched 18 players for DET
+[ESPN] Fetched 18 players for DET
+[ESPN] Fetched 18 players for MIA
+[ESPN] Fetched 18 players for MIA
+[ESPN] Fetched 18 players for DEN
+[ESPN] Fetched 18 players for PHI
+[ESPN] Fetched 18 players for PHI
+[ESPN] Fetched 18 players for DEN
+[ESPN] Fetched 18 players for SA
+[ESPN] Fetched 18 players for SA
+[ESPN] ✓ WSH: 12 players processed
+[ESPN] ✓ WSH: 12 players processed
+[ESPN] ✓ MIA: 12 players processed
+[ESPN] ✓ MIA: 12 players processed
+[ESPN] ✓ SA: 12 players processed
+[ESPN] ✓ SA: 12 players processed
+[ESPN] ✓ DEN: 13 players processed
+[ESPN] ✓ DEN: 13 players processed
+[ESPN] ✓ DET: 13 players processed
+[ESPN] ✓ DET: 13 players processed
+[ESPN] ✓ PHI: 17 players processed
+[ESPN Stats] Total players fetched: 79
+8:38:02 AM [express] GET /api/espn-player-stats 200 in 1078ms :: [{"player":"Bub Carrington","team":…
+[ESPN] ✓ PHI: 17 players processed
+[ESPN Stats] Total players fetched: 79
+8:38:02 AM [express] GET /api/espn-player-stats 200 in 1060ms :: [{"player":"Leaky Black","team":"WS…
+8:38:04 AM [express] GET /api/games 304 in 3ms :: [{"id":"91dccb7b-7ac6-46e0-948f-948b38265065","awa…
+8:38:04 AM [express] GET /api/auth/session 401 in 1ms :: {"user":null}
+[ESPN Stats] Fetching stats for 6 teams: WSH, MIA, SA, DEN, DET, PHI
+[ESPN] Fetched 18 players for MIA
+[ESPN] Fetched 18 players for DET
+[ESPN] Fetched 18 players for WSH
+[ESPN] Fetched 18 players for PHI
+[ESPN] Fetched 18 players for SA
+[ESPN] Fetched 18 players for DEN
+[ESPN] ✓ WSH: 12 players processed
+[ESPN] ✓ MIA: 12 players processed
+[ESPN] ✓ SA: 12 players processed
+[ESPN] ✓ DEN: 13 players processed
+8:38:05 AM [express] GET /api/games 200 in 3ms :: [{"id":"91dccb7b-7ac6-46e0-948f-948b38265065","awa…
+[ESPN] ✓ DET: 13 players processed
+[ESPN] ✓ PHI: 17 players processed
+[ESPN Stats] Total players fetched: 79
+8:38:05 AM [express] GET /api/espn-player-stats 200 in 735ms :: [{"player":"Bub Carrington","team":"…
+[API] ESPN lineup sync triggered
+[ESPN Lineups] Starting lineup sync for [33m6[39m teams...
+[ESPN Lineups] SA: 16 healthy players
+[ESPN Lineups] DEN: 15 healthy players
+[ESPN Lineups] MIA: 16 healthy players
+[ESPN Lineups] WSH: 12 healthy players
+[ESPN Lineups] SA starters: Victor Wembanyama, De'Aaron Fox, Stephon Castle, Devin Vassell, Keldon Johnson
+[ESPN Lineups] DEN starters: Nikola Jokic, Jamal Murray, Aaron Gordon, Tim Hardaway Jr., Christian Braun
+[ESPN Lineups] MIA starters: Tyler Herro, Bam Adebayo, Andrew Wiggins, Jaime Jaquez Jr., Pelle Larsson
+[ESPN Lineups] WSH starters: Julian Reese, Tre Johnson, Bilal Coulibaly, Bub Carrington, Leaky Black
+[ESPN Lineups] DET: 16 healthy players
+[ESPN Lineups] PHI: 17 healthy players
+[ESPN Lineups] DET starters: Jalen Duren, Tobias Harris, Duncan Robinson, Ausar Thompson, Kevin Huerter
+[ESPN Lineups] PHI starters: Tyrese Maxey, Joel Embiid, Paul George, VJ Edgecombe, Kelly Oubre Jr.
+[ESPN Lineups] Updated WSH@MIA
+[ESPN Lineups] Updated SA@DEN
+[ESPN Lineups] Updated DET@PHI
+[PopulatePlayerStats] Starting to populate player stats for today's starters...
+[PopulatePlayerStats] ✓ Created Julian Reese (WSH)
+[PopulatePlayerStats] ✓ Created Tre Johnson (WSH)
+[PopulatePlayerStats] ✓ Created Bub Carrington (WSH)
+[PopulatePlayerStats] ✓ Created Leaky Black (WSH)
+[PopulatePlayerStats] ✓ Created Andrew Wiggins (MIA)
+[PopulatePlayerStats] ✓ Created Jaime Jaquez Jr. (MIA)
+[PopulatePlayerStats] ✓ Created Pelle Larsson (MIA)
+[PopulatePlayerStats] ✓ Created De'Aaron Fox (SA)
+[PopulatePlayerStats] ✓ Created Nikola Jokic (DEN)
+[PopulatePlayerStats] ✓ Created Jamal Murray (DEN)
+[PopulatePlayerStats] ✓ Created Aaron Gordon (DEN)
+[PopulatePlayerStats] ✓ Created Tim Hardaway Jr. (DEN)
+[PopulatePlayerStats] ✓ Created Christian Braun (DEN)
+[PopulatePlayerStats] ✓ Created Duncan Robinson (DET)
+[PopulatePlayerStats] ✓ Created Kevin Huerter (DET)
+[PopulatePlayerStats] ✓ Created VJ Edgecombe (PHI)
+[PopulatePlayerStats] ✓ Complete! Created 16 new players, skipped 14 existing
+[PopulatePlayerStats] Total players in database: 96
+8:38:09 AM [express] POST /api/sync-espn-lineups 200 in 756ms :: {"message":"Updated lineups for 3 g…
+8:38:17 AM [express] GET /api/games 200 in 4ms :: [{"id":"91dccb7b-7ac6-46e0-948f-948b38265065","awa…
+8:38:17 AM [express] GET /api/auth/session 401 in 1ms :: {"user":null}
+[ESPN Stats] Fetching stats for 6 teams: WSH, MIA, SA, DEN, DET, PHI
+[ESPN] Fetched 18 players for DET
+[ESPN] Fetched 18 players for MIA
+[ESPN] Fetched 18 players for WSH
+[ESPN] Fetched 18 players for SA
+[ESPN] Fetched 18 players for PHI
+[ESPN] Fetched 18 players for DEN
+[ESPN] ✓ WSH: 12 players processed
+[ESPN] ✓ MIA: 12 players processed
+[ESPN] ✓ SA: 12 players processed
+[ESPN] ✓ DEN: 13 players processed
+[ESPN] ✓ DET: 13 players processed
+[ESPN] ✓ PHI: 17 players processed
+[ESPN Stats] Total players fetched: 79
+8:38:18 AM [express] GET /api/espn-player-stats 200 in 891ms :: [{"player":"Sharife Cooper","team":"…
+8:38:29 AM [express] GET /api/auth/session 401 in 0ms :: {"user":null}
+8:38:29 AM [express] GET /api/games 200 in 22ms :: [{"id":"91dccb7b-7ac6-46e0-948f-948b38265065","aw…
+[ESPN Stats] Fetching stats for 6 teams: WSH, MIA, SA, DEN, DET, PHI
+[ESPN] Fetched 18 players for DET
+[ESPN] Fetched 18 players for MIA
+[ESPN] Fetched 18 players for WSH
+[ESPN] Fetched 18 players for DEN
+[ESPN] Fetched 18 players for SA
+[ESPN] Fetched 18 players for PHI
+[ESPN] ✓ WSH: 12 players processed
+[ESPN] ✓ MIA: 12 players processed
+[ESPN] ✓ SA: 12 players processed
+[ESPN] ✓ DEN: 13 players processed
+[ESPN] ✓ DET: 13 players processed
+[ESPN] ✓ PHI: 17 players processed
+[ESPN Stats] Total players fetched: 79
+8:38:30 AM [express] GET /api/espn-player-stats 200 in 910ms :: [{"player":"Sharife Cooper","team":"…
+8:38:54 AM [express] GET /api/auth/session 401 in 1ms :: {"user":null}
+8:38:54 AM [express] GET /api/games 304 in 26ms :: [{"id":"91dccb7b-7ac6-46e0-948f-948b38265065","aw…
+[ESPN Stats] Fetching stats for 6 teams: WSH, MIA, SA, DEN, DET, PHI
+[ESPN] Fetched 18 players for DET
+[ESPN] Fetched 18 players for DEN
+[ESPN] Fetched 18 players for MIA
+[ESPN] Fetched 18 players for PHI
+[ESPN] Fetched 18 players for SA
+[ESPN] Fetched 18 players for WSH
+[ESPN] ✓ WSH: 12 players processed
+[ESPN] ✓ MIA: 12 players processed
+[ESPN] ✓ SA: 12 players processed
+[ESPN] ✓ DEN: 13 players processed
+[ESPN] ✓ DET: 13 players processed
+[ESPN] ✓ PHI: 17 players processed
+[ESPN Stats] Total players fetched: 79
+8:38:55 AM [express] GET /api/espn-player-stats 200 in 1070ms :: [{"player":"Anthony Gill","team":"W…
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+[1;1H[0J[2m8:40:04 AM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/AllGames.tsx, /src/index.css?v=BXpAeQozNYjjvmpbGYNGh[22m
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+[1;1H[0J[2m8:40:28 AM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/GamesTable.tsx, /src/index.css?v=BXpAeQozNYjjvmpbGYNGh[22m
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+[1;1H[0J[2m8:40:38 AM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/GameRow.tsx, /src/index.css?v=BXpAeQozNYjjvmpbGYNGh[22m
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+[1;1H[0J[2m8:40:52 AM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/GameRow.tsx, /src/index.css?v=BXpAeQozNYjjvmpbGYNGh[22m [33m(x2)[39m
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+[1;1H[0J[2m8:41:15 AM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/GameRow.tsx, /src/index.css?v=BXpAeQozNYjjvmpbGYNGh[22m [33m(x3)[39m
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+[1;1H[0J[2m8:41:23 AM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/AllGames.tsx, /src/index.css?v=BXpAeQozNYjjvmpbGYNGh[22m
+8:41:26 AM [express] GET /api/auth/session 401 in 0ms :: {"user":null}
+8:41:26 AM [express] GET /api/games 304 in 30ms :: [{"id":"91dccb7b-7ac6-46e0-948f-948b38265065","aw…
+[ESPN Stats] Fetching stats for 6 teams: WSH, MIA, SA, DEN, DET, PHI
+[ESPN] Fetched 18 players for MIA
+[ESPN] Fetched 18 players for PHI
+[ESPN] Fetched 18 players for DET
+[ESPN] Fetched 18 players for WSH
+[ESPN] Fetched 18 players for SA
+[ESPN] Fetched 18 players for DEN
+[ESPN] ✓ WSH: 12 players processed
+[ESPN] ✓ MIA: 12 players processed
+[ESPN] ✓ SA: 12 players processed
+[ESPN] ✓ DEN: 13 players processed
+[ESPN] ✓ DET: 13 players processed
+[ESPN] ✓ PHI: 17 players processed
+[ESPN Stats] Total players fetched: 79
+8:41:28 AM [express] GET /api/espn-player-stats 200 in 1125ms :: [{"player":"Bub Carrington","team":…
+8:41:55 AM [express] GET /api/auth/session 401 in 1ms :: {"user":null}
+8:41:55 AM [express] GET /api/games 304 in 19ms :: [{"id":"91dccb7b-7ac6-46e0-948f-948b38265065","aw…
+[ESPN Stats] Fetching stats for 6 teams: WSH, MIA, SA, DEN, DET, PHI
+[ESPN] Fetched 18 players for MIA
+[ESPN] Fetched 18 players for PHI
+[ESPN] Fetched 18 players for SA
+[ESPN] Fetched 18 players for WSH
+[ESPN] Fetched 18 players for DEN
+[ESPN] Fetched 18 players for DET
+[ESPN] ✓ WSH: 12 players processed
+[ESPN] ✓ MIA: 12 players processed
+[ESPN] ✓ SA: 12 players processed
+[ESPN] ✓ DEN: 13 players processed
+[ESPN] ✓ DET: 13 players processed
+[ESPN] ✓ PHI: 17 players processed
+[ESPN Stats] Total players fetched: 79
+8:41:56 AM [express] GET /api/espn-player-stats 200 in 1089ms :: [{"player":"Bilal Coulibaly","team"…
+8:41:58 AM [express] GET /api/auth/session 401 in 1ms :: {"user":null}
+8:41:58 AM [express] GET /api/games 304 in 8ms :: [{"id":"91dccb7b-7ac6-46e0-948f-948b38265065","awa…
+[ESPN Stats] Fetching stats for 6 teams: WSH, MIA, SA, DEN, DET, PHI
+[ESPN] Fetched 18 players for MIA
+[ESPN] Fetched 18 players for DET
+[ESPN] Fetched 18 players for DEN
+[ESPN] Fetched 18 players for PHI
+[ESPN] Fetched 18 players for WSH
+[ESPN] Fetched 18 players for SA
+[ESPN] ✓ WSH: 12 players processed
+[ESPN] ✓ MIA: 12 players processed
+[ESPN] ✓ SA: 12 players processed
+[ESPN] ✓ DEN: 13 players processed
+[ESPN] ✓ DET: 13 players processed
+[ESPN] ✓ PHI: 17 players processed
+[ESPN Stats] Total players fetched: 79
+8:41:58 AM [express] GET /api/espn-player-stats 200 in 737ms :: [{"player":"Justin Champagnie","team…
+8:42:13 AM [express] GET /api/auth/session 401 in 0ms :: {"user":null}
+8:42:13 AM [express] GET /api/games 304 in 21ms :: [{"id":"91dccb7b-7ac6-46e0-948f-948b38265065","aw…
+[ESPN Stats] Fetching stats for 6 teams: WSH, MIA, SA, DEN, DET, PHI
+[ESPN] Fetched 18 players for DET
+[ESPN] Fetched 18 players for MIA
+[ESPN] Fetched 18 players for PHI
+[ESPN] Fetched 18 players for SA
+[ESPN] Fetched 18 players for WSH
+[ESPN] Fetched 18 players for DEN
+[ESPN] ✓ WSH: 12 players processed
+[ESPN] ✓ MIA: 12 players processed
+[ESPN] ✓ SA: 12 players processed
+[ESPN] ✓ DEN: 13 players processed
+[ESPN] ✓ DET: 13 players processed
+[ESPN] ✓ PHI: 17 players processed
+[ESPN Stats] Total players fetched: 79
+8:42:14 AM [express] GET /api/espn-player-stats 200 in 1115ms :: [{"player":"Leaky Black","team":"WS…
+8:42:28 AM [express] GET /api/auth/session 401 in 0ms :: {"user":null}
+[ESPN Stats] Fetching stats for 6 teams: WSH, MIA, SA, DEN, DET, PHI
+8:42:28 AM [express] GET /api/games 304 in 52ms :: [{"id":"91dccb7b-7ac6-46e0-948f-948b38265065","aw…
+[ESPN] Fetched 18 players for MIA
+[ESPN] Fetched 18 players for WSH
+[ESPN] Fetched 18 players for DEN
+[ESPN] Fetched 18 players for PHI
+[ESPN] Fetched 18 players for DET
+[ESPN] Fetched 18 players for SA
+[ESPN] ✓ WSH: 12 players processed
+[ESPN] ✓ MIA: 12 players processed
+[ESPN] ✓ SA: 12 players processed
+[ESPN] ✓ DEN: 13 players processed
+[ESPN] ✓ DET: 13 players processed
+[ESPN] ✓ PHI: 17 players processed
+[ESPN Stats] Total players fetched: 79
+8:42:29 AM [express] GET /api/espn-player-stats 200 in 996ms :: [{"player":"Justin Champagnie","team…
+[1G[0K⠙[1G[0K

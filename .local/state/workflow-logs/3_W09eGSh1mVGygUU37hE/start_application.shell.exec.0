@@ -1,0 +1,475 @@
+
+> rest-express@1.0.0 dev
+> NODE_ENV=development tsx server/index.ts
+
+[1G[0K[InjurySync] Starting automatic injury sync (every 1 hour)...
+[InjurySync] Starting injury sync from ESPN...
+[Cron] Daily sync scheduled for 12:30 AM ET every day
+[Cron] Lineup sync scheduled every 30 minutes (9 AM - 11 PM ET)
+9:49:14 AM [express] serving on port 5000
+[PopulatePlayerStats] Starting to populate player stats for today's starters...
+[PopulatePlayerStats] ✓ Created Julian Reese (WSH)
+[PopulatePlayerStats] ✓ Created Tre Johnson (WSH)
+[PopulatePlayerStats] ✓ Created Bilal Coulibaly (WSH)
+[PopulatePlayerStats] ✓ Created Bub Carrington (WSH)
+[PopulatePlayerStats] ✓ Created Leaky Black (WSH)
+[PopulatePlayerStats] ✓ Created Tyler Herro (MIA)
+[PopulatePlayerStats] ✓ Created Bam Adebayo (MIA)
+[PopulatePlayerStats] ✓ Created Andrew Wiggins (MIA)
+[PopulatePlayerStats] ✓ Created Jaime Jaquez Jr. (MIA)
+[PopulatePlayerStats] ✓ Created Pelle Larsson (MIA)
+[PopulatePlayerStats] ✓ Created Victor Wembanyama (SA)
+[PopulatePlayerStats] ✓ Created De'Aaron Fox (SA)
+[PopulatePlayerStats] ✓ Created Stephon Castle (SA)
+[PopulatePlayerStats] ✓ Created Devin Vassell (SA)
+[PopulatePlayerStats] ✓ Created Keldon Johnson (SA)
+[PopulatePlayerStats] ✓ Created Nikola Jokic (DEN)
+[PopulatePlayerStats] ✓ Created Jamal Murray (DEN)
+[PopulatePlayerStats] ✓ Created Aaron Gordon (DEN)
+[PopulatePlayerStats] ✓ Created Tim Hardaway Jr. (DEN)
+[PopulatePlayerStats] ✓ Created Christian Braun (DEN)
+[PopulatePlayerStats] ✓ Created Jalen Duren (DET)
+[PopulatePlayerStats] ✓ Created Tobias Harris (DET)
+[PopulatePlayerStats] ✓ Created Duncan Robinson (DET)
+[PopulatePlayerStats] ✓ Created Ausar Thompson (DET)
+[PopulatePlayerStats] ✓ Created Kevin Huerter (DET)
+[PopulatePlayerStats] ✓ Created Tyrese Maxey (PHI)
+[PopulatePlayerStats] ✓ Created Joel Embiid (PHI)
+[PopulatePlayerStats] ✓ Created Paul George (PHI)
+[PopulatePlayerStats] ✓ Created VJ Edgecombe (PHI)
+[PopulatePlayerStats] ✓ Created Kelly Oubre Jr. (PHI)
+[PopulatePlayerStats] ✓ Complete! Created 30 new players, skipped 0 existing
+[PopulatePlayerStats] Total players in database: 30
+9:49:14 AM [express] [Startup] Player stats populated successfully
+Browserslist: browsers data (caniuse-lite) is 6 months old. Please run:
+  npx update-browserslist-db@latest
+  Why you should do it regularly: https://github.com/browserslist/update-db#readme
+[InjurySync] Updated Tyler Herro: DAY-TO-DAY (INJURY_STATUS_DAYTODAY)
+[InjurySync] Updated Tre Johnson: DAY-TO-DAY (INJURY_STATUS_DAYTODAY)
+[InjurySync] Updated Tim Hardaway Jr.: DAY-TO-DAY (Soreness)
+[InjurySync] Updated Tobias Harris: DAY-TO-DAY (Bruise)
+[InjurySync] Updated Bilal Coulibaly: DAY-TO-DAY (INJURY_STATUS_DAYTODAY)
+[InjurySync] Sync complete. Updated 5 players, cleared 0 recovered players.
+[InjurySync] Total injuries from ESPN: 119
+
+A PostCSS plugin did not pass the `from` option to `postcss.parse`. This may cause imported assets to be incorrectly transformed. If you've recently added a PostCSS plugin that raised this warning, please contact the package author to fix the issue.
+9:49:16 AM [express] GET /api/auth/session 401 in 1ms :: {"user":null}
+[ESPN Stats] Fetching stats for 6 teams: DEN, DET, MIA, PHI, SA, WSH
+9:49:16 AM [express] GET /api/games 304 in 21ms :: [{"id":"91dccb7b-7ac6-46e0-948f-948b38265065","aw…
+[ESPN Stats] Got 3 event IDs, fetching first basket odds...
+[ESPN Odds] Found first basket odds for 30 players
+[ESPN] Fetched 18 players for MIA
+[ESPN] Fetched 18 players for DET
+[ESPN] Fetched 18 players for PHI
+[ESPN] Fetched 18 players for WSH
+[ESPN] Fetched 18 players for SA
+[ESPN] Fetched 18 players for DEN
+[ESPN] ✓ DEN: 13 active players
+[ESPN] ✓ DET: 13 active players
+[ESPN] ✓ MIA: 12 active players
+[ESPN] ✓ PHI: 17 active players
+[ESPN] ✓ SA: 12 active players
+[ESPN] ✓ WSH: 12 active players
+[ESPN] Teams with DK first basket coverage: DEN, DET, MIA, PHI, SA, WSH
+[ESPN] After DK confirmation filter: 29 confirmed playing players
+[ESPN Stats] Total players fetched: 29
+9:49:18 AM [express] GET /api/espn-player-stats 200 in 1630ms :: [{"player":"Christian Braun","team"…
+9:49:19 AM [express] GET /api/auth/session 401 in 0ms :: {"user":null}
+9:49:19 AM [express] GET /api/games 304 in 6ms :: [{"id":"91dccb7b-7ac6-46e0-948f-948b38265065","awa…
+[ESPN Stats] Serving from cache (29 players)
+9:49:19 AM [express] GET /api/espn-player-stats 200 in 10ms :: [{"player":"Christian Braun","team":"…
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+[1;1H[0J[2m9:50:55 AM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/index.css?v=sAGvED3Qjv4vhOSNwlWV9[22m
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+[1;1H[0J[2m9:51:03 AM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/PlayerStats.tsx, /src/index.css?v=sAGvED3Qjv4vhOSNwlWV9[22m
+9:51:08 AM [express] GET /api/auth/session 401 in 0ms :: {"user":null}
+[ESPN Stats] Serving from cache (29 players)
+9:51:08 AM [express] GET /api/espn-player-stats 304 in 24ms :: [{"player":"Christian Braun","team":"…
+9:51:08 AM [express] GET /api/games 304 in 24ms :: [{"id":"91dccb7b-7ac6-46e0-948f-948b38265065","aw…
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+[1;1H[0J[2m9:54:16 AM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/Login.tsx, /src/index.css?v=sAGvED3Qjv4vhOSNwlWV9[22m
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+[1;1H[0J[2m9:54:27 AM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/Signup.tsx, /src/index.css?v=sAGvED3Qjv4vhOSNwlWV9[22m
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+[1;1H[0J[2m9:54:37 AM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/Header.tsx, /src/index.css?v=sAGvED3Qjv4vhOSNwlWV9[22m
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+[1;1H[0J[2m9:54:42 AM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/Header.tsx, /src/index.css?v=sAGvED3Qjv4vhOSNwlWV9[22m [33m(x2)[39m
+9:54:46 AM [express] GET /api/auth/session 401 in 0ms :: {"user":null}
+[ESPN Stats] Fetching stats for 6 teams: DEN, DET, MIA, PHI, SA, WSH
+9:54:46 AM [express] GET /api/games 304 in 16ms :: [{"id":"91dccb7b-7ac6-46e0-948f-948b38265065","aw…
+[ESPN Stats] Got 3 event IDs, fetching first basket odds...
+[ESPN Odds] Found first basket odds for 30 players
+[ESPN] Fetched 18 players for DEN
+[ESPN] Fetched 18 players for MIA
+[ESPN] Fetched 18 players for WSH
+[ESPN] Fetched 18 players for DET
+[ESPN] Fetched 18 players for SA
+[ESPN] Fetched 18 players for PHI
+[ESPN] ✓ DEN: 13 active players
+[ESPN] ✓ DET: 13 active players
+[ESPN] ✓ MIA: 12 active players
+[ESPN] ✓ PHI: 17 active players
+[ESPN] ✓ SA: 12 active players
+[ESPN] ✓ WSH: 12 active players
+[ESPN] Teams with DK first basket coverage: DEN, DET, MIA, PHI, SA, WSH
+[ESPN] After DK confirmation filter: 29 confirmed playing players
+[ESPN Stats] Total players fetched: 29
+9:54:48 AM [express] GET /api/espn-player-stats 200 in 1363ms :: [{"player":"Aaron Gordon","team":"D…
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+[1;1H[0J[2m9:54:51 AM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/Header.tsx, /src/index.css?v=sAGvED3Qjv4vhOSNwlWV9[22m [33m(x3)[39m
+9:54:55 AM [express] GET /api/auth/session 401 in 1ms :: {"user":null}
+9:54:58 AM [express] GET /api/auth/session 401 in 1ms :: {"user":null}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+[1;1H[0J[2m9:55:09 AM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/Login.tsx, /src/index.css?v=sAGvED3Qjv4vhOSNwlWV9[22m
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+[1;1H[0J[2m9:55:10 AM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/Login.tsx, /src/index.css?v=sAGvED3Qjv4vhOSNwlWV9[22m [33m(x2)[39m
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+[1;1H[0J[2m9:55:15 AM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/Signup.tsx, /src/index.css?v=sAGvED3Qjv4vhOSNwlWV9[22m
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+[1;1H[0J[2m9:55:17 AM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/Signup.tsx, /src/index.css?v=sAGvED3Qjv4vhOSNwlWV9[22m [33m(x2)[39m
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+[1;1H[0J[2m9:55:18 AM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/Signup.tsx, /src/index.css?v=sAGvED3Qjv4vhOSNwlWV9[22m [33m(x3)[39m
+9:57:29 AM [express] GET /api/auth/session 401 in 0ms :: {"user":null}
+9:57:29 AM [express] GET /api/games 304 in 19ms :: [{"id":"91dccb7b-7ac6-46e0-948f-948b38265065","aw…
+[ESPN Stats] Serving from cache (29 players)
+9:57:29 AM [express] GET /api/espn-player-stats 200 in 26ms :: [{"player":"Aaron Gordon","team":"DEN…
+10:05:50 AM [express] GET /api/auth/session 401 in 0ms :: {"user":null}
+10:05:50 AM [express] GET /api/games 200 in 35ms :: [{"id":"91dccb7b-7ac6-46e0-948f-948b38265065","aw…
+[ESPN Stats] Fetching stats for 6 teams: DEN, DET, MIA, PHI, SA, WSH
+[ESPN Stats] Got 3 event IDs, fetching first basket odds...
+[ESPN Odds] Found first basket odds for 30 players
+[ESPN] Fetched 18 players for WSH
+[ESPN] Fetched 18 players for MIA
+[ESPN] Fetched 18 players for DET
+[ESPN] Fetched 18 players for PHI
+[ESPN] Fetched 18 players for SA
+[ESPN] Fetched 18 players for DEN
+[ESPN] ✓ DEN: 13 active players
+[ESPN] ✓ DET: 13 active players
+[ESPN] ✓ MIA: 12 active players
+[ESPN] ✓ PHI: 17 active players
+[ESPN] ✓ SA: 12 active players
+[ESPN] ✓ WSH: 12 active players
+[ESPN] Teams with DK first basket coverage: DEN, DET, MIA, PHI, SA, WSH
+[ESPN] After DK confirmation filter: 29 confirmed playing players
+[ESPN Stats] Total players fetched: 29
+10:05:52 AM [express] GET /api/espn-player-stats 200 in 1651ms :: [{"player":"Aaron Gordon","team":"D…
+10:06:01 AM [express] GET /api/auth/session 401 in 1ms :: {"user":null}
+10:06:01 AM [express] GET /api/games 200 in 34ms :: [{"id":"91dccb7b-7ac6-46e0-948f-948b38265065","aw…
+[ESPN Stats] Serving from cache (29 players)
+10:06:01 AM [express] GET /api/espn-player-stats 200 in 43ms :: [{"player":"Aaron Gordon","team":"DEN…
+10:06:20 AM [express] GET /api/player-stats 200 in 1ms :: [{"player":"Victor Wembanyama","team":"SA",…
+10:06:37 AM [express] GET /api/auth/session 401 in 0ms :: {"user":null}
+10:06:37 AM [express] GET /api/games 304 in 17ms :: [{"id":"91dccb7b-7ac6-46e0-948f-948b38265065","aw…
+[ESPN Stats] Serving from cache (29 players)
+10:06:37 AM [express] GET /api/espn-player-stats 304 in 22ms :: [{"player":"Aaron Gordon","team":"DEN…
+10:14:07 AM [express] GET /api/auth/session 401 in 0ms :: {"user":null}
+[ESPN Stats] Fetching stats for 6 teams: DEN, DET, MIA, PHI, SA, WSH
+10:14:07 AM [express] GET /api/games 304 in 17ms :: [{"id":"91dccb7b-7ac6-46e0-948f-948b38265065","aw…
+[ESPN Stats] Got 3 event IDs, fetching first basket odds...
+[ESPN Odds] Found first basket odds for 30 players
+[ESPN] Fetched 18 players for PHI
+[ESPN] Fetched 18 players for MIA
+[ESPN] Fetched 18 players for DEN
+[ESPN] Fetched 18 players for WSH
+[ESPN] Fetched 18 players for DET
+[ESPN] Fetched 18 players for SA
+[ESPN] ✓ DEN: 13 active players
+[ESPN] ✓ DET: 13 active players
+[ESPN] ✓ MIA: 12 active players
+[ESPN] ✓ PHI: 17 active players
+[ESPN] ✓ SA: 12 active players
+[ESPN] ✓ WSH: 12 active players
+[ESPN] Teams with DK first basket coverage: DEN, DET, MIA, PHI, SA, WSH
+[ESPN] After DK confirmation filter: 29 confirmed playing players
+[ESPN Stats] Total players fetched: 29
+10:14:08 AM [express] GET /api/espn-player-stats 200 in 1405ms :: [{"player":"Christian Braun","team"…
+10:14:33 AM [express] GET /api/auth/session 401 in 1ms :: {"user":null}
+[ESPN Stats] Serving from cache (29 players)
+10:14:33 AM [express] GET /api/espn-player-stats 304 in 20ms :: [{"player":"Christian Braun","team":"…
+10:14:33 AM [express] GET /api/games 304 in 20ms :: [{"id":"91dccb7b-7ac6-46e0-948f-948b38265065","aw…
+10:14:54 AM [express] GET /api/auth/session 401 in 1ms :: {"user":null}
+[ESPN Stats] Serving from cache (29 players)
+10:14:54 AM [express] GET /api/espn-player-stats 304 in 17ms :: [{"player":"Christian Braun","team":"…
+10:14:54 AM [express] GET /api/games 304 in 16ms :: [{"id":"91dccb7b-7ac6-46e0-948f-948b38265065","aw…
+10:14:59 AM [express] GET /api/auth/session 401 in 0ms :: {"user":null}
+[ESPN Stats] Serving from cache (29 players)
+10:14:59 AM [express] GET /api/espn-player-stats 200 in 4ms :: [{"player":"Christian Braun","team":"D…
+10:14:59 AM [express] GET /api/games 304 in 3ms :: [{"id":"91dccb7b-7ac6-46e0-948f-948b38265065","awa…
+10:15:08 AM [express] GET /api/auth/session 401 in 0ms :: {"user":null}
+[ESPN Stats] Serving from cache (29 players)
+10:15:08 AM [express] GET /api/espn-player-stats 304 in 5ms :: [{"player":"Christian Braun","team":"D…
+10:15:08 AM [express] GET /api/games 304 in 16ms :: [{"id":"91dccb7b-7ac6-46e0-948f-948b38265065","aw…
+10:15:20 AM [express] GET /api/auth/session 401 in 1ms :: {"user":null}
+10:15:20 AM [express] GET /api/games 304 in 22ms :: [{"id":"91dccb7b-7ac6-46e0-948f-948b38265065","aw…
+[ESPN Stats] Serving from cache (29 players)
+10:15:20 AM [express] GET /api/espn-player-stats 304 in 20ms :: [{"player":"Christian Braun","team":"…
+10:15:26 AM [express] GET /api/auth/session 401 in 1ms :: {"user":null}
+[ESPN Stats] Serving from cache (29 players)
+10:15:26 AM [express] GET /api/espn-player-stats 304 in 3ms :: [{"player":"Christian Braun","team":"D…
+10:15:26 AM [express] GET /api/games 304 in 3ms :: [{"id":"91dccb7b-7ac6-46e0-948f-948b38265065","awa…
+[1G[0K⠙[1G[0K

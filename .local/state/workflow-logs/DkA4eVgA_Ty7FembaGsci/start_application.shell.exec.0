@@ -1,0 +1,266 @@
+
+> rest-express@1.0.0 dev
+> NODE_ENV=development tsx server/index.ts
+
+[1G[0K[InjurySync] Starting automatic injury sync (every 1 hour)...
+[InjurySync] Starting injury sync from ESPN...
+[Cron] Daily sync scheduled for 12:30 AM ET every day
+[Cron] Lineup sync scheduled every 30 minutes (9 AM - 11 PM ET)
+8:50:52 AM [express] serving on port 5000
+[PopulatePlayerStats] Starting to populate player stats for today's starters...
+[PopulatePlayerStats] ✓ Created Julian Reese (WSH)
+[PopulatePlayerStats] ✓ Created Tre Johnson (WSH)
+[PopulatePlayerStats] ✓ Created Bilal Coulibaly (WSH)
+[PopulatePlayerStats] ✓ Created Bub Carrington (WSH)
+[PopulatePlayerStats] ✓ Created Leaky Black (WSH)
+[PopulatePlayerStats] ✓ Created Tyler Herro (MIA)
+[PopulatePlayerStats] ✓ Created Bam Adebayo (MIA)
+[PopulatePlayerStats] ✓ Created Andrew Wiggins (MIA)
+[PopulatePlayerStats] ✓ Created Jaime Jaquez Jr. (MIA)
+[PopulatePlayerStats] ✓ Created Pelle Larsson (MIA)
+[PopulatePlayerStats] ✓ Created Victor Wembanyama (SA)
+[PopulatePlayerStats] ✓ Created De'Aaron Fox (SA)
+[PopulatePlayerStats] ✓ Created Stephon Castle (SA)
+[PopulatePlayerStats] ✓ Created Devin Vassell (SA)
+[PopulatePlayerStats] ✓ Created Keldon Johnson (SA)
+[PopulatePlayerStats] ✓ Created Nikola Jokic (DEN)
+[PopulatePlayerStats] ✓ Created Jamal Murray (DEN)
+[PopulatePlayerStats] ✓ Created Aaron Gordon (DEN)
+[PopulatePlayerStats] ✓ Created Tim Hardaway Jr. (DEN)
+[PopulatePlayerStats] ✓ Created Christian Braun (DEN)
+[PopulatePlayerStats] ✓ Created Jalen Duren (DET)
+[PopulatePlayerStats] ✓ Created Tobias Harris (DET)
+[PopulatePlayerStats] ✓ Created Duncan Robinson (DET)
+[PopulatePlayerStats] ✓ Created Ausar Thompson (DET)
+[PopulatePlayerStats] ✓ Created Kevin Huerter (DET)
+[PopulatePlayerStats] ✓ Created Tyrese Maxey (PHI)
+[PopulatePlayerStats] ✓ Created Joel Embiid (PHI)
+[PopulatePlayerStats] ✓ Created Paul George (PHI)
+[PopulatePlayerStats] ✓ Created VJ Edgecombe (PHI)
+[PopulatePlayerStats] ✓ Created Kelly Oubre Jr. (PHI)
+[PopulatePlayerStats] ✓ Complete! Created 30 new players, skipped 0 existing
+[PopulatePlayerStats] Total players in database: 30
+8:50:52 AM [express] [Startup] Player stats populated successfully
+[InjurySync] Updated Tyler Herro: DAY-TO-DAY (INJURY_STATUS_DAYTODAY)
+[InjurySync] Updated Tre Johnson: DAY-TO-DAY (INJURY_STATUS_DAYTODAY)
+[InjurySync] Updated Tim Hardaway Jr.: DAY-TO-DAY (Soreness)
+[InjurySync] Updated Tobias Harris: DAY-TO-DAY (Bruise)
+[InjurySync] Updated Bilal Coulibaly: DAY-TO-DAY (INJURY_STATUS_DAYTODAY)
+[InjurySync] Sync complete. Updated 5 players, cleared 0 recovered players.
+[InjurySync] Total injuries from ESPN: 119
+Browserslist: browsers data (caniuse-lite) is 6 months old. Please run:
+  npx update-browserslist-db@latest
+  Why you should do it regularly: https://github.com/browserslist/update-db#readme
+
+A PostCSS plugin did not pass the `from` option to `postcss.parse`. This may cause imported assets to be incorrectly transformed. If you've recently added a PostCSS plugin that raised this warning, please contact the package author to fix the issue.
+8:50:54 AM [express] GET /api/auth/session 401 in 1ms :: {"user":null}
+[ESPN Stats] Fetching stats for 6 teams: DEN, DET, MIA, PHI, SA, WSH
+8:50:54 AM [express] GET /api/games 304 in 21ms :: [{"id":"91dccb7b-7ac6-46e0-948f-948b38265065","aw…
+[ESPN Stats] Got 3 event IDs, fetching first basket odds...
+[ESPN Odds] Found first basket odds for 30 players
+[ESPN] Fetched 18 players for DEN
+[ESPN] Fetched 18 players for DET
+[ESPN] Fetched 18 players for WSH
+[ESPN] Fetched 18 players for PHI
+[ESPN] Fetched 18 players for MIA
+[ESPN] Fetched 18 players for SA
+[ESPN] ✓ DEN: 13 active players
+[ESPN] ✓ DET: 13 active players
+[ESPN] ✓ MIA: 12 active players
+[ESPN] ✓ PHI: 17 active players
+[ESPN] ✓ SA: 12 active players
+[ESPN] ✓ WSH: 12 active players
+[ESPN Stats] Total players fetched: 79
+8:50:56 AM [express] GET /api/espn-player-stats 200 in 1491ms :: [{"player":"Aaron Gordon","team":"D…
+8:51:06 AM [express] GET /api/auth/session 401 in 4ms :: {"user":null}
+8:51:06 AM [express] GET /api/games 200 in 42ms :: [{"id":"91dccb7b-7ac6-46e0-948f-948b38265065","aw…
+[ESPN Stats] Serving from cache (79 players)
+8:51:06 AM [express] GET /api/espn-player-stats 200 in 86ms :: [{"player":"Aaron Gordon","team":"DEN…
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+[1;1H[0J[2m8:59:18 AM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/Navigation.tsx, /src/index.css?v=gSS2hnEYSXecfohg-4jcT[22m
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+[1;1H[0J[2m8:59:26 AM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/Navigation.tsx, /src/index.css?v=gSS2hnEYSXecfohg-4jcT[22m [33m(x2)[39m
+9:00:05 AM [express] GET /api/auth/session 401 in 1ms :: {"user":null}
+9:00:05 AM [express] GET /api/games 304 in 17ms :: [{"id":"91dccb7b-7ac6-46e0-948f-948b38265065","aw…
+[ESPN Stats] Fetching stats for 6 teams: DEN, DET, MIA, PHI, SA, WSH
+[ESPN Stats] Got 3 event IDs, fetching first basket odds...
+[ESPN Odds] Found first basket odds for 30 players
+[ESPN] Fetched 18 players for DET
+[ESPN] Fetched 18 players for MIA
+[ESPN] Fetched 18 players for PHI
+[ESPN] Fetched 18 players for DEN
+[ESPN] Fetched 18 players for SA
+[ESPN] Fetched 18 players for WSH
+[ESPN] ✓ DEN: 13 active players
+[ESPN] ✓ DET: 13 active players
+[ESPN] ✓ MIA: 12 active players
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+[1;1H[0J[2m9:00:06 AM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/PlayerStats.tsx, /src/index.css?v=gSS2hnEYSXecfohg-4jcT[22m
+[ESPN] ✓ PHI: 17 active players
+[ESPN] ✓ SA: 12 active players
+[ESPN] ✓ WSH: 12 active players
+[ESPN Stats] Total players fetched: 79
+9:00:06 AM [express] GET /api/espn-player-stats 200 in 1872ms :: [{"player":"Christian Braun","team"…
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+[1;1H[0J[2m9:00:16 AM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/PlayerStats.tsx, /src/index.css?v=gSS2hnEYSXecfohg-4jcT[22m [33m(x2)[39m
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+[1;1H[0J[2m9:00:24 AM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/PlayerStats.tsx, /src/index.css?v=gSS2hnEYSXecfohg-4jcT[22m [33m(x3)[39m
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+[1;1H[0J[2m9:00:41 AM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/PlayerStats.tsx, /src/index.css?v=gSS2hnEYSXecfohg-4jcT[22m [33m(x4)[39m
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+[1;1H[0J[2m9:00:51 AM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/PlayerStats.tsx, /src/index.css?v=gSS2hnEYSXecfohg-4jcT[22m [33m(x5)[39m
+[1G[0K⠙[1G[0K
