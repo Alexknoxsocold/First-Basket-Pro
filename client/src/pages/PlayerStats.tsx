@@ -90,7 +90,7 @@ function parseOddsToImplied(odds: string): number {
 // first-basket indicators. Uses 5 independent signals; needs ≥ 2 to qualify.
 function checkSneakyValue(stat: EspnPlayerStat, teamRank: number): boolean {
   if (teamRank <= 2) return false;           // already highlighted as top picks
-  if (teamRank > 5) return false;            // too deep in the rotation
+  if (teamRank > 3) return false;            // only consider top 3 per team
   if (stat.firstBasketPct < 5) return false; // negligible probability
   const inj = stat.injuryStatus?.toLowerCase() || "";
   if (inj.includes("out")) return false;
