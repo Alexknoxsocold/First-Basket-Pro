@@ -53,8 +53,9 @@ export default function Header() {
             <img
               src={logoImage}
               alt="First Basket Pro logo"
-              className="w-14 h-14 rounded-md object-cover"
+              className="w-14 h-14 rounded-md object-cover cursor-pointer"
               data-testid="img-logo"
+              onClick={() => window.location.reload()}
             />
             <div className="flex items-center gap-2">
               <span className="text-base font-bold tracking-tight">First Basket Pro</span>
