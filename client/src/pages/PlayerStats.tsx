@@ -154,14 +154,14 @@ function FbBar({ pct, isTopPick = false, isSneakyValue = false }: { pct: number;
           ? "bg-teal-700"
           : "bg-red-500/70";
   const textColor = isElite
-    ? "text-green-400"
+    ? "text-green-700 dark:text-green-400"
     : isGood
-      ? "text-yellow-400"
+      ? "text-yellow-700 dark:text-yellow-400"
       : isTopPick
-        ? "text-emerald-500"
+        ? "text-emerald-700 dark:text-emerald-500"
         : isSneakyValue
-          ? "text-teal-400"
-          : "text-red-400";
+          ? "text-teal-700 dark:text-teal-400"
+          : "text-red-600 dark:text-red-400";
   return (
     <div className="flex items-center gap-2">
       <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
@@ -196,15 +196,15 @@ function PlayerCard({
   const displayOdds = stat.liveOdds || stat.odds;
   const isLive = !!stat.liveOdds;
 
-  // Card tint
+  // Card tint — uses light/dark explicit variants so both modes look correct
   const cardBg = isElite
-    ? "bg-green-500/5"
+    ? "bg-green-500/5 dark:bg-green-500/5"
     : isTopPick
-      ? "bg-emerald-900/30"
+      ? "bg-emerald-50 dark:bg-emerald-900/30"
       : isSneakyValue
-        ? "bg-teal-900/25"
+        ? "bg-teal-50 dark:bg-teal-900/25"
         : isLow
-          ? "bg-red-500/5"
+          ? "bg-red-50/60 dark:bg-red-500/5"
           : "";
 
   // Avatar ring
@@ -216,14 +216,14 @@ function PlayerCard({
         ? "ring-teal-600/50"
         : "ring-border";
 
-  // Odds color
+  // Odds color — darker in light mode for contrast, bright in dark mode
   const oddsColor = isElite || isGood
-    ? "text-green-400"
+    ? "text-green-700 dark:text-green-400"
     : isTopPick
-      ? "text-emerald-500"
+      ? "text-emerald-700 dark:text-emerald-500"
       : isSneakyValue
-        ? "text-teal-400"
-        : "text-red-400";
+        ? "text-teal-700 dark:text-teal-400"
+        : "text-red-600 dark:text-red-400";
 
   return (
     <div
