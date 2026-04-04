@@ -17,6 +17,7 @@ declare global {
 declare module 'express-session' {
   interface SessionData {
     userId?: string;
+    isAdminVerified?: boolean;
   }
 }
 
@@ -56,17 +57,23 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
   next();
 }
 
+// Require admin middleware - returns 403 if not admin-verified via password
+export function requireAdmin(req: Request, res: Response, next: NextFunction) {
+  if (!req.session?.isAdminVerified) {
+    return res.status(403).json({ error: "Admin access required" });
+  }
+  next();
+}
+
 // Auth route handlers
 export async function signup(req: Request, res: Response) {
   try {
     const { email, password } = req.body;
 
-    // Validate input
     if (!email || !password) {
       return res.status(400).json({ error: "Email and password are required" });
     }
 
-    // Validate email format
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
       return res.status(400).json({ error: "Invalid email format" });
@@ -76,13 +83,11 @@ export async function signup(req: Request, res: Response) {
       return res.status(400).json({ error: "Password must be at least 8 characters" });
     }
 
-    // Check if user already exists
     const existingUser = await storage.getUserByEmail(email);
     if (existingUser) {
       return res.status(409).json({ error: "Email already registered" });
     }
 
-    // Hash password and create user
     const passwordHash = await hashPassword(password);
     const user = await storage.createUser({
       email,
@@ -90,7 +95,6 @@ export async function signup(req: Request, res: Response) {
       role: 'user'
     });
 
-    // Store user ID in session and save before responding
     req.session.userId = user.id;
     await new Promise<void>((resolve, reject) => {
       req.session.save((err) => {
@@ -99,7 +103,6 @@ export async function signup(req: Request, res: Response) {
       });
     });
 
-    // Return user without password hash
     const { passwordHash: _, ...userWithoutPassword } = user;
     res.json({ user: userWithoutPassword });
   } catch (error) {
@@ -112,30 +115,25 @@ export async function login(req: Request, res: Response) {
   try {
     const { email, password } = req.body;
 
-    // Validate input
     if (!email || !password) {
       return res.status(400).json({ error: "Email and password are required" });
     }
 
-    // Validate email format
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
       return res.status(400).json({ error: "Invalid email format" });
     }
 
-    // Find user
     const user = await storage.getUserByEmail(email);
     if (!user) {
       return res.status(401).json({ error: "Invalid email or password" });
     }
 
-    // Verify password
     const isValid = await verifyPassword(password, user.passwordHash);
     if (!isValid) {
       return res.status(401).json({ error: "Invalid email or password" });
     }
 
-    // Store user ID in session and save before responding
     req.session.userId = user.id;
     await new Promise<void>((resolve, reject) => {
       req.session.save((err) => {
@@ -144,7 +142,6 @@ export async function login(req: Request, res: Response) {
       });
     });
 
-    // Return user without password hash
     const { passwordHash: _, ...userWithoutPassword } = user;
     res.json({ user: userWithoutPassword });
   } catch (error) {
@@ -174,7 +171,6 @@ export async function getSession(req: Request, res: Response) {
     return res.status(401).json({ user: null });
   }
 
-  // Return user without password hash
   const { passwordHash: _, ...userWithoutPassword } = req.user;
   res.json({ user: userWithoutPassword });
 }
@@ -183,24 +179,20 @@ export async function inviteAccess(req: Request, res: Response) {
   try {
     const { code } = req.body;
 
-    // Validate input
     if (!code) {
       return res.status(400).json({ error: "Invite code is required" });
     }
 
-    // Check invite code against environment variable
     const validInviteCode = process.env.INVITE_CODE || "FIRSTBASKET2024";
     
     if (code !== validInviteCode) {
       return res.status(401).json({ error: "Invalid invite code" });
     }
 
-    // Create a guest user if one doesn't exist
     const guestEmail = "guest@firstbasket.pro";
     let user = await storage.getUserByEmail(guestEmail);
     
     if (!user) {
-      // Create guest user with a secure random password (they won't use it)
       const guestPassword = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
       const passwordHash = await hashPassword(guestPassword);
       
@@ -211,7 +203,6 @@ export async function inviteAccess(req: Request, res: Response) {
       });
     }
 
-    // Store user ID in session and save before responding
     req.session.userId = user.id;
     await new Promise<void>((resolve, reject) => {
       req.session.save((err) => {
@@ -220,7 +211,6 @@ export async function inviteAccess(req: Request, res: Response) {
       });
     });
 
-    // Return user without password hash
     const { passwordHash: _, ...userWithoutPassword } = user;
     res.json({ user: userWithoutPassword });
   } catch (error) {

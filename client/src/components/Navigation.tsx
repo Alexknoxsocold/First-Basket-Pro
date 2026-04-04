@@ -1,6 +1,6 @@
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
-import { LayoutGrid, BarChart2, Layers, Settings } from "lucide-react";
+import { LayoutGrid, BarChart2, Layers } from "lucide-react";
 
 const navItems = [
   { label: "All Games", path: "/", icon: LayoutGrid },
@@ -36,14 +36,6 @@ export default function Navigation() {
             );
           })}
 
-          <div className="ml-auto flex items-center">
-            <Link href="/admin">
-              <span className="flex items-center gap-1.5 px-3 py-3 text-xs text-muted-foreground hover:text-foreground cursor-pointer whitespace-nowrap">
-                <Settings className="w-3.5 h-3.5" />
-                Admin
-              </span>
-            </Link>
-          </div>
         </div>
       </div>
     </nav>

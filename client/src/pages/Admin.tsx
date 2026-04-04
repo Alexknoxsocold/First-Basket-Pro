@@ -2,10 +2,12 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { Settings, Save, RotateCw, Loader2 } from "lucide-react";
-import { useState } from "react";
+import { Settings, Save, RotateCw, Loader2, Lock } from "lucide-react";
+import { useState, useEffect } from "react";
 import {
   Select,
   SelectContent,
@@ -30,17 +32,114 @@ interface PlayerStat {
   position: string;
 }
 
+const ADMIN_AUTH_KEY = "adminAuthenticated";
+
+function AdminPasswordGate({ onAuthenticated }: { onAuthenticated: () => void }) {
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setLoading(true);
+    try {
+      const res = await fetch("/api/admin/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password }),
+      });
+      if (res.ok) {
+        onAuthenticated();
+      } else {
+        setError("Incorrect password. Please try again.");
+        setPassword("");
+      }
+    } catch {
+      setError("Something went wrong. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="flex items-center justify-center min-h-[60vh]">
+      <Card className="w-full max-w-sm">
+        <CardHeader className="text-center">
+          <div className="flex justify-center mb-2">
+            <Lock className="h-8 w-8 text-muted-foreground" />
+          </div>
+          <CardTitle>Admin Access</CardTitle>
+          <CardDescription>Enter the admin password to continue</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="admin-password">Password</Label>
+              <Input
+                id="admin-password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Enter password"
+                autoComplete="current-password"
+                data-testid="input-admin-password"
+              />
+            </div>
+            {error && (
+              <p className="text-sm text-destructive" data-testid="text-admin-error">{error}</p>
+            )}
+            <Button type="submit" className="w-full" disabled={loading || !password} data-testid="button-admin-submit">
+              {loading ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Verifying...
+                </>
+              ) : (
+                "Enter"
+              )}
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 export default function Admin() {
   const { toast } = useToast();
   const [editingGame, setEditingGame] = useState<string | null>(null);
   const [localLineups, setLocalLineups] = useState<Record<string, { away: string[], home: string[] }>>({});
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [sessionChecked, setSessionChecked] = useState(false);
+
+  useEffect(() => {
+    const cachedAuth = sessionStorage.getItem(ADMIN_AUTH_KEY) === "true";
+    if (!cachedAuth) {
+      setSessionChecked(true);
+      return;
+    }
+    fetch("/api/admin/session")
+      .then(r => r.json())
+      .then(data => {
+        if (data.isAdmin) {
+          setIsAuthenticated(true);
+        } else {
+          sessionStorage.removeItem(ADMIN_AUTH_KEY);
+        }
+      })
+      .catch(() => sessionStorage.removeItem(ADMIN_AUTH_KEY))
+      .finally(() => setSessionChecked(true));
+  }, []);
 
   const { data: games, isLoading: gamesLoading } = useQuery<Game[]>({
     queryKey: ["/api/games"],
+    enabled: isAuthenticated,
   });
 
   const { data: playerStats, isLoading: playersLoading } = useQuery<PlayerStat[]>({
     queryKey: ["/api/player-stats"],
+    enabled: isAuthenticated,
   });
 
   const updateLineupMutation = useMutation({
@@ -65,6 +164,25 @@ export default function Admin() {
     },
   });
 
+  if (!sessionChecked) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <AdminPasswordGate
+        onAuthenticated={() => {
+          sessionStorage.setItem(ADMIN_AUTH_KEY, "true");
+          setIsAuthenticated(true);
+        }}
+      />
+    );
+  }
+
   const todayGames = games?.filter(g => g.gameTime?.includes(new Date().toISOString().split('T')[0])) || [];
 
   const getPlayersByTeam = (team: string) => {
@@ -73,12 +191,11 @@ export default function Admin() {
 
   const handleStartEdit = (gameId: string, game: Game) => {
     setEditingGame(gameId);
-    // Initialize with current starters or empty slots, ensure arrays
-    const currentAway = Array.isArray(game.awayStarters) 
-      ? game.awayStarters 
+    const currentAway = Array.isArray(game.awayStarters)
+      ? game.awayStarters
       : ['', '', '', '', ''];
-    const currentHome = Array.isArray(game.homeStarters) 
-      ? game.homeStarters 
+    const currentHome = Array.isArray(game.homeStarters)
+      ? game.homeStarters
       : ['', '', '', '', ''];
     setLocalLineups({
       ...localLineups,
@@ -114,7 +231,6 @@ export default function Admin() {
       return;
     }
 
-    // Validate all slots are filled
     const allStarters = [...lineups.away, ...lineups.home];
     if (allStarters.some(name => !name || name.trim() === '')) {
       toast({
@@ -125,10 +241,9 @@ export default function Admin() {
       return;
     }
 
-    // Check for duplicates within each team
     const awaySet = new Set(lineups.away);
     const homeSet = new Set(lineups.home);
-    
+
     if (awaySet.size !== 5 || homeSet.size !== 5) {
       toast({
         title: "Duplicate Players",
@@ -154,13 +269,13 @@ export default function Admin() {
   const hasDuplicates = (gameId: string): boolean => {
     const lineups = localLineups[gameId];
     if (!lineups) return false;
-    
+
     const awaySet = new Set(lineups.away.filter(name => name && name.trim() !== ''));
     const homeSet = new Set(lineups.home.filter(name => name && name.trim() !== ''));
-    
+
     const awayFilledCount = lineups.away.filter(name => name && name.trim() !== '').length;
     const homeFilledCount = lineups.home.filter(name => name && name.trim() !== '').length;
-    
+
     return awaySet.size !== awayFilledCount || homeSet.size !== homeFilledCount;
   };
 
@@ -200,8 +315,7 @@ export default function Admin() {
             const isEditing = editingGame === game.id;
             const awayPlayers = getPlayersByTeam(game.awayTeam);
             const homePlayers = getPlayersByTeam(game.homeTeam);
-            
-            // Safely get current lineups, ensure string arrays (not null)
+
             const currentLineups = isEditing && localLineups[game.id] ? localLineups[game.id] : {
               away: Array.isArray(game.awayStarters) ? game.awayStarters : ['', '', '', '', ''],
               home: Array.isArray(game.homeStarters) ? game.homeStarters : ['', '', '', '', ''],
@@ -210,7 +324,7 @@ export default function Admin() {
             return (
               <Card key={game.id} data-testid={`card-game-${game.id}`}>
                 <CardHeader>
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between gap-1">
                     <div>
                       <CardTitle className="text-lg">
                         {game.awayTeam} @ {game.homeTeam}
