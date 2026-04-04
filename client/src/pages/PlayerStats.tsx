@@ -10,7 +10,24 @@ import {
   AlertCircle, AlertTriangle, Activity, Shield,
   Star, Zap, ArrowLeftRight, Clock, ChevronDown, ChevronUp
 } from "lucide-react";
+
 import type { Game } from "@shared/schema";
+
+// DraftKings SVG crown logo badge
+function DkLogo({ className = "w-5 h-5" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 28 28" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect width="28" height="28" rx="4" fill="#1A1A2E" />
+      <path
+        d="M14 4L17.5 10.5L24.5 11.5L19.5 16.5L20.5 23.5L14 20L7.5 23.5L8.5 16.5L3.5 11.5L10.5 10.5L14 4Z"
+        fill="#4CAF50"
+        stroke="#4CAF50"
+        strokeWidth="0.5"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
 
 interface EspnPlayerStat {
   player: string;
@@ -138,11 +155,11 @@ function PlayerCard({
         {/* Stats row */}
         <div className="flex items-center gap-3 mt-1.5 flex-wrap">
           {/* Odds */}
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1.5">
             {isLive ? (
-              <span className="text-[9px] uppercase tracking-wider text-green-400 font-semibold">DK</span>
+              <DkLogo className="w-4 h-4 shrink-0" />
             ) : (
-              <span className="text-[9px] uppercase tracking-wider text-muted-foreground/60 font-semibold">Est</span>
+              <span className="text-[9px] uppercase tracking-wider text-muted-foreground/50 font-semibold">Est</span>
             )}
             <span className={`font-mono text-xs font-bold ${(isGood || isLive) ? "text-green-400" : "text-muted-foreground"}`}>
               {displayOdds}
@@ -465,10 +482,10 @@ export default function PlayerStats() {
                     <p className="text-[10px] text-muted-foreground truncate">{p.team} &bull; {p.position}</p>
                     <div className="flex items-center gap-1.5 mt-0.5">
                       <span className="text-xs font-bold text-green-400">{p.firstBasketPct.toFixed(1)}%</span>
+                      {isLive && <DkLogo className="w-3.5 h-3.5 shrink-0" />}
                       <span className={`text-[10px] font-semibold ${isLive ? "text-green-400" : "text-muted-foreground"}`}>
                         {displayOdds}
                       </span>
-                      {isLive && <span className="text-[9px] text-green-400/70">DK</span>}
                     </div>
                   </div>
                 </div>
@@ -485,7 +502,7 @@ export default function PlayerStats() {
         <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-yellow-500 inline-block" />Good 20–27%</span>
         <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-muted-foreground/40 inline-block" />Low &lt;20%</span>
         <span className="ml-auto flex items-center gap-2">
-          <span className="flex items-center gap-1"><span className="font-mono text-green-400 font-bold text-[10px]">DK</span> = DraftKings live odds</span>
+          <span className="flex items-center gap-1.5"><DkLogo className="w-3.5 h-3.5" /> = DraftKings live odds</span>
           <span className="text-muted-foreground/40">|</span>
           <span className="flex items-center gap-1"><span className="text-muted-foreground/60 font-bold text-[10px]">Est</span> = model estimate</span>
         </span>

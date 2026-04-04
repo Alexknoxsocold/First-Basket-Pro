@@ -1,10 +1,9 @@
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
-import { LayoutGrid, Radio, BarChart2, Layers, Settings } from "lucide-react";
+import { LayoutGrid, BarChart2, Layers, Settings } from "lucide-react";
 
 const navItems = [
   { label: "All Games", path: "/", icon: LayoutGrid },
-  { label: "Opening Tips", path: "/opening-tips", icon: Radio },
   { label: "Player FB Stats", path: "/player-stats", icon: BarChart2 },
   { label: "Parlays", path: "/parlays", icon: Layers },
 ];

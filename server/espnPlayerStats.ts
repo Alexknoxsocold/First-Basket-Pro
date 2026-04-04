@@ -275,7 +275,22 @@ export async function fetchEspnTeamStats(
     console.log(`[ESPN] ✓ ${team}: ${results.filter(r => r.team === team).length} active players`);
   }
 
-  return results;
+  // Key filter: if DK has first basket odds for a team, ONLY show players DK confirms as playing.
+  // This removes injured players like Embiid who ESPN marks Active but DK knows aren't playing.
+  const teamsWithDkOdds = new Set(results.filter(r => !!r.liveOdds).map(r => r.team));
+  console.log(`[ESPN] Teams with DK first basket coverage: ${[...teamsWithDkOdds].join(', ')}`);
+
+  const filtered = results.filter(r => {
+    if (teamsWithDkOdds.has(r.team)) {
+      // Only show DK-confirmed players for this team
+      return !!r.liveOdds;
+    }
+    // No DK coverage for this team — show all ESPN-active players
+    return true;
+  });
+
+  console.log(`[ESPN] After DK confirmation filter: ${filtered.length} confirmed playing players`);
+  return filtered;
 }
 
 /**
