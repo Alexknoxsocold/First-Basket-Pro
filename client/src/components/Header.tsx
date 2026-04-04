@@ -13,7 +13,7 @@ import { useAuth } from "@/context/AuthContext";
 import { Link } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
-import logoImage from "@assets/AGSX8074_1763247106947.jpeg";
+import logoImage from "@assets/i5GAK_1775293448252.jpg";
 
 export default function Header() {
   const { user, logout } = useAuth();
@@ -53,7 +53,7 @@ export default function Header() {
             <img
               src={logoImage}
               alt="First Basket Pro logo"
-              className="w-8 h-8 rounded-md object-cover"
+              className="w-10 h-10 rounded-md object-cover"
               data-testid="img-logo"
             />
             <div className="flex items-center gap-2">
