@@ -477,7 +477,7 @@ function MatchupH2H({
 
 export default function PlayerStats() {
   const [searchQuery, setSearchQuery] = useState("");
-  const [filterStarters, setFilterStarters] = useState(false);
+  const [filterStarters, setFilterStarters] = useState(true);
   const [viewMode, setViewMode] = useState<"h2h" | "list">("h2h");
 
   const { data: espnStats, isLoading: espnLoading, error: espnError, refetch, isFetching } = useQuery<EspnPlayerStat[]>({
