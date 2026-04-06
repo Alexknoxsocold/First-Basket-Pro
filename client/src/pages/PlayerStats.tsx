@@ -194,7 +194,7 @@ function FbBar({ pct, isTopPick = false, isSneakyValue = false, isDarkHorse = fa
       <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
         <div className={`h-full rounded-full transition-all ${barColor}`} style={{ width: `${barWidth}%` }} />
       </div>
-      <span className={`font-mono text-xs font-bold w-12 text-right ${textColor}`}>{pct.toFixed(1)}%</span>
+      <span className={`font-mono text-xs font-bold w-12 text-right ${textColor}`}>{Math.round(pct)}%</span>
     </div>
   );
 }

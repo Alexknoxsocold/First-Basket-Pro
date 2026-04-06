@@ -336,12 +336,15 @@ export async function fetchEspnTeamStats(
 
   console.log(`[ESPN] After DK confirmation filter: ${filtered.length} confirmed playing players`);
 
-  // Load DB-tracked first basket counts (seeded manually + auto-tracked)
+  // Load DB-tracked first basket counts + games started (seeded from BestOdds)
   let dbTrackingMap: Record<string, number> = {};
+  let dbGamesStartedMap: Record<string, number> = {};
   try {
     const dbTracking = await storage.getAllFbTracking();
     for (const rec of dbTracking) {
-      dbTrackingMap[normalizeNameLocal(rec.playerName)] = rec.fbScored;
+      const key = normalizeNameLocal(rec.playerName);
+      dbTrackingMap[key] = rec.fbScored;
+      if (rec.gamesTracked > 0) dbGamesStartedMap[key] = rec.gamesTracked;
     }
     if (dbTracking.length > 0) {
       console.log(`[FBTracker] Loaded ${dbTracking.length} DB-tracked players`);
@@ -364,10 +367,13 @@ export async function fetchEspnTeamStats(
       storage.upsertFbTracking(p.player, p.team, history[key], "2025/26", p.gamesPlayed).catch(() => {});
     }
 
-    // Override formula-derived % with real historical rate when we have actual counts
-    if (p.firstBasketsScored !== undefined && p.gamesPlayed > 0) {
-      const realPct = (p.firstBasketsScored / p.gamesPlayed) * 100;
-      p.firstBasketPct = Math.round(realPct * 10) / 10;
+    // Use real % from actual counts — prefer BestOdds games started over ESPN games played
+    // This matches BestOdds display exactly (they use games started, not games played)
+    if (p.firstBasketsScored !== undefined) {
+      const gamesForCalc = dbGamesStartedMap[key] || p.gamesPlayed;
+      if (gamesForCalc > 0) {
+        p.firstBasketPct = Math.round((p.firstBasketsScored / gamesForCalc) * 100);
+      }
     }
   }
 

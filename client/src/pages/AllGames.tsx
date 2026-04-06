@@ -243,14 +243,14 @@ export default function AllGames() {
         />
         <StatsCard
           title="Top Jump Ball"
-          value={stats.topJumpBallPct > 0 ? `${stats.topJumpBallPct.toFixed(1)}%` : "Loading..."}
+          value={stats.topJumpBallPct > 0 ? `${Math.round(stats.topJumpBallPct)}%` : "Loading..."}
           subtitle={stats.topJumpBallPlayer ? `${stats.topJumpBallPlayer} — ${stats.topJumpBallTeam}` : "Fetching ESPN data..."}
           icon={Zap}
         />
         <StatsCard
           title="Top Team Today"
           value={stats.topTeam || "—"}
-          subtitle={stats.topTeamPct > 0 ? `${stats.topTeamPct.toFixed(1)}% scoring probability` : "Fetching ESPN data..."}
+          subtitle={stats.topTeamPct > 0 ? `${Math.round(stats.topTeamPct)}% scoring probability` : "Fetching ESPN data..."}
           icon={Trophy}
         />
       </div>

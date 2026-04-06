@@ -174,6 +174,24 @@ function FbTrackerTab({ isAuthenticated }: { isAuthenticated: boolean }) {
     },
   });
 
+  const autoTrackerMutation = useMutation({
+    mutationFn: async () => {
+      return apiRequest("POST", "/api/admin/run-auto-tracker", {});
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/fb-tracking"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/espn-player-stats"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/fb-tracking/processed-games"] });
+      toast({
+        title: data.processed > 0 ? `✓ ${data.processed} game(s) tracked!` : "No new games",
+        description: data.message,
+      });
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Auto-tracker failed. Check server logs.", variant: "destructive" });
+    },
+  });
+
   // Build map of existing DB entries for quick lookup
   const trackingMap: Record<string, FbTracking> = {};
   (fbTracking || []).forEach(r => { trackingMap[`${r.playerName}__${r.team}`] = r; });
@@ -221,6 +239,38 @@ function FbTrackerTab({ isAuthenticated }: { isAuthenticated: boolean }) {
 
   return (
     <div className="space-y-6">
+
+      {/* Auto-Tracker Control */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <RotateCw className="h-4 w-4 text-green-500" />
+            Auto First-Basket Tracker
+          </CardTitle>
+          <CardDescription>
+            Checks ESPN play-by-play for any completed games today, finds who scored first, and automatically increments their count. Runs automatically every 30 min from 6 PM – 2 AM ET. Click to run it now.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button
+            onClick={() => autoTrackerMutation.mutate()}
+            disabled={autoTrackerMutation.isPending}
+            data-testid="button-run-auto-tracker"
+          >
+            {autoTrackerMutation.isPending ? (
+              <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Scanning ESPN...</>
+            ) : (
+              <><RotateCw className="h-4 w-4 mr-2" />Run Auto-Tracker Now</>
+            )}
+          </Button>
+          {autoTrackerMutation.isSuccess && (
+            <p className="text-sm text-muted-foreground mt-3">
+              {(autoTrackerMutation.data as any)?.message}
+            </p>
+          )}
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
@@ -308,7 +358,7 @@ function FbTrackerTab({ isAuthenticated }: { isAuthenticated: boolean }) {
                       )}
                     </div>
                     <p className="text-[11px] text-muted-foreground mt-0.5">
-                      {p.gamesPlayed} GP · {p.firstBasketPct.toFixed(1)}% FB rate
+                      {p.gamesPlayed} GP · {Math.round(p.firstBasketPct)}% FB rate
                     </p>
                   </div>
                   <div className="flex items-center gap-2">

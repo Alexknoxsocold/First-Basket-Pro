@@ -6,6 +6,7 @@ import { LineupSync } from "./lineupSync";
 import { createDailySyncService } from "./dailySync";
 import { signup, login, logout, getSession, inviteAccess, requireAuth, requireAdmin } from "./auth";
 import { seedFbHistoryFromBestOdds } from "./seedFbHistory";
+import { runFirstBasketTracker } from "./autoTracker";
 import cron from "node-cron";
 
 const injurySync = new InjurySync(storage);
@@ -392,6 +393,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Admin: manually trigger the auto-tracker (useful to run right after games end)
+  app.post("/api/admin/run-auto-tracker", requireAdmin, async (_req, res) => {
+    try {
+      console.log("[API] Manual auto-tracker run triggered by admin");
+      const result = await runFirstBasketTracker();
+      espnStatsCache = null; // clear cache so updated counts show immediately
+      res.json({
+        message: `Auto-tracker complete: ${result.processed} new game(s) processed, ${result.skipped} already done`,
+        ...result,
+      });
+    } catch (error: any) {
+      console.error("[API] Auto-tracker error:", error);
+      res.status(500).json({ error: "Auto-tracker failed", detail: error?.message });
+    }
+  });
+
   // Team stats endpoints
   app.get("/api/team-stats", async (_req, res) => {
     try {
@@ -534,8 +551,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
     timezone: 'America/New_York'
   });
 
+  // Auto first-basket tracker: runs every 30 minutes from 6 PM to 2 AM ET
+  // Detects who scored first in any completed game and increments their DB count
+  cron.schedule('*/30 18-23 * * *', async () => {
+    console.log('[Cron] Running first-basket auto-tracker (evening)...');
+    try {
+      const result = await runFirstBasketTracker();
+      if (result.processed > 0) {
+        espnStatsCache = null;
+        console.log(`[Cron] ✓ Auto-tracker: ${result.processed} game(s) processed`);
+      }
+    } catch (error) {
+      console.error('[Cron] Auto-tracker failed:', error);
+    }
+  }, { timezone: 'America/New_York' });
+
+  // Also runs 12:30 AM – 2 AM ET to catch late games finishing after midnight
+  cron.schedule('*/30 0-2 * * *', async () => {
+    console.log('[Cron] Running first-basket auto-tracker (late night)...');
+    try {
+      const result = await runFirstBasketTracker();
+      if (result.processed > 0) {
+        espnStatsCache = null;
+        console.log(`[Cron] ✓ Auto-tracker: ${result.processed} game(s) processed`);
+      }
+    } catch (error) {
+      console.error('[Cron] Auto-tracker failed:', error);
+    }
+  }, { timezone: 'America/New_York' });
+
   console.log('[Cron] Daily sync scheduled for 12:30 AM ET every day');
   console.log('[Cron] Lineup sync scheduled every 30 minutes (9 AM - 11 PM ET)');
+  console.log('[Cron] First-basket auto-tracker scheduled every 30 min (6 PM – 2 AM ET)');
 
   const httpServer = createServer(app);
   return httpServer;
