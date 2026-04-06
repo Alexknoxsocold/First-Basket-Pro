@@ -1,4 +1,5 @@
 import { Switch, Route } from "wouter";
+import { useState } from "react";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -7,6 +8,7 @@ import { AuthProvider } from "@/context/AuthContext";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import Header from "@/components/Header";
 import Navigation from "@/components/Navigation";
+import SplashScreen from "@/components/SplashScreen";
 import AllGames from "@/pages/AllGames";
 import OpeningTips from "@/pages/OpeningTips";
 import PlayerStats from "@/pages/PlayerStats";
@@ -15,7 +17,7 @@ import Admin from "@/pages/Admin";
 import Login from "@/pages/Login";
 import Signup from "@/pages/Signup";
 import Invite from "@/pages/Invite";
-import NRFIPro from "@/NRFIPro";
+import NRFIPro from "@/pages/NRFIPro";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -36,10 +38,13 @@ function Router() {
 }
 
 function App() {
+  const [splashDone, setSplashDone] = useState(false);
+
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <TooltipProvider>
+          {!splashDone && <SplashScreen onDone={() => setSplashDone(true)} />}
           <div className="min-h-screen bg-background">
             <Header />
             <Navigation />
