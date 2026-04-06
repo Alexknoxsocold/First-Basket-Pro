@@ -271,9 +271,9 @@ function PlayerCard({
           {rank}
         </span>
         <div className="relative">
-          <Avatar className={`w-11 h-11 ring-1 ${avatarRing}`}>
+          <Avatar className={`w-16 h-16 ring-1 ${avatarRing}`}>
             <AvatarImage src={stat.headshot} alt={stat.player} className="object-cover object-top" />
-            <AvatarFallback className="text-xs font-bold bg-muted text-muted-foreground">{initials}</AvatarFallback>
+            <AvatarFallback className="text-sm font-bold bg-muted text-muted-foreground">{initials}</AvatarFallback>
           </Avatar>
           {(isElite || isTopPick || isSneakyValue || isDarkHorse) && (
             <span className={`absolute -top-1 -right-1 flex items-center justify-center w-4 h-4 rounded-full ${isElite ? "bg-green-500" : isTopPick ? "bg-emerald-700" : isSneakyValue ? "bg-blue-700" : "bg-amber-500"}`}>
