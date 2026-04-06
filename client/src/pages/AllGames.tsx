@@ -129,11 +129,19 @@ export default function AllGames() {
   const findJumpBall = (players: EspnPlayerStat[]): JumpBallPlayer | null => {
     const starters = players.filter(p => p.isStarter);
     const pool = starters.length > 0 ? starters : players;
-    const center = pool.find(p => p.position === 'C')
-      ?? pool.find(p => p.position === 'PF' || p.position === 'F')
-      ?? pool[0];
-    if (!center) return null;
-    return { player: center.player, headshot: center.headshot, position: center.position ?? 'C' };
+    // ESPN only uses C, F, G — no PF/SF distinction
+    // Pick C first; among Fs, pick the one with highest FB% (the featured big man, e.g. Wembanyama not Champagnie)
+    const centers = pool.filter(p => p.position === 'C');
+    if (centers.length > 0) {
+      const best = [...centers].sort((a, b) => b.firstBasketPct - a.firstBasketPct)[0];
+      return { player: best.player, headshot: best.headshot, position: best.position ?? 'C' };
+    }
+    const forwards = pool.filter(p => p.position === 'F');
+    if (forwards.length > 0) {
+      const best = [...forwards].sort((a, b) => b.firstBasketPct - a.firstBasketPct)[0];
+      return { player: best.player, headshot: best.headshot, position: best.position ?? 'F' };
+    }
+    return null;
   };
 
   // Build per-game pick summaries using ESPN stats

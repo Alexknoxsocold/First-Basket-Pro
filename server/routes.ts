@@ -365,17 +365,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Admin: upsert a player's FB scored count (seed/manual edit)
+  // Admin: upsert a player's FB scored count + games started (seed/manual edit)
   app.post("/api/admin/fb-tracking", requireAdmin, async (req, res) => {
     try {
-      const { playerName, team, fbScored } = req.body;
+      const { playerName, team, fbScored, gamesTracked } = req.body;
       if (!playerName || !team || typeof fbScored !== 'number') {
         return res.status(400).json({ error: "playerName, team, and fbScored (number) are required" });
       }
-      const record = await storage.upsertFbTracking(playerName.trim(), team.trim().toUpperCase(), Math.max(0, Math.round(fbScored)));
+      const gamesArg = typeof gamesTracked === 'number' ? Math.max(1, Math.round(gamesTracked)) : undefined;
+      const record = await storage.upsertFbTracking(
+        playerName.trim(), team.trim().toUpperCase(),
+        Math.max(0, Math.round(fbScored)), "2025/26", gamesArg
+      );
       // Invalidate ESPN stats cache
       espnStatsCache = null;
-      console.log(`[FBTracker] Admin set ${playerName} (${team}) to ${fbScored} FB scored`);
+      console.log(`[FBTracker] Admin set ${playerName} (${team}) → ${fbScored} FBs, ${gamesArg ?? 'unchanged'} games`);
       res.json(record);
     } catch (error) {
       console.error('[FBTracker] Upsert error:', error);
