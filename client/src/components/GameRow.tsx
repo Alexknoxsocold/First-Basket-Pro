@@ -12,6 +12,12 @@ interface EspnPick {
   isStarter?: boolean;
 }
 
+interface JumpBallPlayer {
+  player: string;
+  headshot?: string;
+  position: string;
+}
+
 interface GameRowProps {
   awayTeam: string;
   awayPlayer: string;
@@ -32,6 +38,8 @@ interface GameRowProps {
   homePlayerHeadshot?: string;
   awayEspnPick?: EspnPick | null;
   homeEspnPick?: EspnPick | null;
+  awayJumpBall?: JumpBallPlayer | null;
+  homeJumpBall?: JumpBallPlayer | null;
 }
 
 // ESPN team ID map for logo URLs
@@ -144,6 +152,7 @@ export default function GameRow({
   h2h, gameTime, status, awayStarters, homeStarters,
   awayPlayerHeadshot, homePlayerHeadshot,
   awayEspnPick, homeEspnPick,
+  awayJumpBall, homeJumpBall,
 }: GameRowProps) {
   // Use ESPN FB% if available, fallback to game scorePercent
   const awayDisplayPct = awayEspnPick ? awayEspnPick.firstBasketPct : awayScorePercent;
@@ -267,42 +276,38 @@ export default function GameRow({
             </div>
           </div>
 
-          {/* First basket picks column */}
+          {/* Jump Ball column */}
           <div className="flex flex-col gap-2.5 border rounded-md p-2.5 bg-background/50">
-            <div className="text-[9px] uppercase tracking-widest text-muted-foreground font-semibold mb-0.5">First Basket Pick</div>
-            <div className="flex items-center gap-2.5 min-w-0">
-              <Avatar className="w-9 h-9 shrink-0 ring-2 ring-border">
-                <AvatarImage src={awayDisplayHeadshot} alt={awayDisplayPlayer} className="object-cover object-top" />
-                <AvatarFallback className="text-xs font-bold bg-muted">{awayDisplayPlayer.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase()}</AvatarFallback>
-              </Avatar>
-              <div className="min-w-0 flex-1">
-                <span className={`text-xs font-semibold truncate block ${awayIsTop ? "text-foreground" : "text-muted-foreground"}`}>{awayDisplayPlayer}</span>
-                <div className="text-[10px] text-muted-foreground">
-                  {awayEspnPick ? (
-                    <span className={`font-semibold ${awayIsTop || isTie ? "text-green-400" : "text-red-400"}`}>{awayEspnPick.firstBasketPct.toFixed(1)}% &bull; {awayEspnPick.odds}</span>
-                  ) : (
-                    <span>{awayTeam} &bull; Tip {awayTipPercent}%</span>
-                  )}
+            <div className="text-[9px] uppercase tracking-widest text-muted-foreground font-semibold mb-0.5">Jump Ball</div>
+            {awayJumpBall ? (
+              <div className="flex items-center gap-2.5 min-w-0">
+                <Avatar className="w-9 h-9 shrink-0 ring-2 ring-border">
+                  <AvatarImage src={awayJumpBall.headshot} alt={awayJumpBall.player} className="object-cover object-top" />
+                  <AvatarFallback className="text-xs font-bold bg-muted">{awayJumpBall.player.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase()}</AvatarFallback>
+                </Avatar>
+                <div className="min-w-0 flex-1">
+                  <span className="text-xs font-semibold truncate block text-foreground">{awayJumpBall.player}</span>
+                  <div className="text-[10px] text-muted-foreground">{awayTeam} &bull; {awayJumpBall.position}</div>
                 </div>
               </div>
-            </div>
+            ) : (
+              <div className="flex items-center gap-2 h-9 text-[10px] text-muted-foreground">No data</div>
+            )}
             <div className="border-t border-dashed" />
-            <div className="flex items-center gap-2.5 min-w-0">
-              <Avatar className="w-9 h-9 shrink-0 ring-2 ring-border">
-                <AvatarImage src={homeDisplayHeadshot} alt={homeDisplayPlayer} className="object-cover object-top" />
-                <AvatarFallback className="text-xs font-bold bg-muted">{homeDisplayPlayer.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase()}</AvatarFallback>
-              </Avatar>
-              <div className="min-w-0 flex-1">
-                <span className={`text-xs font-semibold truncate block ${!awayIsTop ? "text-foreground" : "text-muted-foreground"}`}>{homeDisplayPlayer}</span>
-                <div className="text-[10px] text-muted-foreground">
-                  {homeEspnPick ? (
-                    <span className={`font-semibold ${!awayIsTop || isTie ? "text-green-400" : "text-red-400"}`}>{homeEspnPick.firstBasketPct.toFixed(1)}% &bull; {homeEspnPick.odds}</span>
-                  ) : (
-                    <span>{homeTeam} &bull; Tip {homeTipPercent}%</span>
-                  )}
+            {homeJumpBall ? (
+              <div className="flex items-center gap-2.5 min-w-0">
+                <Avatar className="w-9 h-9 shrink-0 ring-2 ring-border">
+                  <AvatarImage src={homeJumpBall.headshot} alt={homeJumpBall.player} className="object-cover object-top" />
+                  <AvatarFallback className="text-xs font-bold bg-muted">{homeJumpBall.player.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase()}</AvatarFallback>
+                </Avatar>
+                <div className="min-w-0 flex-1">
+                  <span className="text-xs font-semibold truncate block text-foreground">{homeJumpBall.player}</span>
+                  <div className="text-[10px] text-muted-foreground">{homeTeam} &bull; {homeJumpBall.position}</div>
                 </div>
               </div>
-            </div>
+            ) : (
+              <div className="flex items-center gap-2 h-9 text-[10px] text-muted-foreground">No data</div>
+            )}
           </div>
 
           {/* Score bars column */}
@@ -324,11 +329,9 @@ export default function GameRow({
                 </div>
               </div>
             </div>
-            <div className="text-[9px] text-muted-foreground/50 text-center">
-              {hasEspn ? "ESPN FB% + home-court factor" : "Historical home-court baseline"}
-            </div>
           </div>
         </div>
+
       </div>
     </div>
   );

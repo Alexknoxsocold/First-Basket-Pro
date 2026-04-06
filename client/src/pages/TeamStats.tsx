@@ -36,7 +36,7 @@ export default function TeamStats() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-4">
-        <h2 className="text-lg font-semibold">Team First Basket Stats</h2>
+        <h2 className="text-lg font-semibold">Team Scoring Stats</h2>
         <div className="relative w-64">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input

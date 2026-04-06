@@ -5,7 +5,7 @@ import StatsCard from "@/components/StatsCard";
 import { getTeamLogoUrl } from "@/components/GameRow";
 import dkLogoImg from "@assets/fyz4mydi8ceuovtoaooy_1775294282507.avif";
 
-import { Target, TrendingUp, Zap } from "lucide-react";
+import { Target, TrendingUp, Zap, Trophy } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 
@@ -21,6 +21,7 @@ interface EspnPlayerStat {
   odds: string;
   liveOdds?: string;
   isStarter?: boolean;
+  position?: string;
 }
 
 function DkLogo({ dimmed = false }: { dimmed?: boolean }) {
@@ -53,11 +54,19 @@ function TeamLogo({ team, size = "md" }: { team: string; size?: "sm" | "md" | "l
   );
 }
 
+interface JumpBallPlayer {
+  player: string;
+  headshot?: string;
+  position: string;
+}
+
 interface GamePickSummary {
   game: Game;
   topPlayer: EspnPlayerStat | null;
   awayTop: EspnPlayerStat | null;
   homeTop: EspnPlayerStat | null;
+  awayJumpBall: JumpBallPlayer | null;
+  homeJumpBall: JumpBallPlayer | null;
 }
 
 
@@ -116,23 +125,46 @@ export default function AllGames() {
     });
   }, [allGames]);
 
+  // Find the jump ball player (center) for a team
+  const findJumpBall = (players: EspnPlayerStat[]): JumpBallPlayer | null => {
+    const starters = players.filter(p => p.isStarter);
+    const pool = starters.length > 0 ? starters : players;
+    const center = pool.find(p => p.position === 'C')
+      ?? pool.find(p => p.position === 'PF' || p.position === 'F')
+      ?? pool[0];
+    if (!center) return null;
+    return { player: center.player, headshot: center.headshot, position: center.position ?? 'C' };
+  };
+
   // Build per-game pick summaries using ESPN stats
   const gamePicks = useMemo<GamePickSummary[]>(() => {
     if (!games.length) return [];
     return games.map(game => {
       const awayPlayers = espnStats?.filter(s => s.team === game.awayTeam) ?? [];
       const homePlayers = espnStats?.filter(s => s.team === game.homeTeam) ?? [];
-      const awayTop = awayPlayers.sort((a, b) => b.firstBasketPct - a.firstBasketPct)[0] ?? null;
-      const homeTop = homePlayers.sort((a, b) => b.firstBasketPct - a.firstBasketPct)[0] ?? null;
+      const awayTop = [...awayPlayers].sort((a, b) => b.firstBasketPct - a.firstBasketPct)[0] ?? null;
+      const homeTop = [...homePlayers].sort((a, b) => b.firstBasketPct - a.firstBasketPct)[0] ?? null;
       const topPlayer = !awayTop ? homeTop
         : !homeTop ? awayTop
         : awayTop.firstBasketPct >= homeTop.firstBasketPct ? awayTop : homeTop;
-      return { game, topPlayer, awayTop, homeTop };
+      return {
+        game,
+        topPlayer,
+        awayTop,
+        homeTop,
+        awayJumpBall: findJumpBall(awayPlayers),
+        homeJumpBall: findJumpBall(homePlayers),
+      };
     });
   }, [games, espnStats]);
 
   const stats = useMemo(() => {
-    if (!games || games.length === 0) return { avgFbPct: "0.0", highestFbPct: 0, highestFbMatchup: "", topPlayer: "" };
+    const empty = {
+      avgFbPct: "0.0", highestFbPct: 0, highestFbMatchup: "", topPlayer: "",
+      topJumpBallPct: 0, topJumpBallPlayer: "", topJumpBallTeam: "",
+      topTeam: "", topTeamPct: 0,
+    };
+    if (!games || games.length === 0) return empty;
 
     const allFbPcts = espnStats?.map(s => s.firstBasketPct) ?? [];
     const avgFbPct = allFbPcts.length > 0
@@ -142,21 +174,46 @@ export default function AllGames() {
     let highestFbPct = 0;
     let highestFbMatchup = "";
     let topPlayer = "";
-    gamePicks.forEach(({ game, topPlayer: tp }) => {
+    let topTeam = "";
+    let topTeamPct = 0;
+    gamePicks.forEach(({ game, topPlayer: tp, awayTop, homeTop }) => {
       if (tp && tp.firstBasketPct > highestFbPct) {
         highestFbPct = tp.firstBasketPct;
         highestFbMatchup = `${game.awayTeam} @ ${game.homeTeam}`;
         topPlayer = tp.player;
       }
+      [awayTop, homeTop].forEach(pick => {
+        if (pick && pick.firstBasketPct > topTeamPct) {
+          topTeamPct = pick.firstBasketPct;
+          topTeam = pick.team;
+        }
+      });
     });
 
-    return { avgFbPct, highestFbPct, highestFbMatchup, topPlayer };
+    // Top jump ball: the center with the highest firstBasketPct today
+    let topJumpBallPct = 0;
+    let topJumpBallPlayer = "";
+    let topJumpBallTeam = "";
+    gamePicks.forEach(({ awayJumpBall, homeJumpBall }) => {
+      [awayJumpBall, homeJumpBall].forEach(jb => {
+        if (!jb) return;
+        const stat = espnStats?.find(s => s.player === jb.player);
+        if (stat && stat.firstBasketPct > topJumpBallPct) {
+          topJumpBallPct = stat.firstBasketPct;
+          topJumpBallPlayer = jb.player;
+          topJumpBallTeam = stat.team;
+        }
+      });
+    });
+
+    return { avgFbPct, highestFbPct, highestFbMatchup, topPlayer, topJumpBallPct, topJumpBallPlayer, topJumpBallTeam, topTeam, topTeamPct };
   }, [games, espnStats, gamePicks]);
 
   if (gamesLoading) {
     return (
       <div className="space-y-6">
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
+          <Skeleton className="h-28" />
           <Skeleton className="h-28" />
           <Skeleton className="h-28" />
           <Skeleton className="h-28" />
@@ -171,7 +228,7 @@ export default function AllGames() {
     <div className="space-y-6">
 
       {/* Stats Row */}
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
         <StatsCard
           title="Today's Games"
           value={games.length}
@@ -179,16 +236,22 @@ export default function AllGames() {
           icon={Target}
         />
         <StatsCard
-          title="Avg First Basket %"
+          title="Avg Scoring %"
           value={`${stats.avgFbPct}%`}
           subtitle={`Across ${espnStats?.length ?? 0} players today`}
           icon={TrendingUp}
         />
         <StatsCard
-          title="Top Pick Probability"
-          value={stats.highestFbPct > 0 ? `${stats.highestFbPct.toFixed(1)}%` : "Loading..."}
-          subtitle={stats.topPlayer ? `${stats.topPlayer} — ${stats.highestFbMatchup}` : stats.highestFbMatchup || "Fetching ESPN data..."}
+          title="Top Jump Ball"
+          value={stats.topJumpBallPct > 0 ? `${stats.topJumpBallPct.toFixed(1)}%` : "Loading..."}
+          subtitle={stats.topJumpBallPlayer ? `${stats.topJumpBallPlayer} — ${stats.topJumpBallTeam}` : "Fetching ESPN data..."}
           icon={Zap}
+        />
+        <StatsCard
+          title="Top Team Today"
+          value={stats.topTeam || "—"}
+          subtitle={stats.topTeamPct > 0 ? `${stats.topTeamPct.toFixed(1)}% scoring probability` : "Fetching ESPN data..."}
+          icon={Trophy}
         />
       </div>
 
@@ -205,6 +268,8 @@ export default function AllGames() {
           headshotMap={headshotMap}
           espnAwayPicks={Object.fromEntries(gamePicks.map(gp => [gp.game.id, gp.awayTop]))}
           espnHomePicks={Object.fromEntries(gamePicks.map(gp => [gp.game.id, gp.homeTop]))}
+          espnAwayJumpBall={Object.fromEntries(gamePicks.map(gp => [gp.game.id, gp.awayJumpBall]))}
+          espnHomeJumpBall={Object.fromEntries(gamePicks.map(gp => [gp.game.id, gp.homeJumpBall]))}
         />
       </div>
     </div>

@@ -596,14 +596,11 @@ export default function PlayerStats() {
             <Zap className="h-5 w-5 text-primary" />
             Player FB Stats
           </h1>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            ESPN 2025-26 season data &bull; {allActivePlayers.length} confirmed players
-            {hasLiveOdds && (
-              <span className="ml-2 text-green-400 font-semibold">
-                &bull; DraftKings Live Odds
-              </span>
-            )}
-          </p>
+          {hasLiveOdds && (
+            <p className="text-xs text-green-400 font-semibold mt-0.5">
+              DraftKings Live Odds
+            </p>
+          )}
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
@@ -695,7 +692,7 @@ export default function PlayerStats() {
           <TrendingUp className="w-8 h-8 text-muted-foreground mx-auto mb-3" />
           <p className="text-sm font-medium">Loading player data from ESPN...</p>
           <p className="text-xs text-muted-foreground mt-1">
-            Fetching stats + DraftKings first basket odds for all players on today's rosters.
+            Fetching stats + DraftKings scoring odds for all players on today's rosters.
           </p>
           <Button variant="outline" size="sm" className="mt-4 gap-2" onClick={() => refetch()}>
             <RefreshCw className="w-3.5 h-3.5" /> Try Again
@@ -746,7 +743,7 @@ export default function PlayerStats() {
           </div>
           <div className="px-4 py-2 border-t bg-muted/30">
             <p className="text-xs text-muted-foreground">
-              {allActivePlayers.length} players shown &bull; Sorted by First Basket Probability
+              {allActivePlayers.length} players shown &bull; Sorted by Scoring Probability
               {hasLiveOdds && " &bull; DraftKings live odds included"}
             </p>
           </div>

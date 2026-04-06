@@ -11,11 +11,19 @@ interface EspnPick {
   isStarter?: boolean;
 }
 
+interface JumpBallPlayer {
+  player: string;
+  headshot?: string;
+  position: string;
+}
+
 interface GamesTableProps {
   games: Game[];
   headshotMap?: Record<string, string>;
   espnAwayPicks?: Record<string, EspnPick | null>;
   espnHomePicks?: Record<string, EspnPick | null>;
+  espnAwayJumpBall?: Record<string, JumpBallPlayer | null>;
+  espnHomeJumpBall?: Record<string, JumpBallPlayer | null>;
 }
 
 export default function GamesTable({
@@ -23,6 +31,8 @@ export default function GamesTable({
   headshotMap = {},
   espnAwayPicks = {},
   espnHomePicks = {},
+  espnAwayJumpBall = {},
+  espnHomeJumpBall = {},
 }: GamesTableProps) {
   if (games.length === 0) {
     return (
@@ -47,6 +57,8 @@ export default function GamesTable({
               homePlayerHeadshot={homeEspn?.headshot || headshotMap[game.homePlayer]}
               awayEspnPick={awayEspn}
               homeEspnPick={homeEspn}
+              awayJumpBall={espnAwayJumpBall[game.id]}
+              homeJumpBall={espnHomeJumpBall[game.id]}
             />
           );
         })}
