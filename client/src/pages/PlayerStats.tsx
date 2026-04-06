@@ -491,11 +491,37 @@ export default function PlayerStats() {
 
   const todayGames = useMemo(() => {
     if (!games) return [];
-    const todayISO = new Date().toISOString().split("T")[0];
+    // ET-aware active date: after 11 PM ET, advance to tomorrow automatically
+    const now = new Date();
+    const etHour = parseInt(new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/New_York', hour: 'numeric', hour12: false
+    }).format(now));
+    const targetDate = etHour >= 23 ? new Date(now.getTime() + 24 * 60 * 60 * 1000) : now;
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit'
+    }).formatToParts(targetDate);
+    const y = parseInt(parts.find(p => p.type === 'year')!.value);
+    const mo = parseInt(parts.find(p => p.type === 'month')!.value) - 1;
+    const d = parseInt(parts.find(p => p.type === 'day')!.value);
+    const activeDateISO = `${y}-${String(mo + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    const etFormatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit'
+    });
+
     return games.filter((g) => {
-      if (g.gameDate === "Today") return true;
-      if (g.gameTime) return new Date(g.gameTime).toISOString().split("T")[0] === todayISO;
-      return g.gameDate === todayISO;
+      // gameDate is authoritative when it's a specific date
+      if (g.gameDate && g.gameDate !== 'Today') return g.gameDate === activeDateISO;
+      // Legacy "Today" label
+      if (g.gameDate === 'Today' && etHour < 23) return true;
+      // No gameDate — fall back to gameTime in ET
+      if (g.gameTime) {
+        const gp = etFormatter.formatToParts(new Date(g.gameTime));
+        const gy = gp.find(p => p.type === 'year')?.value;
+        const gm = gp.find(p => p.type === 'month')?.value;
+        const gd = gp.find(p => p.type === 'day')?.value;
+        return `${gy}-${gm}-${gd}` === activeDateISO;
+      }
+      return false;
     });
   }, [games]);
 

@@ -81,18 +81,38 @@ export default function AllGames() {
 
   const games = useMemo(() => {
     if (!allGames) return [];
+
+    // Get active date in ET: after 11 PM ET, advance to tomorrow automatically
     const now = new Date();
-    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+    const etHour = parseInt(new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/New_York', hour: 'numeric', hour12: false
+    }).format(now));
+    const targetDate = etHour >= 23 ? new Date(now.getTime() + 24 * 60 * 60 * 1000) : now;
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit'
+    }).formatToParts(targetDate);
+    const y = parseInt(parts.find(p => p.type === 'year')!.value);
+    const mo = parseInt(parts.find(p => p.type === 'month')!.value) - 1;
+    const d = parseInt(parts.find(p => p.type === 'day')!.value);
+    const activeDateISO = `${y}-${String(mo + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    const etFormatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit'
+    });
 
     return allGames.filter(game => {
-      if (game.gameDate === "Today") return true;
+      // gameDate is authoritative when it's a specific date
+      if (game.gameDate && game.gameDate !== 'Today') return game.gameDate === activeDateISO;
+      // Legacy "Today" label
+      if (game.gameDate === 'Today' && etHour < 23) return true;
+      // No gameDate — fall back to gameTime in ET
       if (game.gameTime) {
-        const gameTime = new Date(game.gameTime);
-        return gameTime >= todayStart && gameTime < todayEnd;
+        const gameParts = etFormatter.formatToParts(new Date(game.gameTime));
+        const gy = gameParts.find(p => p.type === 'year')?.value;
+        const gm = gameParts.find(p => p.type === 'month')?.value;
+        const gd = gameParts.find(p => p.type === 'day')?.value;
+        return `${gy}-${gm}-${gd}` === activeDateISO;
       }
-      const todayISO = now.toISOString().split('T')[0];
-      return game.gameDate === todayISO;
+      return false;
     });
   }, [allGames]);
 
