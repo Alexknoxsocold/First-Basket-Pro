@@ -360,6 +360,14 @@ export async function fetchEspnTeamStats(
       p.firstBasketsScored = dbTrackingMap[key]; // authoritative DB value
     } else if (history[key] !== undefined) {
       p.firstBasketsScored = history[key]; // scraper fallback
+      // Persist scraper result to DB so it's available next request without re-scraping
+      storage.upsertFbTracking(p.player, p.team, history[key], "2025/26", p.gamesPlayed).catch(() => {});
+    }
+
+    // Override formula-derived % with real historical rate when we have actual counts
+    if (p.firstBasketsScored !== undefined && p.gamesPlayed > 0) {
+      const realPct = (p.firstBasketsScored / p.gamesPlayed) * 100;
+      p.firstBasketPct = Math.round(realPct * 10) / 10;
     }
   }
 
@@ -367,7 +375,7 @@ export async function fetchEspnTeamStats(
     const key = normalizeNameLocal(p.player);
     return dbTrackingMap[key] !== undefined;
   }).length;
-  console.log(`[FBTracker] ${dbCount}/${filtered.length} players have DB-tracked counts`);
+  console.log(`[FBTracker] ${dbCount}/${filtered.length} players have DB-tracked counts (real % used for ${filtered.filter(p => p.firstBasketsScored !== undefined).length})`);
 
   return filtered;
 }

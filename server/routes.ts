@@ -5,6 +5,7 @@ import { InjurySync } from "./injurySync";
 import { LineupSync } from "./lineupSync";
 import { createDailySyncService } from "./dailySync";
 import { signup, login, logout, getSession, inviteAccess, requireAuth, requireAdmin } from "./auth";
+import { seedFbHistoryFromBestOdds } from "./seedFbHistory";
 import cron from "node-cron";
 
 const injurySync = new InjurySync(storage);
@@ -104,6 +105,9 @@ async function ensureGamesForDate(dateISO: string): Promise<void> {
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Seed BestOdds verified first basket counts into DB on startup
+  seedFbHistoryFromBestOdds().catch(err => console.warn('[FBSeed] Startup seed failed:', err));
+
   // Start automatic injury sync
   injurySync.start();
 

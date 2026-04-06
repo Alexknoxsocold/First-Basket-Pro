@@ -40,7 +40,7 @@ export interface IStorage {
   // FB Tracking
   getAllFbTracking(): Promise<FbTracking[]>;
   getFbTrackingByPlayer(playerName: string, team: string): Promise<FbTracking | undefined>;
-  upsertFbTracking(playerName: string, team: string, fbScored: number, season?: string): Promise<FbTracking>;
+  upsertFbTracking(playerName: string, team: string, fbScored: number, season?: string, gamesTracked?: number): Promise<FbTracking>;
   incrementFbScored(playerName: string, team: string): Promise<void>;
   isGameProcessed(espnGameId: string): Promise<boolean>;
   markGameProcessed(espnGameId: string, firstScorer?: string, firstScorerTeam?: string): Promise<void>;
@@ -402,31 +402,32 @@ export class MemStorage implements IStorage {
       .find(r => r.playerName === playerName && r.team === team);
   }
 
-  async upsertFbTracking(playerName: string, team: string, fbScored: number, season = "2025/26"): Promise<FbTracking> {
+  async upsertFbTracking(playerName: string, team: string, fbScored: number, season = "2025/26", gamesTracked?: number): Promise<FbTracking> {
     const now = new Date().toISOString();
     if (this.db) {
-      // Check if exists
       const existing = await this.getFbTrackingByPlayer(playerName, team);
       if (existing) {
+        const setFields: any = { fbScored, lastUpdated: now };
+        if (gamesTracked !== undefined) setFields.gamesTracked = gamesTracked;
         const [updated] = await this.db.update(fbTrackingTable)
-          .set({ fbScored, lastUpdated: now })
+          .set(setFields)
           .where(eq(fbTrackingTable.id, existing.id))
           .returning();
         return updated;
       }
       const [created] = await this.db.insert(fbTrackingTable)
-        .values({ playerName, team, fbScored, gamesTracked: 0, season, lastUpdated: now })
+        .values({ playerName, team, fbScored, gamesTracked: gamesTracked ?? 0, season, lastUpdated: now })
         .returning();
       return created;
     }
     const existing = await this.getFbTrackingByPlayer(playerName, team);
     if (existing) {
-      const updated = { ...existing, fbScored, lastUpdated: now };
+      const updated = { ...existing, fbScored, lastUpdated: now, ...(gamesTracked !== undefined ? { gamesTracked } : {}) };
       this.fbTrackingMap.set(existing.id, updated);
       return updated;
     }
     const id = randomUUID();
-    const rec: FbTracking = { id, playerName, team, fbScored, gamesTracked: 0, season, lastUpdated: now };
+    const rec: FbTracking = { id, playerName, team, fbScored, gamesTracked: gamesTracked ?? 0, season, lastUpdated: now };
     this.fbTrackingMap.set(id, rec);
     return rec;
   }
