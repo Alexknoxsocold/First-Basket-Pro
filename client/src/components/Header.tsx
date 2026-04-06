@@ -18,7 +18,8 @@ import logoImage from "@assets/i5GAK_1775293448252.jpg";
 export default function Header() {
   const { user, logout } = useAuth();
   const { toast } = useToast();
-  const [, setLocation] = useLocation();
+  const [location, setLocation] = useLocation();
+  const isMLB = location === "/mlb";
   const [theme, setTheme] = useState<"light" | "dark">(() => {
     const savedTheme = localStorage.getItem("theme");
     return (savedTheme as "light" | "dark") || "dark";
@@ -59,9 +60,11 @@ export default function Header() {
               onClick={() => window.location.reload()}
             />
             <div className="flex items-center gap-2">
-              <span className="text-base font-bold tracking-tight">First Basket Pro</span>
+              <span className="text-base font-bold tracking-tight">
+                {isMLB ? "NRFI Pro" : "First Basket Pro"}
+              </span>
               <Badge variant="secondary" className="text-xs px-1.5 py-0 h-4 font-mono hidden sm:flex">
-                2025/26
+                {isMLB ? "MLB" : "2025/26"}
               </Badge>
             </div>
           </div>

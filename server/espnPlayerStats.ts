@@ -197,11 +197,16 @@ export async function fetchFirstBasketOdds(eventIds: string[]): Promise<Record<s
 /**
  * Get today's ESPN event IDs for NBA games
  */
-export async function getTodayEspnEventIds(): Promise<string[]> {
-  const today = new Date();
-  const dateStr = today.getFullYear() +
-    String(today.getMonth() + 1).padStart(2, '0') +
-    String(today.getDate()).padStart(2, '0');
+export async function getTodayEspnEventIds(dateISO?: string): Promise<string[]> {
+  let dateStr: string;
+  if (dateISO) {
+    dateStr = dateISO.replace(/-/g, '');
+  } else {
+    const today = new Date();
+    dateStr = today.getFullYear() +
+      String(today.getMonth() + 1).padStart(2, '0') +
+      String(today.getDate()).padStart(2, '0');
+  }
 
   const data = await fetchJson(
     `https://sports.core.api.espn.com/v2/sports/basketball/leagues/nba/events?dates=${dateStr}&limit=20`
@@ -252,9 +257,13 @@ export async function fetchEspnTeamStats(
   for (const team of teams) {
     const roster = rosterMap[team] || [];
     const starters = starterMap[team] || [];
+    const hasLineupData = starters.length > 0;
 
     // Strictly filter: only include players who are NOT out/suspended
     const activePlayers = roster.filter(p => !isPlayerOut(p));
+
+    // Collect all valid players for this team first, then determine starters
+    const teamPlayers: EspnPlayerStat[] = [];
 
     // Fetch stats for all active players in parallel (batches of 8)
     const batchSize = 8;
@@ -268,14 +277,16 @@ export async function fetchEspnTeamStats(
         const position = player.position?.abbreviation || 'G';
         const { fbPct, q1FgaRate, odds } = deriveFirstBasketPct(statsData, position);
 
-        const isStarter = starters.length > 0
-          ? starters.some(s => normalizeName(s) === normalizeName(player.displayName))
-          : statsData.avgMinutes >= 25;
-
         // Use real sportsbook odds if available
         const liveOdds = firstBasketOddsMap[player.id];
 
-        results.push({
+        // When confirmed lineup exists, match by name. Otherwise mark all for now
+        // (we'll pick top 5 by minutes after collecting everyone)
+        const isStarterByLineup = hasLineupData
+          ? starters.some(s => normalizeName(s) === normalizeName(player.displayName))
+          : false;
+
+        teamPlayers.push({
           player: player.displayName,
           team,
           espnId: player.id,
@@ -293,12 +304,20 @@ export async function fetchEspnTeamStats(
           liveOdds,
           headshot: player.headshot?.href,
           injuryStatus: getInjuryStatus(player),
-          isStarter,
+          isStarter: isStarterByLineup,
         });
       }));
     }
 
-    console.log(`[ESPN] ✓ ${team}: ${results.filter(r => r.team === team).length} active players`);
+    // When no confirmed lineup: mark top 5 players by avg minutes as starters
+    if (!hasLineupData && teamPlayers.length > 0) {
+      const sorted = [...teamPlayers].sort((a, b) => b.avgMinutes - a.avgMinutes);
+      const top5Names = new Set(sorted.slice(0, 5).map(p => p.player));
+      teamPlayers.forEach(p => { p.isStarter = top5Names.has(p.player); });
+    }
+
+    results.push(...teamPlayers);
+    console.log(`[ESPN] ✓ ${team}: ${teamPlayers.length} active players (${teamPlayers.filter(p => p.isStarter).length} starters)`);
   }
 
   // Key filter: if DK has first basket odds for a team, ONLY show players DK confirms as playing.

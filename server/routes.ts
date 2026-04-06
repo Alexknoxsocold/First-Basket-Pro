@@ -11,6 +11,98 @@ const injurySync = new InjurySync(storage);
 const lineupSync = new LineupSync(storage);
 const dailySyncService = createDailySyncService(storage);
 
+// Helper: get current date in Eastern Time as YYYY-MM-DD
+// After 11 PM ET, returns TOMORROW's date so the app auto-advances to next day's games
+function getActiveDateISO(): string {
+  const now = new Date();
+  const etHour = parseInt(new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York', hour: 'numeric', hour12: false
+  }).format(now));
+  const targetDate = etHour >= 23 ? new Date(now.getTime() + 24 * 60 * 60 * 1000) : now;
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit'
+  }).formatToParts(targetDate);
+  const y = parts.find(p => p.type === 'year')?.value;
+  const m = parts.find(p => p.type === 'month')?.value;
+  const d = parts.find(p => p.type === 'day')?.value;
+  return `${y}-${m}-${d}`;
+}
+
+// Helper: get the current calendar date in Eastern Time as YYYY-MM-DD (not advance-adjusted)
+function getTodayETISO(): string {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit'
+  }).formatToParts(new Date());
+  const y = parts.find(p => p.type === 'year')?.value;
+  const m = parts.find(p => p.type === 'month')?.value;
+  const d = parts.find(p => p.type === 'day')?.value;
+  return `${y}-${m}-${d}`;
+}
+
+// Helper: check if a game belongs to a given dateISO (YYYY-MM-DD, ET)
+// gameDate is the authoritative NBA "game date" and always wins when it's a specific date.
+// Only fall back to converting gameTime to ET if gameDate is missing.
+function gameIsOnDate(gameTime: string | null | undefined, gameDate: string | null | undefined, dateISO: string): boolean {
+  // 1. gameDate is the authoritative field — use it when it's a specific date
+  if (gameDate && gameDate !== 'Today') return gameDate === dateISO;
+  // 2. Legacy "Today" label: only matches if dateISO is the actual current ET date
+  if (gameDate === 'Today') return dateISO === getTodayETISO();
+  // 3. No gameDate set — fall back to gameTime converted to ET
+  if (gameTime) {
+    const etDate = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit'
+    }).formatToParts(new Date(gameTime));
+    const y = etDate.find(p => p.type === 'year')?.value;
+    const m = etDate.find(p => p.type === 'month')?.value;
+    const d = etDate.find(p => p.type === 'day')?.value;
+    return `${y}-${m}-${d}` === dateISO;
+  }
+  return false;
+}
+
+// Helper: ensure games for a given date exist in storage, loading from ESPN if needed
+async function ensureGamesForDate(dateISO: string): Promise<void> {
+  const all = await storage.getGames();
+  const existing = all.filter(g => gameIsOnDate(g.gameTime, g.gameDate, dateISO));
+  if (existing.length > 0) return;
+
+  try {
+    const dateStr = dateISO.replace(/-/g, '');
+    const resp = await fetch(
+      `https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard?dates=${dateStr}`,
+      { signal: AbortSignal.timeout(8000) }
+    );
+    if (!resp.ok) return;
+    const data = await resp.json();
+    const events: any[] = data?.events || [];
+    for (const event of events) {
+      const comp = event.competitions?.[0];
+      if (!comp?.competitors) continue;
+      const home = comp.competitors.find((c: any) => c.homeAway === 'home');
+      const away = comp.competitors.find((c: any) => c.homeAway === 'away');
+      if (!home || !away) continue;
+      // Skip if already exists by ESPN ID or by team matchup + date
+      const alreadyExists = all.find(g =>
+        (g.espnGameId && g.espnGameId === event.id) ||
+        (g.homeTeam === home.team.abbreviation && g.awayTeam === away.team.abbreviation &&
+          gameIsOnDate(g.gameTime, g.gameDate, dateISO))
+      );
+      if (alreadyExists) continue;
+      await storage.createGame({
+        awayTeam: away.team.abbreviation, awayPlayer: 'TBD',
+        awayTipCount: 0, awayTipPercent: 50, awayScorePercent: 50, awayStarters: [],
+        homeTeam: home.team.abbreviation, homePlayer: 'TBD',
+        homeTipCount: 0, homeTipPercent: 50, homeScorePercent: 50, homeStarters: [],
+        h2h: 'N/A', gameDate: dateISO, gameTime: event.date,
+        status: 'scheduled', espnGameId: event.id, lastSynced: new Date().toISOString()
+      });
+      console.log(`[AutoSync] Created game: ${away.team.abbreviation} @ ${home.team.abbreviation} for ${dateISO}`);
+    }
+  } catch (err) {
+    console.warn('[AutoSync] Could not load games for date:', dateISO, err);
+  }
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
   // Start automatic injury sync
   injurySync.start();
@@ -204,17 +296,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ESPN real player stats for today's games — fetches all active players on today's teams
   app.get("/api/espn-player-stats", async (_req, res) => {
     try {
+      const activeDateISO = getActiveDateISO();
+      await ensureGamesForDate(activeDateISO);
       const games = await storage.getGames();
-      const now = new Date();
-      const todayISO = now.toISOString().split('T')[0];
-      const todayGames = games.filter(g => {
-        if (g.gameDate === 'Today') return true;
-        if (g.gameTime) {
-          const gt = new Date(g.gameTime);
-          return gt.toISOString().split('T')[0] === todayISO;
-        }
-        return g.gameDate === todayISO;
-      });
+      const todayGames = games.filter(g => gameIsOnDate(g.gameTime, g.gameDate, activeDateISO));
 
       if (todayGames.length === 0) {
         return res.json([]);
@@ -245,7 +330,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Fetch real DraftKings first basket odds from ESPN propBets in parallel
       let firstBasketOddsMap: Record<string, string> = {};
       try {
-        const eventIds = await getTodayEspnEventIds();
+        const eventIds = await getTodayEspnEventIds(activeDateISO);
         console.log(`[ESPN Stats] Got ${eventIds.length} event IDs, fetching first basket odds...`);
         firstBasketOddsMap = await fetchFirstBasketOdds(eventIds);
       } catch (err) {

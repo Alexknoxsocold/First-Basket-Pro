@@ -1,10 +1,11 @@
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
-import { LayoutGrid, BarChart2 } from "lucide-react";
+import { LayoutGrid, BarChart2, CircleDot } from "lucide-react";
 
 const navItems = [
   { label: "All Games", path: "/", icon: LayoutGrid },
   { label: "Player FB Stats", path: "/player-stats", icon: BarChart2 },
+  { label: "MLB", path: "/mlb", icon: CircleDot },
 ];
 
 export default function Navigation() {
