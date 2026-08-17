@@ -1,0 +1,153 @@
+alex@knoxsocolds-Air prezibaskets new % npm run dev
+
+> rest-express@1.0.0 dev
+> NODE_ENV=development tsx server/index.ts
+
+[InjurySync] Starting automatic injury sync (every 1 hour)...
+[InjurySync] Starting injury sync from ESPN...
+[Cron] Daily sync scheduled for 12:30 AM ET every day
+[Cron] Lineup sync scheduled every 30 minutes (9 AM - 11 PM ET)
+7:05:26 AM [express] serving on port 5000
+7:05:26 AM [express] [Startup] Running initial data sync...
+[DailySync] Starting daily sync process...
+[DailySync] Step 0: Cleaning up yesterday's games...
+[DailySync] Step 0 failed (cleanup), continuing: Error: No database host or connection string was set, and key parameters have default values (host: localhost, user: alex, db: alex, password: null). Is an environment variable missing? Alternatively, if you intended to connect with these parameters, please set the host to 'localhost' explicitly.
+    at An.connect (file:///Users/alex/Downloads/prezibaskets%20new/node_modules/@neondatabase/serverless/index.mjs:1579:62)
+    at Cn.newClient (file:///Users/alex/Downloads/prezibaskets%20new/node_modules/@neondatabase/serverless/index.mjs:1383:3)
+    at Cn.connect (file:///Users/alex/Downloads/prezibaskets%20new/node_modules/@neondatabase/serverless/index.mjs:1378:23)
+    at Cn.query (file:///Users/alex/Downloads/prezibaskets%20new/node_modules/@neondatabase/serverless/index.mjs:1407:63)
+    at Cn.query (file:///Users/alex/Downloads/prezibaskets%20new/node_modules/@neondatabase/serverless/index.mjs:1623:14)
+    at NeonPreparedQuery.execute (/Users/alex/Downloads/prezibaskets new/node_modules/src/neon-serverless/session.ts:102:31)
+    at <anonymous> (/Users/alex/Downloads/prezibaskets new/node_modules/src/pg-core/query-builders/select.ts:1009:27)
+    at Object.startActiveSpan (/Users/alex/Downloads/prezibaskets new/node_modules/src/tracing.ts:27:11)
+    at PgSelectBase.execute (/Users/alex/Downloads/prezibaskets new/node_modules/src/pg-core/query-builders/select.ts:1008:17)
+    at PgSelectBase.then (/Users/alex/Downloads/prezibaskets new/node_modules/src/query-promise.ts:31:15)
+[DailySync] Step 1: Syncing injury data...
+[InjurySync] Starting injury sync from ESPN...
+[InjurySync] Sync complete. Updated 0 players, cleared 0 recovered players.
+[InjurySync] Total injuries from ESPN: 119
+[InjurySync] Sync complete. Updated 0 players, cleared 0 recovered players.
+[InjurySync] Total injuries from ESPN: 119
+[DailySync] Step 1.5: Syncing starting lineups...
+[LineupSync] APISPORTS_KEY not configured. Skipping lineup sync.
+[LineupSync] To enable automatic lineup updates, add your API-Sports.io key to Replit Secrets.
+[DailySync] Step 2: Fetching today's ESPN scoreboard...
+[DailySync] Fetching scoreboard from: https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard?dates=20260404
+[DailySync] Fetched 3 games from ESPN
+[DailySync] Step 3: Processing completed games...
+[DailySync] Found 0 completed games
+[DailySync] Step 3.5: Processing today's upcoming games...
+[DailySync] Found 3 upcoming games
+[DailySync] Upcoming: WSH @ MIA (4/4/2026, 3:00:00 PM)
+[DailySync] Error updating upcoming game 401810984: Error: No database host or connection string was set, and key parameters have default values (host: localhost, user: alex, db: alex, password: null). Is an environment variable missing? Alternatively, if you intended to connect with these parameters, please set the host to 'localhost' explicitly.
+    at An.connect (file:///Users/alex/Downloads/prezibaskets%20new/node_modules/@neondatabase/serverless/index.mjs:1579:62)
+    at Cn.newClient (file:///Users/alex/Downloads/prezibaskets%20new/node_modules/@neondatabase/serverless/index.mjs:1383:3)
+    at Cn.connect (file:///Users/alex/Downloads/prezibaskets%20new/node_modules/@neondatabase/serverless/index.mjs:1378:23)
+    at Cn.query (file:///Users/alex/Downloads/prezibaskets%20new/node_modules/@neondatabase/serverless/index.mjs:1407:63)
+    at Cn.query (file:///Users/alex/Downloads/prezibaskets%20new/node_modules/@neondatabase/serverless/index.mjs:1623:14)
+    at NeonPreparedQuery.execute (/Users/alex/Downloads/prezibaskets new/node_modules/src/neon-serverless/session.ts:102:31)
+    at <anonymous> (/Users/alex/Downloads/prezibaskets new/node_modules/src/pg-core/query-builders/select.ts:1009:27)
+    at Object.startActiveSpan (/Users/alex/Downloads/prezibaskets new/node_modules/src/tracing.ts:27:11)
+    at PgSelectBase.execute (/Users/alex/Downloads/prezibaskets new/node_modules/src/pg-core/query-builders/select.ts:1008:17)
+    at PgSelectBase.then (/Users/alex/Downloads/prezibaskets new/node_modules/src/query-promise.ts:31:15)
+[DailySync] Upcoming: SA @ DEN (4/4/2026, 3:00:00 PM)
+[DailySync] Error updating upcoming game 401810985: Error: No database host or connection string was set, and key parameters have default values (host: localhost, user: alex, db: alex, password: null). Is an environment variable missing? Alternatively, if you intended to connect with these parameters, please set the host to 'localhost' explicitly.
+    at An.connect (file:///Users/alex/Downloads/prezibaskets%20new/node_modules/@neondatabase/serverless/index.mjs:1579:62)
+    at Cn.newClient (file:///Users/alex/Downloads/prezibaskets%20new/node_modules/@neondatabase/serverless/index.mjs:1383:3)
+    at Cn.connect (file:///Users/alex/Downloads/prezibaskets%20new/node_modules/@neondatabase/serverless/index.mjs:1378:23)
+    at Cn.query (file:///Users/alex/Downloads/prezibaskets%20new/node_modules/@neondatabase/serverless/index.mjs:1407:63)
+    at Cn.query (file:///Users/alex/Downloads/prezibaskets%20new/node_modules/@neondatabase/serverless/index.mjs:1623:14)
+    at NeonPreparedQuery.execute (/Users/alex/Downloads/prezibaskets new/node_modules/src/neon-serverless/session.ts:102:31)
+    at <anonymous> (/Users/alex/Downloads/prezibaskets new/node_modules/src/pg-core/query-builders/select.ts:1009:27)
+    at Object.startActiveSpan (/Users/alex/Downloads/prezibaskets new/node_modules/src/tracing.ts:27:11)
+    at PgSelectBase.execute (/Users/alex/Downloads/prezibaskets new/node_modules/src/pg-core/query-builders/select.ts:1008:17)
+    at PgSelectBase.then (/Users/alex/Downloads/prezibaskets new/node_modules/src/query-promise.ts:31:15)
+[DailySync] Upcoming: DET @ PHI (4/4/2026, 7:00:00 PM)
+[DailySync] Error updating upcoming game 401810986: Error: No database host or connection string was set, and key parameters have default values (host: localhost, user: alex, db: alex, password: null). Is an environment variable missing? Alternatively, if you intended to connect with these parameters, please set the host to 'localhost' explicitly.
+    at An.connect (file:///Users/alex/Downloads/prezibaskets%20new/node_modules/@neondatabase/serverless/index.mjs:1579:62)
+    at Cn.newClient (file:///Users/alex/Downloads/prezibaskets%20new/node_modules/@neondatabase/serverless/index.mjs:1383:3)
+    at Cn.connect (file:///Users/alex/Downloads/prezibaskets%20new/node_modules/@neondatabase/serverless/index.mjs:1378:23)
+    at Cn.query (file:///Users/alex/Downloads/prezibaskets%20new/node_modules/@neondatabase/serverless/index.mjs:1407:63)
+    at Cn.query (file:///Users/alex/Downloads/prezibaskets%20new/node_modules/@neondatabase/serverless/index.mjs:1623:14)
+    at NeonPreparedQuery.execute (/Users/alex/Downloads/prezibaskets new/node_modules/src/neon-serverless/session.ts:102:31)
+    at <anonymous> (/Users/alex/Downloads/prezibaskets new/node_modules/src/pg-core/query-builders/select.ts:1009:27)
+    at Object.startActiveSpan (/Users/alex/Downloads/prezibaskets new/node_modules/src/tracing.ts:27:11)
+    at PgSelectBase.execute (/Users/alex/Downloads/prezibaskets new/node_modules/src/pg-core/query-builders/select.ts:1008:17)
+    at PgSelectBase.then (/Users/alex/Downloads/prezibaskets new/node_modules/src/query-promise.ts:31:15)
+[DailySync] Step 4: Updating tomorrow's games...
+[DailySync] Fetching scoreboard from: https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard?dates=20260405
+[DailySync] Fetched 11 games from ESPN
+[DailySync] Found 11 upcoming games
+[DailySync] Upcoming: TOR @ BOS (4/5/2026, 3:30:00 PM)
+[DailySync] Error updating upcoming game 401810987: Error: No database host or connection string was set, and key parameters have default values (host: localhost, user: alex, db: alex, password: null). Is an environment variable missing? Alternatively, if you intended to connect with these parameters, please set the host to 'localhost' explicitly.
+    at An.connect (file:///Users/alex/Downloads/prezibaskets%20new/node_modules/@neondatabase/serverless/index.mjs:1579:62)
+    at Cn.newClient (file:///Users/alex/Downloads/prezibaskets%20new/node_modules/@neondatabase/serverless/index.mjs:1383:3)
+    at Cn.connect (file:///Users/alex/Downloads/prezibaskets%20new/node_modules/@neondatabase/serverless/index.mjs:1378:23)
+    at Cn.query (file:///Users/alex/Downloads/prezibaskets%20new/node_modules/@neondatabase/serverless/index.mjs:1407:63)
+    at Cn.query (file:///Users/alex/Downloads/prezibaskets%20new/node_modules/@neondatabase/serverless/index.mjs:1623:14)
+    at NeonPreparedQuery.execute (/Users/alex/Downloads/prezibaskets new/node_modules/src/neon-serverless/session.ts:102:31)
+    at <anonymous> (/Users/alex/Downloads/prezibaskets new/node_modules/src/pg-core/query-builders/select.ts:1009:27)
+    at Object.startActiveSpan (/Users/alex/Downloads/prezibaskets new/node_modules/src/tracing.ts:27:11)
+    at PgSelectBase.execute (/Users/alex/Downloads/prezibaskets new/node_modules/src/pg-core/query-builders/select.ts:1008:17)
+    at PgSelectBase.then (/Users/alex/Downloads/prezibaskets new/node_modules/src/query-promise.ts:31:15)
+[DailySync] Upcoming: WSH @ BKN (4/5/2026, 3:30:00 PM)
+[DailySync] Error updating upcoming game 401810988: Error: No database host or connection string was set, and key parameters have default values (host: localhost, user: alex, db: alex, password: null). Is an environment variable missing? Alternatively, if you intended to connect with these parameters, please set the host to 'localhost' explicitly.
+    at An.connect (file:///Users/alex/Downloads/prezibaskets%20new/node_modules/@neondatabase/serverless/index.mjs:1579:62)
+    at Cn.newClient (file:///Users/alex/Downloads/prezibaskets%20new/node_modules/@neondatabase/serverless/index.mjs:1383:3)
+    at Cn.connect (file:///Users/alex/Downloads/prezibaskets%20new/node_modules/@neondatabase/serverless/index.mjs:1378:23)
+    at Cn.query (file:///Users/alex/Downloads/prezibaskets%20new/node_modules/@neondatabase/serverless/index.mjs:1407:63)
+    at Cn.query (file:///Users/alex/Downloads/prezibaskets%20new/node_modules/@neondatabase/serverless/index.mjs:1623:14)
+    at NeonPreparedQuery.execute (/Users/alex/Downloads/prezibaskets new/node_modules/src/neon-serverless/session.ts:102:31)
+    at <anonymous> (/Users/alex/Downloads/prezibaskets new/node_modules/src/pg-core/query-builders/select.ts:1009:27)
+    at Object.startActiveSpan (/Users/alex/Downloads/prezibaskets new/node_modules/src/tracing.ts:27:11)
+    at PgSelectBase.execute (/Users/alex/Downloads/prezibaskets new/node_modules/src/pg-core/query-builders/select.ts:1008:17)
+    at PgSelectBase.then (/Users/alex/Downloads/prezibaskets new/node_modules/src/query-promise.ts:31:15)
+[DailySync] Upcoming: PHX @ CHI (4/5/2026, 3:30:00 PM)
+[DailySync] Error updating upcoming game 401810989: Error: No database host or connection string was set, and key parameters have default values (host: localhost, user: alex, db: alex, password: null). Is an environment variable missing? Alternatively, if you intended to connect with these parameters, please set the host to 'localhost' explicitly.
+    at An.connect (file:///Users/alex/Downloads/prezibaskets%20new/node_modules/@neondatabase/serverless/index.mjs:1579:62)
+    at Cn.newClient (file:///Users/alex/Downloads/prezibaskets%20new/node_modules/@neondatabase/serverless/index.mjs:1383:3)
+    at Cn.connect (file:///Users/alex/Downloads/prezibaskets%20new/node_modules/@neondatabase/serverless/index.mjs:1378:23)
+    at Cn.query (file:///Users/alex/Downloads/prezibaskets%20new/node_modules/@neondatabase/serverless/index.mjs:1407:63)
+    at Cn.query (file:///Users/alex/Downloads/prezibaskets%20new/node_modules/@neondatabase/serverless/index.mjs:1623:14)
+    at NeonPreparedQuery.execute (/Users/alex/Downloads/prezibaskets new/node_modules/src/neon-serverless/session.ts:102:31)
+    at <anonymous> (/Users/alex/Downloads/prezibaskets new/node_modules/src/pg-core/query-builders/select.ts:1009:27)
+    at Object.startActiveSpan (/Users/alex/Downloads/prezibaskets new/node_modules/src/tracing.ts:27:11)
+    at PgSelectBase.execute (/Users/alex/Downloads/prezibaskets new/node_modules/src/pg-core/query-builders/select.ts:1008:17)
+    at PgSelectBase.then (/Users/alex/Downloads/prezibaskets new/node_modules/src/query-promise.ts:31:15)
+[DailySync] Upcoming: MEM @ MIL (4/5/2026, 3:30:00 PM)
+[DailySync] Error updating upcoming game 401810990: Error: No database host or connection string was set, and key parameters have default values (host: localhost, user: alex, db: alex, password: null). Is an environment variable missing? Alternatively, if you intended to connect with these parameters, please set the host to 'localhost' explicitly.
+    at An.connect (file:///Users/alex/Downloads/prezibaskets%20new/node_modules/@neondatabase/serverless/index.mjs:1579:62)
+    at Cn.newClient (file:///Users/alex/Downloads/prezibaskets%20new/node_modules/@neondatabase/serverless/index.mjs:1383:3)
+    at Cn.connect (file:///Users/alex/Downloads/prezibaskets%20new/node_modules/@neondatabase/serverless/index.mjs:1378:23)
+    at Cn.query (file:///Users/alex/Downloads/prezibaskets%20new/node_modules/@neondatabase/serverless/index.mjs:1407:63)
+    at Cn.query (file:///Users/alex/Downloads/prezibaskets%20new/node_modules/@neondatabase/serverless/index.mjs:1623:14)
+    at NeonPreparedQuery.execute (/Users/alex/Downloads/prezibaskets new/node_modules/src/neon-serverless/session.ts:102:31)
+    at <anonymous> (/Users/alex/Downloads/prezibaskets new/node_modules/src/pg-core/query-builders/select.ts:1009:27)
+    at Object.startActiveSpan (/Users/alex/Downloads/prezibaskets new/node_modules/src/tracing.ts:27:11)
+    at PgSelectBase.execute (/Users/alex/Downloads/prezibaskets new/node_modules/src/pg-core/query-builders/select.ts:1008:17)
+    at PgSelectBase.then (/Users/alex/Downloads/prezibaskets new/node_modules/src/query-promise.ts:31:15)
+[DailySync] Upcoming: IND @ CLE (4/5/2026, 6:00:00 PM)
+[DailySync] Error updating upcoming game 401810991: Error: No database host or connection string was set, and key parameters have default values (host: localhost, user: alex, db: alex, password: null). Is an environment variable missing? Alternatively, if you intended to connect with these parameters, please set the host to 'localhost' explicitly.
+    at An.connect (file:///Users/alex/Downloads/prezibaskets%20new/node_modules/@neondatabase/serverless/index.mjs:1579:62)
+    at Cn.newClient (file:///Users/alex/Downloads/prezibaskets%20new/node_modules/@neondatabase/serverless/index.mjs:1383:3)
+    at Cn.connect (file:///Users/alex/Downloads/prezibaskets%20new/node_modules/@neondatabase/serverless/index.mjs:1378:23)
+    at Cn.query (file:///Users/alex/Downloads/prezibaskets%20new/node_modules/@neondatabase/serverless/index.mjs:1407:63)
+    at Cn.query (file:///Users/alex/Downloads/prezibaskets%20new/node_modules/@neondatabase/serverless/index.mjs:1623:14)
+    at NeonPreparedQuery.execute (/Users/alex/Downloads/prezibaskets new/node_modules/src/neon-serverless/session.ts:102:31)
+    at <anonymous> (/Users/alex/Downloads/prezibaskets new/node_modules/src/pg-core/query-builders/select.ts:1009:27)
+    at Object.startActiveSpan (/Users/alex/Downloads/prezibaskets new/node_modules/src/tracing.ts:27:11)
+    at PgSelectBase.execute (/Users/alex/Downloads/prezibaskets new/node_modules/src/pg-core/query-builders/select.ts:1008:17)
+    at PgSelectBase.then (/Users/alex/Downloads/prezibaskets new/node_modules/src/query-promise.ts:31:15)
+[DailySync] Upcoming: CHA @ MIN (4/5/2026, 7:00:00 PM)
+[DailySync] Error updating upcoming game 401810992: Error: No database host or connection string was set, and key parameters have default values (host: localhost, user: alex, db: alex, password: null). Is an environment variable missing? Alternatively, if you intended to connect with these parameters, please set the host to 'localhost' explicitly.
+    at An.connect (file:///Users/alex/Downloads/prezibaskets%20new/node_modules/@neondatabase/serverless/index.mjs:1579:62)
+    at Cn.newClient (file:///Users/alex/Downloads/prezibaskets%20new/node_modules/@neondatabase/serverless/index.mjs:1383:3)
+    at Cn.connect (file:///Users/alex/Downloads/prezibaskets%20new/node_modules/@neondatabase/serverless/index.mjs:1378:23)
+    at Cn.query (file:///Users/alex/Downloads/prezibaskets%20new/node_modules/@neondatabase/serverless/index.mjs:1407:63)
+    at Cn.query (file:///Users/alex/Downloads/prezibaskets%20new/node_modules/@neondatabase/serverless/index.mjs:1623:14)
+    at NeonPreparedQuery.execute (/Users/alex/Downloads/prezibaskets new/node_modules/src/neon-serverless/session.ts:102:31)
+    at <anonymous> (/Users/alex/Downloads/prezibaskets new/node_modules/src/pg-core/query-builders/select.ts:1009:27)
+    at Object.startActiveSpan (/Users/alex/Downloads/prezibaskets new/node_modules/src/tracing.ts:27:11)
+    at PgSelectBase.execute (/Users/alex/Downloads/prezibaskets new/node_modules/src/pg-core/query-builders/select.ts:1008:17)
+    at PgSelectBase.then (/Users/alex/Downloads/prezibaskets new/node_modules/src/query-promise.ts:31:15)
+[DailySync] Upcoming: ORL @ NO (4/5/2026, 7:00:00 PM)

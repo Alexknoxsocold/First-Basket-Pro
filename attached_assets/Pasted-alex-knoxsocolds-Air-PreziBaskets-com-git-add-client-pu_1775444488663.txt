@@ -1,0 +1,33 @@
+alex@knoxsocolds-Air PreziBaskets.com % git add client/public/greenlover.jpg
+alex@knoxsocolds-Air PreziBaskets.com % git commit -m "Add green character as greenlover"
+[main b051679] Add green character as greenlover
+ 1 file changed, 0 insertions(+), 0 deletions(-)
+ create mode 100644 client/public/greenlover.jpg
+alex@knoxsocolds-Air PreziBaskets.com % git push origin main
+Enumerating objects: 7, done.
+Counting objects: 100% (7/7), done.
+Delta compression using up to 10 threads
+Compressing objects: 100% (4/4), done.
+Writing objects: 100% (4/4), 446 bytes | 446.00 KiB/s, done.
+Total 4 (delta 1), reused 0 (delta 0), pack-reused 0 (from 0)
+remote: Resolving deltas: 100% (1/1), completed with 1 local object.
+To https://github.com/Alexknoxsocold/First-Basket-Pro.git
+   5a5dbc0..b051679  main -> main
+alex@knoxsocolds-Air PreziBaskets.com % psql "postgresql://neondb_owner:npg_24qKpaAvMkrg@ep-dry-dew-amwqszbi-pooler.c-5.us-east-1.aws.neon.tech/neondb?sslmode=require" -c "INSERT INTO fb_tracking (player_name, team, season, fb_scored, games_tracked) VALUES ('Jalen Brunson','NYK','2024-2025',14,71),('Karl-Anthony Towns','NYK','2024-2025',9,72),('OG Anunoby','NYK','2024-2025',7,65),('Mikal Bridges','NYK','2024-2025',5,78),('Josh Hart','NYK','2024-2025',3,49),('CJ McCollum','ATL','2024-2025',5,22),('Nickeil Alexander-Walker','ATL','2024-2025',7,66),('Jalen Johnson','ATL','2024-2025',3,67),('Onyeka Okongwu','ATL','2024-2025',8,58),('Dyson Daniels','ATL','2024-2025',5,71);"
+INSERT 0 10
+alex@knoxsocolds-Air PreziBaskets.com % git add .
+git commit -m "Fix starters and ET date logic"
+git push
+[main 0c3ed93] Fix starters and ET date logic
+ 4 files changed, 59 insertions(+), 13 deletions(-)
+ delete mode 100644 client/public/favicon.png
+Enumerating objects: 17, done.
+Counting objects: 100% (17/17), done.
+Delta compression using up to 10 threads
+Compressing objects: 100% (8/8), done.
+Writing objects: 100% (9/9), 1.97 KiB | 1.97 MiB/s, done.
+Total 9 (delta 6), reused 0 (delta 0), pack-reused 0 (from 0)
+remote: Resolving deltas: 100% (6/6), completed with 6 local objects.
+To https://github.com/Alexknoxsocold/First-Basket-Pro.git
+   b051679..0c3ed93  main -> main
+alex@knoxsocolds-Air PreziBaskets.com % 

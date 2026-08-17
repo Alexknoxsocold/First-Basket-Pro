@@ -1,0 +1,40 @@
+
+
+psql (18.3 (Postgres.app))
+Type "help" for help.
+
+firstbasket=# psql (18.3 (Postgres.app))
+firstbasket-# Type "help" for help.
+firstbasket-# 
+firstbasket-# alex=# INSERT INTO fb_tracking (player_name, team, season, fb_scored, games_tracked) VALUES
+firstbasket-# alex-#   ('Aaron Gordon', 'DEN', '2024-2025', 3, 3),
+firstbasket-# alex-#   ('Christian Braun', 'DEN', '2024-2025', 0, 0),
+firstbasket-# alex-#   ('Jamal Murray', 'DEN', '2024-2025', 15, 15),
+firstbasket-# alex-#   ('Nikola Jokic', 'DEN', '2024-2025', 9, 9),
+firstbasket-# alex-#   ('Ausar Thompson', 'DET', '2024-2025', 4, 4),
+firstbasket-# alex-#   ('Duncan Robinson', 'DET', '2024-2025', 6, 6),
+firstbasket-# alex-#   ('Jalen Duren', 'DET', '2024-2025', 10, 10),
+firstbasket-# alex-#   ('Tobias Harris', 'DET', '2024-2025', 8, 8),
+firstbasket-# alex-#   ('Andrew Wiggins', 'MIA', '2024-2025', 9, 9),
+firstbasket-# alex-#   ('Bam Adebayo', 'MIA', '2024-2025', 13, 13),
+firstbasket-# alex-#   ('Pelle Larsson', 'MIA', '2024-2025', 3, 3),
+firstbasket-# alex-#   ('Tyler Herro', 'MIA', '2024-2025', 1, 1),
+firstbasket-# alex-#   ('Kelly Oubre Jr.', 'PHI', '2024-2025', 8, 8),
+firstbasket-# alex-#   ('Tyrese Maxey', 'PHI', '2024-2025', 9, 9),
+firstbasket-# alex-#   ('VJ Edgecombe', 'PHI', '2024-2025', 3, 3),
+firstbasket-# alex-#   ('De''Aaron Fox', 'SA', '2024-2025', 9, 9),
+firstbasket-# alex-#   ('Devin Vassell', 'SA', '2024-2025', 10, 10),
+firstbasket-# alex-#   ('Stephon Castle', 'SA', '2024-2025', 6, 6),
+firstbasket-# alex-#   ('Victor Wembanyama', 'SA', '2024-2025', 11, 11),
+firstbasket-# alex-#   ('Bilal Coulibaly', 'WSH', '2024-2025', 5, 5),
+firstbasket-# alex-#   ('Bub Carrington', 'WSH', '2024-2025', 4, 4),
+firstbasket-# alex-#   ('Tre Johnson', 'WSH', '2024-2025', 0, 0);
+ERROR:  syntax error at or near "psql"
+LINE 1: psql (18.3 (Postgres.app))
+        ^
+firstbasket=# ERROR:  relation "fb_tracking" does not exist
+firstbasket-# LINE 1: INSERT INTO fb_tracking (player_name, team, season, fb_score...
+firstbasket(#                     ^
+firstbasket(# alex=# 
+firstbasket(# 
+firstbasket(# 

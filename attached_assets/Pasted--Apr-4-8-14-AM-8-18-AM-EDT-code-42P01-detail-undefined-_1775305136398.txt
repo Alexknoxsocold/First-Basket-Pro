@@ -1,0 +1,207 @@
+
+
+Apr 4, 8:14 AM - 8:18 AM
+EDT
+
+
+
+  code: '42P01',
+  detail: undefined,
+  hint: undefined,
+  position: '330',
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'parse_relation.c',
+  line: '1449',
+  routine: 'parserOpenTable'
+}
+[DailySync] Upcoming: ORL @ NO (4/5/2026, 11:00:00 PM)
+[DailySync] Upcoming: UTAH @ OKC (4/5/2026, 11:00:00 PM)
+[DailySync] Error updating upcoming game 401810993: error: relation "games" does not exist
+    at file:///opt/render/project/src/node_modules/@neondatabase/serverless/index.mjs:1345:74
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async NeonPreparedQuery.execute (file:///opt/render/project/src/node_modules/drizzle-orm/neon-serverless/session.js:76:20)
+    at async MemStorage.getGames (file:///opt/render/project/src/dist/index.js:755:25)
+    at async DailySyncService.updateUpcomingGame (file:///opt/render/project/src/dist/index.js:1320:22)
+    at async DailySyncService.updateUpcomingGames (file:///opt/render/project/src/dist/index.js:1300:9)
+    at async DailySyncService.runDailySync (file:///opt/render/project/src/dist/index.js:1160:7)
+    at async Server.<anonymous> (file:///opt/render/project/src/dist/index.js:2020:7) {
+  length: 105,
+  severity: 'ERROR',
+  code: '42P01',
+  detail: undefined,
+  hint: undefined,
+  position: '330',
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'parse_relation.c',
+  line: '1449',
+  routine: 'parserOpenTable'
+}
+[DailySync] Error updating upcoming game 401810994: error: relation "games" does not exist
+    at file:///opt/render/project/src/node_modules/@neondatabase/serverless/index.mjs:1345:74
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async NeonPreparedQuery.execute (file:///opt/render/project/src/node_modules/drizzle-orm/neon-serverless/session.js:76:20)
+    at async MemStorage.getGames (file:///opt/render/project/src/dist/index.js:755:25)
+[DailySync] Upcoming: LAL @ DAL (4/5/2026, 11:30:00 PM)
+    at async DailySyncService.updateUpcomingGame (file:///opt/render/project/src/dist/index.js:1320:22)
+    at async DailySyncService.updateUpcomingGames (file:///opt/render/project/src/dist/index.js:1300:9)
+    at async DailySyncService.runDailySync (file:///opt/render/project/src/dist/index.js:1160:7)
+    at async Server.<anonymous> (file:///opt/render/project/src/dist/index.js:2020:7) {
+  length: 105,
+  severity: 'ERROR',
+  code: '42P01',
+  detail: undefined,
+  hint: undefined,
+  position: '330',
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'parse_relation.c',
+  line: '1449',
+  routine: 'parserOpenTable'
+}
+[DailySync] Error updating upcoming game 401810995: error: relation "games" does not exist
+    at file:///opt/render/project/src/node_modules/@neondatabase/serverless/index.mjs:1345:74
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async NeonPreparedQuery.execute (file:///opt/render/project/src/node_modules/drizzle-orm/neon-serverless/session.js:76:20)
+    at async MemStorage.getGames (file:///opt/render/project/src/dist/index.js:755:25)
+    at async DailySyncService.updateUpcomingGame (file:///opt/render/project/src/dist/index.js:1320:22)
+    at async DailySyncService.updateUpcomingGames (file:///opt/render/project/src/dist/index.js:1300:9)
+    at async DailySyncService.runDailySync (file:///opt/render/project/src/dist/index.js:1160:7)
+    at async Server.<anonymous> (file:///opt/render/project/src/dist/index.js:2020:7) {
+  length: 105,
+  severity: 'ERROR',
+  code: '42P01',
+  detail: undefined,
+  hint: undefined,
+  position: '330',
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'parse_relation.c',
+  line: '1449',
+  routine: 'parserOpenTable'
+}
+[DailySync] Upcoming: LAC @ SAC (4/6/2026, 1:00:00 AM)
+[DailySync] Error updating upcoming game 401810996: error: relation "games" does not exist
+    at file:///opt/render/project/src/node_modules/@neondatabase/serverless/index.mjs:1345:74
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async NeonPreparedQuery.execute (file:///opt/render/project/src/node_modules/drizzle-orm/neon-serverless/session.js:76:20)
+    at async MemStorage.getGames (file:///opt/render/project/src/dist/index.js:755:25)
+    at async DailySyncService.updateUpcomingGame (file:///opt/render/project/src/dist/index.js:1320:22)
+    at async DailySyncService.updateUpcomingGames (file:///opt/render/project/src/dist/index.js:1300:9)
+    at async DailySyncService.runDailySync (file:///opt/render/project/src/dist/index.js:1160:7)
+    at async Server.<anonymous> (file:///opt/render/project/src/dist/index.js:2020:7) {
+  length: 105,
+  severity: 'ERROR',
+  code: '42P01',
+  detail: undefined,
+  hint: undefined,
+  position: '330',
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'parse_relation.c',
+[DailySync] Upcoming: HOU @ GS (4/6/2026, 2:00:00 AM)
+  line: '1449',
+  routine: 'parserOpenTable'
+}
+[DailySync] Error updating upcoming game 401810997: error: relation "games" does not exist
+    at file:///opt/render/project/src/node_modules/@neondatabase/serverless/index.mjs:1345:74
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async NeonPreparedQuery.execute (file:///opt/render/project/src/node_modules/drizzle-orm/neon-serverless/session.js:76:20)
+    at async MemStorage.getGames (file:///opt/render/project/src/dist/index.js:755:25)
+    at async DailySyncService.updateUpcomingGame (file:///opt/render/project/src/dist/index.js:1320:22)
+    at async DailySyncService.updateUpcomingGames (file:///opt/render/project/src/dist/index.js:1300:9)
+    at async DailySyncService.runDailySync (file:///opt/render/project/src/dist/index.js:1160:7)
+    at async Server.<anonymous> (file:///opt/render/project/src/dist/index.js:2020:7) {
+  length: 105,
+  severity: 'ERROR',
+  code: '42P01',
+  detail: undefined,
+  hint: undefined,
+  position: '330',
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'parse_relation.c',
+  line: '1449',
+  routine: 'parserOpenTable'
+}
+[DailySync] ⚠ Daily sync completed with warnings (5/6 steps succeeded)
+[DailySync] Results: {
+  cleanupOldGames: false,
+  injuries: true,
+  lineups: true,
+  todayGames: true,
+  completedGames: true,
+  upcomingGames: true
+}
+12:17:06 PM [express] [Startup] Initial sync complete
+[PopulatePlayerStats] Starting to populate player stats for today's starters...
+[PopulatePlayerStats] Error: error: relation "games" does not exist
+    at file:///opt/render/project/src/node_modules/@neondatabase/serverless/index.mjs:1345:74
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async NeonPreparedQuery.execute (file:///opt/render/project/src/node_modules/drizzle-orm/neon-serverless/session.js:76:20)
+    at async MemStorage.getGames (file:///opt/render/project/src/dist/index.js:755:25)
+    at async populateTodayStarters (file:///opt/render/project/src/dist/index.js:365:20)
+    at async Server.<anonymous> (file:///opt/render/project/src/dist/index.js:2027:7) {
+  length: 105,
+  severity: 'ERROR',
+  code: '42P01',
+  detail: undefined,
+  hint: undefined,
+  position: '330',
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'parse_relation.c',
+  line: '1449',
+  routine: 'parserOpenTable'
+}
+12:17:07 PM [error: relation "games" does not exist] [Startup] Failed to populate player stats:
+==> Your service is live 🎉
+==> 
+==> ///////////////////////////////////////////////////////////
+==> 
+==> Available at your primary URL https://first-basket-pro.onrender.com
+==> 
+==> ///////////////////////////////////////////////////////////

@@ -1,0 +1,47 @@
+alex@knoxsocolds-Air PreziBaskets.com % npm run dev
+
+> rest-express@1.0.0 dev
+> NODE_ENV=development tsx server/index.ts
+
+[InjurySync] Starting automatic injury sync (every 1 hour)...
+[InjurySync] Starting injury sync from ESPN...
+[Cron] Daily sync scheduled for 12:30 AM ET every day
+[Cron] Lineup sync scheduled every 30 minutes (9 AM - 11 PM ET)
+3:08:46 AM [express] serving on port 5000
+3:08:46 AM [express] [Startup] Running initial data sync...
+[DailySync] Starting daily sync process...
+[DailySync] Step 0: Cleaning up yesterday's games...
+[DailySync] No old games to delete
+[DailySync] Step 1: Syncing injury data...
+[InjurySync] Starting injury sync from ESPN...
+[InjurySync] Sync complete. Updated 0 players, cleared 0 recovered players.
+[InjurySync] Total injuries from ESPN: 123
+[InjurySync] Sync complete. Updated 0 players, cleared 0 recovered players.
+[InjurySync] Total injuries from ESPN: 123
+[DailySync] Step 1.5: Syncing starting lineups...
+[LineupSync] APISPORTS_KEY not configured. Skipping lineup sync.
+[LineupSync] To enable automatic lineup updates, add your API-Sports.io key to Replit Secrets.
+[DailySync] Step 2: Fetching today's ESPN scoreboard...
+[DailySync] Fetching scoreboard from: https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard?dates=20260406
+Browserslist: browsers data (caniuse-lite) is 6 months old. Please run:
+  npx update-browserslist-db@latest
+  Why you should do it regularly: https://github.com/browserslist/update-db#readme
+3:08:46 AM [vite] Internal server error: Failed to resolve import "@/components/SplashScreen" from "client/src/App.tsx". Does the file exist?
+  Plugin: vite:import-analysis
+  File: /Users/alex/Downloads/PreziBaskets.com/client/src/App.tsx:11:25
+  25 |  import Header from "@/components/Header";
+  26 |  import Navigation from "@/components/Navigation";
+  27 |  import SplashScreen from "@/components/SplashScreen";
+     |                            ^
+  28 |  import AllGames from "@/pages/AllGames";
+  29 |  import OpeningTips from "@/pages/OpeningTips";
+      at TransformPluginContext._formatError (/Users/alex/Downloads/PreziBaskets.com/node_modules/vite/dist/node/chunks/dep-D_zLpgQd.js:49258:41)
+      at TransformPluginContext.error (/Users/alex/Downloads/PreziBaskets.com/node_modules/vite/dist/node/chunks/dep-D_zLpgQd.js:49253:16)
+      at normalizeUrl (/Users/alex/Downloads/PreziBaskets.com/node_modules/vite/dist/node/chunks/dep-D_zLpgQd.js:64306:23)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async <anonymous> (/Users/alex/Downloads/PreziBaskets.com/node_modules/vite/dist/node/chunks/dep-D_zLpgQd.js:64438:39)
+      at async Promise.all (index 12)
+      at async TransformPluginContext.transform (/Users/alex/Downloads/PreziBaskets.com/node_modules/vite/dist/node/chunks/dep-D_zLpgQd.js:64365:7)
+      at async PluginContainer.transform (/Users/alex/Downloads/PreziBaskets.com/node_modules/vite/dist/node/chunks/dep-D_zLpgQd.js:49099:18)
+      at async loadAndTransform (/Users/alex/Downloads/PreziBaskets.com/node_modules/vite/dist/node/chunks/dep-D_zLpgQd.js:51977:27)
+alex@knoxsocolds-Air PreziBaskets.com % 
