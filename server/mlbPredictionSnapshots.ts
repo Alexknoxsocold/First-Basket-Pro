@@ -12,6 +12,8 @@ export type MlbPredictionSnapshot = {
   probability: number;
   confidence?: string | null;
   modelVersion: string;
+  /** Authoritative scheduled/actual first-pitch timestamp from the source feed. */
+  gameStartAt?: Date | string | null;
   lockedAt?: Date | null;
   outcome?: "NRFI" | "YRFI" | null;
   firstInningScore?: string | null;
@@ -29,7 +31,7 @@ async function ensure(): Promise<void> {
     CREATE TABLE IF NOT EXISTS mlb_prediction_snapshots (
       id varchar(160) PRIMARY KEY, prediction_date text NOT NULL, game_id text NOT NULL, matchup text NOT NULL,
       recommendation text NOT NULL, probability real NOT NULL, confidence text, model_version text NOT NULL,
-      locked_at timestamp, outcome text, first_inning_score text, market_available boolean NOT NULL DEFAULT false,
+      game_start_at timestamp, locked_at timestamp, outcome text, first_inning_score text, market_available boolean NOT NULL DEFAULT false,
       market_side text, sportsbook text, market_name text, market_odds integer, market_captured_at timestamp,
       market_implied_probability real, market_no_vig_probability real, market_edge real, market_expected_value real,
       value_play boolean NOT NULL DEFAULT false, created_at timestamp NOT NULL DEFAULT now(), graded_at timestamp,
@@ -38,6 +40,7 @@ async function ensure(): Promise<void> {
       CHECK (recommendation IN ('NRFI','YRFI','NO_PLAY')),
       CHECK (outcome IS NULL OR outcome IN ('NRFI','YRFI'))
     );
+    ALTER TABLE mlb_prediction_snapshots ADD COLUMN IF NOT EXISTS game_start_at timestamp;
     ALTER TABLE mlb_prediction_snapshots ADD COLUMN IF NOT EXISTS market_available boolean NOT NULL DEFAULT false;
     ALTER TABLE mlb_prediction_snapshots ADD COLUMN IF NOT EXISTS market_side text;
     ALTER TABLE mlb_prediction_snapshots ADD COLUMN IF NOT EXISTS sportsbook text;
@@ -52,9 +55,6 @@ async function ensure(): Promise<void> {
     ALTER TABLE mlb_prediction_snapshots ADD COLUMN IF NOT EXISTS created_at timestamp NOT NULL DEFAULT now();
     ALTER TABLE mlb_prediction_snapshots ADD COLUMN IF NOT EXISTS graded_at timestamp;
 
-    -- Defense in depth: application upserts already preserve immutable fields,
-    -- but the database must also reject accidental post-lock mutation from any
-    -- other writer, admin script, migration, or future code path.
     CREATE OR REPLACE FUNCTION protect_mlb_prediction_snapshot_lock()
     RETURNS trigger AS $$
     BEGIN
@@ -66,6 +66,7 @@ async function ensure(): Promise<void> {
           OR NEW.probability IS DISTINCT FROM OLD.probability
           OR NEW.confidence IS DISTINCT FROM OLD.confidence
           OR NEW.model_version IS DISTINCT FROM OLD.model_version
+          OR NEW.game_start_at IS DISTINCT FROM OLD.game_start_at
           OR NEW.locked_at IS DISTINCT FROM OLD.locked_at
           OR NEW.market_available IS DISTINCT FROM OLD.market_available
           OR NEW.market_side IS DISTINCT FROM OLD.market_side
@@ -86,6 +87,9 @@ async function ensure(): Promise<void> {
         IF NEW.locked_at IS NOT NULL AND NEW.locked_at > now() + interval '2 minutes' THEN
           RAISE EXCEPTION 'MLB prediction lock timestamp is too far in the future';
         END IF;
+        IF NEW.game_start_at IS NOT NULL AND NEW.locked_at IS NOT NULL AND NEW.locked_at > NEW.game_start_at THEN
+          RAISE EXCEPTION 'MLB prediction lock cannot occur after game start';
+        END IF;
         IF NEW.locked_at IS NOT NULL
           AND NEW.market_captured_at IS NOT NULL
           AND NEW.market_captured_at > NEW.locked_at + interval '2 minutes'
@@ -105,6 +109,7 @@ async function ensure(): Promise<void> {
     CREATE INDEX IF NOT EXISTS mlb_prediction_snapshots_date_idx ON mlb_prediction_snapshots(prediction_date DESC);
     CREATE INDEX IF NOT EXISTS mlb_prediction_snapshots_value_idx ON mlb_prediction_snapshots(value_play, prediction_date DESC);
     CREATE INDEX IF NOT EXISTS mlb_prediction_snapshots_locked_idx ON mlb_prediction_snapshots(locked_at DESC);
+    CREATE INDEX IF NOT EXISTS mlb_prediction_snapshots_start_idx ON mlb_prediction_snapshots(game_start_at DESC);
   `).then(() => undefined).catch(error => { ready = null; throw error; });
   return ready;
 }
@@ -114,30 +119,27 @@ export async function snapshotPrediction(data: MlbPredictionSnapshot): Promise<v
   const id = `${data.date}:${data.gameId}:${data.modelVersion}`;
   const market = data.marketValue;
   const lockedAt = data.lockedAt ?? null;
+  const gameStartAt = data.gameStartAt ? new Date(data.gameStartAt) : null;
 
-  if (lockedAt && lockedAt.getTime() > Date.now() + 2 * 60 * 1000) {
-    throw new Error("Prediction lock timestamp cannot be materially in the future");
-  }
+  if (gameStartAt && !Number.isFinite(gameStartAt.getTime())) throw new Error("Invalid MLB game start timestamp");
+  if (lockedAt && lockedAt.getTime() > Date.now() + 2 * 60 * 1000) throw new Error("Prediction lock timestamp cannot be materially in the future");
+  if (gameStartAt && lockedAt && lockedAt.getTime() > gameStartAt.getTime()) throw new Error("Prediction lock cannot occur after game start");
   if (lockedAt && market?.capturedAt) {
     const capturedAt = new Date(market.capturedAt);
-    if (Number.isFinite(capturedAt.getTime()) && capturedAt.getTime() > lockedAt.getTime() + 2 * 60 * 1000) {
-      throw new Error("Market quote was captured after prediction lock");
-    }
+    if (Number.isFinite(capturedAt.getTime()) && capturedAt.getTime() > lockedAt.getTime() + 2 * 60 * 1000) throw new Error("Market quote was captured after prediction lock");
   }
 
   await connection.query(`
     INSERT INTO mlb_prediction_snapshots
-      (id,prediction_date,game_id,matchup,recommendation,probability,confidence,model_version,locked_at,outcome,first_inning_score,
+      (id,prediction_date,game_id,matchup,recommendation,probability,confidence,model_version,game_start_at,locked_at,outcome,first_inning_score,
        market_available,market_side,sportsbook,market_name,market_odds,market_captured_at,market_implied_probability,market_no_vig_probability,
        market_edge,market_expected_value,value_play,created_at,graded_at)
-    VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,now(),CASE WHEN $10 IS NULL THEN NULL ELSE now() END)
+    VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,now(),CASE WHEN $11 IS NULL THEN NULL ELSE now() END)
     ON CONFLICT(prediction_date,game_id,model_version) DO UPDATE SET
-      -- Pregame prediction/model/market fields are immutable. The only fields
-      -- that may change after creation are the eventual game result fields.
       outcome=COALESCE(EXCLUDED.outcome, mlb_prediction_snapshots.outcome),
       first_inning_score=COALESCE(EXCLUDED.first_inning_score, mlb_prediction_snapshots.first_inning_score),
       graded_at=COALESCE(EXCLUDED.graded_at, mlb_prediction_snapshots.graded_at)
-  `, [id,data.date,data.gameId,data.matchup,data.recommendation,data.probability,data.confidence ?? null,data.modelVersion,lockedAt,data.outcome ?? null,data.firstInningScore ?? null,
+  `, [id,data.date,data.gameId,data.matchup,data.recommendation,data.probability,data.confidence ?? null,data.modelVersion,gameStartAt,lockedAt,data.outcome ?? null,data.firstInningScore ?? null,
       market?.available ?? false,market?.side ?? null,market?.sportsbook ?? null,market?.market ?? null,market?.americanOdds ?? null,
       market?.capturedAt ? new Date(market.capturedAt) : null,market?.impliedProbability ?? null,market?.noVigProbability ?? null,market?.edge ?? null,market?.expectedValue ?? null,market?.valuePlay ?? false]);
 }
@@ -145,7 +147,7 @@ export async function snapshotPrediction(data: MlbPredictionSnapshot): Promise<v
 export async function getPredictionHistory(days = 30): Promise<MlbPredictionSnapshot[]> {
   const connection = db(); if (!connection) return []; await ensure();
   const result = await connection.query(`
-    SELECT prediction_date,game_id,matchup,recommendation,probability,confidence,model_version,locked_at,outcome,first_inning_score,
+    SELECT prediction_date,game_id,matchup,recommendation,probability,confidence,model_version,game_start_at,locked_at,outcome,first_inning_score,
            market_available,market_side,sportsbook,market_name,market_odds,market_captured_at,market_implied_probability,market_no_vig_probability,
            market_edge,market_expected_value,value_play
     FROM mlb_prediction_snapshots WHERE prediction_date >= to_char(current_date - ($1::int - 1),'YYYY-MM-DD')
@@ -153,8 +155,8 @@ export async function getPredictionHistory(days = 30): Promise<MlbPredictionSnap
   `, [Math.min(Math.max(Math.round(days),1),365)]);
   return result.rows.map(row => ({
     date: row.prediction_date, gameId: row.game_id, matchup: row.matchup, recommendation: row.recommendation,
-    probability: Number(row.probability), confidence: row.confidence, modelVersion: row.model_version, lockedAt: row.locked_at,
-    outcome: row.outcome, firstInningScore: row.first_inning_score,
+    probability: Number(row.probability), confidence: row.confidence, modelVersion: row.model_version,
+    gameStartAt: row.game_start_at, lockedAt: row.locked_at, outcome: row.outcome, firstInningScore: row.first_inning_score,
     marketValue: row.market_available ? {
       available: true, side: row.market_side, sportsbook: row.sportsbook, market: row.market_name, americanOdds: row.market_odds,
       capturedAt: row.market_captured_at, ageSeconds: null, impliedProbability: row.market_implied_probability,
