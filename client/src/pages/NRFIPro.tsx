@@ -97,7 +97,9 @@ function GameCard({ game }: { game: NrfiGame }) {
     !factor.startsWith("Missing ESPN pitcher metrics filled from MLB Stats API") &&
     !factor.startsWith("Recent sample:") &&
     !factor.startsWith("Recent league NRFI baseline:") &&
-    !factor.startsWith("Model v3:")
+    !factor.startsWith("Model v3:") &&
+    !factor.startsWith("The model sees an edge") &&
+    !factor.startsWith("No meaningful model edge")
   );
   return (
     <article className={`rounded-md border overflow-hidden ${cardTone} ${promoted ? "ring-1 ring-primary/20" : ""}`} data-testid={`card-nrfi-${game.id}`}>
