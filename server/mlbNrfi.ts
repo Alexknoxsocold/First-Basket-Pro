@@ -104,9 +104,11 @@ export type NrfiWindowResponse = {
 
 const ESPN_BASE = "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb";
 const CACHE_TTL = 20 * 60 * 1000; // 20 minutes
+const STALE_TTL = 2 * 60 * 60 * 1000; // serve up to 2 hours stale while refreshing
 let cachedResponse: NrfiResponse | null = null;
 let cachedDate: string | null = null;
 let cachedAt = 0;
+const refreshInFlight = new Map<string, Promise<NrfiResponse>>();
 const teamFormCache = new Map<string, { value: TeamForm; expiresAt: number }>();
 
 async function fetchJson<T>(url: string, timeoutMs = 8000): Promise<T> {
@@ -185,7 +187,8 @@ function clamp(value: number, min: number, max: number): number {
 }
 
 async function fetchTeamForm(teamId: string, beforeDate: string): Promise<TeamForm> {
-  const cached = teamFormCache.get(teamId);
+  const cacheKey = `${teamId}:${beforeDate}`;
+  const cached = teamFormCache.get(cacheKey);
   if (cached && cached.expiresAt > Date.now()) return cached.value;
 
   try {
@@ -199,9 +202,8 @@ async function fetchTeamForm(teamId: string, beforeDate: string): Promise<TeamFo
         const state = event.competitions?.[0]?.status?.type?.state;
         return state === "post" || event.competitions?.[0]?.status?.type?.completed === true;
       })
-      .slice(-5); // only last 5 games (was 8)
+      .slice(-5);
 
-    // Fetch first-inning data with lower concurrency
     const firstInningResults = await withConcurrency(
       completed,
       async (event) => {
@@ -231,7 +233,7 @@ async function fetchTeamForm(teamId: string, beforeDate: string): Promise<TeamFo
           return null;
         }
       },
-      4, // lower concurrency
+      4,
     );
 
     let games = 0;
@@ -257,17 +259,16 @@ async function fetchTeamForm(teamId: string, beforeDate: string): Promise<TeamFo
           }
         : { games: 0, noRunPct: 0.55, firstInningRuns: 0.48, firstInningAllowed: 0.48 };
 
-    teamFormCache.set(teamId, { value, expiresAt: Date.now() + CACHE_TTL });
+    teamFormCache.set(cacheKey, { value, expiresAt: Date.now() + CACHE_TTL });
     return value;
   } catch {
-    // Graceful fallback if ESPN fails for this team
     const fallback: TeamForm = {
       games: 0,
       noRunPct: 0.55,
       firstInningRuns: 0.48,
       firstInningAllowed: 0.48,
     };
-    teamFormCache.set(teamId, { value: fallback, expiresAt: Date.now() + 5 * 60 * 1000 });
+    teamFormCache.set(cacheKey, { value: fallback, expiresAt: Date.now() + 5 * 60 * 1000 });
     return fallback;
   }
 }
@@ -345,12 +346,7 @@ async function withConcurrency<T, R>(
   return results;
 }
 
-export async function fetchNrfiData(date = getTodayET()): Promise<NrfiResponse> {
-  // Serve from cache if still fresh
-  if (cachedResponse && cachedDate === date && Date.now() - cachedAt < CACHE_TTL) {
-    return cachedResponse;
-  }
-
+async function buildNrfiData(date: string): Promise<NrfiResponse> {
   const scoreboard = await fetchJson<{ events?: EspnEvent[] }>(
     `${ESPN_BASE}/scoreboard?dates=${date.replace(/-/g, "")}`,
   );
@@ -385,10 +381,9 @@ export async function fetchNrfiData(date = getTodayET()): Promise<NrfiResponse> 
     const home = competition.competitors!.find((c) => c.homeAway === "home")!;
     const awayId = away.team?.id ?? "";
     const homeId = home.team?.id ?? "";
-    const awayForm =
-      formMap.get(awayId) ?? { games: 0, noRunPct: 0.55, firstInningRuns: 0.48, firstInningAllowed: 0.48 };
-    const homeForm =
-      formMap.get(homeId) ?? { games: 0, noRunPct: 0.55, firstInningRuns: 0.48, firstInningAllowed: 0.48 };
+    const fallbackForm = { games: 0, noRunPct: 0.55, firstInningRuns: 0.48, firstInningAllowed: 0.48 };
+    const awayForm = formMap.get(awayId) ?? fallbackForm;
+    const homeForm = formMap.get(homeId) ?? fallbackForm;
     const awayPitcher = getPitcher(away);
     const homePitcher = getPitcher(home);
     const status = competition.status?.type?.detail ?? "Scheduled";
@@ -430,11 +425,9 @@ export async function fetchNrfiData(date = getTodayET()): Promise<NrfiResponse> 
     games.length > 0
       ? Math.round(games.reduce((sum, g) => sum + g.nrfiProbability, 0) / games.length)
       : null;
+  const topPick = [...games].sort((a, b) => b.nrfiProbability - a.nrfiProbability)[0] ?? null;
 
-  const topPick =
-    [...games].sort((a, b) => b.nrfiProbability - a.nrfiProbability)[0] ?? null;
-
-  const response: NrfiResponse = {
+  return {
     date,
     games,
     averageNrfiProbability,
@@ -444,38 +437,66 @@ export async function fetchNrfiData(date = getTodayET()): Promise<NrfiResponse> 
     methodology:
       "First-inning run expectancy model using recent team form + probable starter ERA adjustments",
   };
+}
 
-  // Update cache
-  cachedResponse = response;
-  cachedDate = date;
-  cachedAt = Date.now();
+export async function fetchNrfiData(date = getTodayET()): Promise<NrfiResponse> {
+  const age = Date.now() - cachedAt;
 
-  return response;
+  // Fast path: fresh cache.
+  if (cachedResponse && cachedDate === date && age < CACHE_TTL) {
+    return cachedResponse;
+  }
+
+  // Stale-while-revalidate: never make a user wait for a refresh if we already
+  // have usable data for this date. Only one refresh is allowed at a time.
+  if (cachedResponse && cachedDate === date && age < STALE_TTL) {
+    if (!refreshInFlight.has(date)) {
+      const refresh = buildNrfiData(date)
+        .then((response) => {
+          cachedResponse = response;
+          cachedDate = date;
+          cachedAt = Date.now();
+          return response;
+        })
+        .finally(() => refreshInFlight.delete(date));
+      refreshInFlight.set(date, refresh);
+    }
+    return cachedResponse;
+  }
+
+  const existingRefresh = refreshInFlight.get(date);
+  if (existingRefresh) return existingRefresh;
+
+  const refresh = buildNrfiData(date)
+    .then((response) => {
+      cachedResponse = response;
+      cachedDate = date;
+      cachedAt = Date.now();
+      return response;
+    })
+    .finally(() => refreshInFlight.delete(date));
+  refreshInFlight.set(date, refresh);
+  return refresh;
 }
 
 export async function fetchUpcomingNrfiData(days = 3): Promise<NrfiWindowResponse> {
   const start = getTodayET();
-  const results: NrfiResponse[] = [];
-
-  for (let i = 0; i < days; i++) {
+  const dates = Array.from({ length: days }, (_, i) => {
     const d = new Date(`${start}T12:00:00`);
     d.setDate(d.getDate() + i);
-    const dateStr = d.toISOString().slice(0, 10);
-    try {
-      const dayData = await fetchNrfiData(dateStr);
-      results.push(dayData);
-    } catch {
-      // skip failed days
-    }
-  }
+    return d.toISOString().slice(0, 10);
+  });
+
+  // Build uncached days in parallel instead of making users wait through
+  // three full ESPN pipelines one after another.
+  const results = (await Promise.all(dates.map((date) => fetchNrfiData(date)))).filter(Boolean);
 
   const allGames = results.flatMap((r) => r.games);
   const averageNrfiProbability =
     allGames.length > 0
       ? Math.round(allGames.reduce((sum, g) => sum + g.nrfiProbability, 0) / allGames.length)
       : null;
-  const topPick =
-    [...allGames].sort((a, b) => b.nrfiProbability - a.nrfiProbability)[0] ?? null;
+  const topPick = [...allGames].sort((a, b) => b.nrfiProbability - a.nrfiProbability)[0] ?? null;
 
   return {
     startDate: start,
