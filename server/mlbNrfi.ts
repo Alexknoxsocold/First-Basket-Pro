@@ -108,10 +108,10 @@ export type NrfiWindowResponse = {
 };
 
 const ESPN_BASE = "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb";
-const CACHE_TTL = 20 * 60 * 1000; // 20 minutes
-const STALE_TTL = 2 * 60 * 60 * 1000; // serve up to 2 hours stale while refreshing
-const WINDOW_CACHE_TTL = 10 * 60 * 1000; // 10 minutes for the 3-day MLB tab payload
-const SCHEDULE_CACHE_TTL = 30 * 60 * 1000; // schedules change much less often than predictions
+const CACHE_TTL = 20 * 60 * 1000;
+const STALE_TTL = 2 * 60 * 60 * 1000;
+const WINDOW_CACHE_TTL = 10 * 60 * 1000;
+const SCHEDULE_CACHE_TTL = 30 * 60 * 1000;
 let cachedResponse: NrfiResponse | null = null;
 let cachedDate: string | null = null;
 let cachedAt = 0;
@@ -129,9 +129,7 @@ async function fetchJson<T>(url: string, timeoutMs = 8000): Promise<T> {
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const response = await fetch(url, { signal: controller.signal });
-    if (!response.ok) {
-      throw new Error(`ESPN returned ${response.status} for ${url}`);
-    }
+    if (!response.ok) throw new Error(`ESPN returned ${response.status} for ${url}`);
     return (await response.json()) as T;
   } finally {
     clearTimeout(timer);
@@ -145,10 +143,7 @@ function getTodayET(): string {
     month: "2-digit",
     day: "2-digit",
   }).formatToParts(new Date());
-  const year = parts.find((part) => part.type === "year")?.value;
-  const month = parts.find((part) => part.type === "month")?.value;
-  const day = parts.find((part) => part.type === "day")?.value;
-  return `${year}-${month}-${day}`;
+  return `${parts.find((p) => p.type === "year")?.value}-${parts.find((p) => p.type === "month")?.value}-${parts.find((p) => p.type === "day")?.value}`;
 }
 
 function getFirstInningRuns(competitor: EspnCompetitor): number | null {
@@ -161,31 +156,22 @@ function getOutcome(
   competition: EspnCompetition,
 ): Pick<NrfiGame, "outcome" | "firstInningScore"> {
   const competitors = competition.competitors ?? [];
-  const away = competitors.find((competitor) => competitor.homeAway === "away");
-  const home = competitors.find((competitor) => competitor.homeAway === "home");
+  const away = competitors.find((c) => c.homeAway === "away");
+  const home = competitors.find((c) => c.homeAway === "home");
   const awayRuns = away ? getFirstInningRuns(away) : null;
   const homeRuns = home ? getFirstInningRuns(home) : null;
-  const firstInningScore =
-    awayRuns !== null && homeRuns !== null ? `${awayRuns}-${homeRuns}` : null;
+  const firstInningScore = awayRuns !== null && homeRuns !== null ? `${awayRuns}-${homeRuns}` : null;
   const state = competition.status?.type?.state;
-  const firstInningComplete =
-    state === "post" || (awayRuns !== null && homeRuns !== null && state !== "pre");
-
+  const firstInningComplete = state === "post" || (awayRuns !== null && homeRuns !== null && state !== "pre");
   if (!firstInningComplete || awayRuns === null || homeRuns === null) {
     return { outcome: "pending", firstInningScore };
   }
-
   const wasNrfi = awayRuns === 0 && homeRuns === 0;
-  return {
-    outcome: recommendation === (wasNrfi ? "NRFI" : "YRFI") ? "won" : "lost",
-    firstInningScore,
-  };
+  return { outcome: recommendation === (wasNrfi ? "NRFI" : "YRFI") ? "won" : "lost", firstInningScore };
 }
 
 function getPitcher(competitor: EspnCompetitor): NrfiPitcher {
-  const probable =
-    competitor.probables?.find((item) => item.name === "probableStartingPitcher") ??
-    competitor.probables?.[0];
+  const probable = competitor.probables?.find((item) => item.name === "probableStartingPitcher") ?? competitor.probables?.[0];
   const eraText = probable?.statistics?.find((stat) => stat.name === "ERA")?.displayValue;
   const era = eraText ? Number.parseFloat(eraText) : null;
   return {
@@ -202,15 +188,9 @@ function clamp(value: number, min: number, max: number): number {
 async function fetchTeamSchedule(teamId: string): Promise<EspnEvent[]> {
   const cached = teamScheduleCache.get(teamId);
   if (cached && cached.expiresAt > Date.now()) return cached.events;
-
-  const data = await fetchJson<{ events?: EspnEvent[] }>(
-    `${ESPN_BASE}/teams/${encodeURIComponent(teamId)}/schedule?limit=40`,
-  );
+  const data = await fetchJson<{ events?: EspnEvent[] }>(`${ESPN_BASE}/teams/${encodeURIComponent(teamId)}/schedule?limit=40`);
   const events = data.events ?? [];
-  teamScheduleCache.set(teamId, {
-    events,
-    expiresAt: Date.now() + SCHEDULE_CACHE_TTL,
-  });
+  teamScheduleCache.set(teamId, { events, expiresAt: Date.now() + SCHEDULE_CACHE_TTL });
   return events;
 }
 
@@ -221,7 +201,6 @@ async function fetchTeamForm(teamId: string, beforeDate: string): Promise<TeamFo
 
   try {
     const events = await fetchTeamSchedule(teamId);
-
     const completed = events
       .filter((event) => (event.date ?? "").slice(0, 10) < beforeDate)
       .filter((event) => {
@@ -230,70 +209,42 @@ async function fetchTeamForm(teamId: string, beforeDate: string): Promise<TeamFo
       })
       .slice(-5);
 
-    const firstInningResults = await withConcurrency(
-      completed,
-      async (event) => {
-        try {
-          const summary = await fetchJson<EspnSummary>(
-            `${ESPN_BASE}/summary?event=${encodeURIComponent(event.id)}`,
-            6000,
-          );
-          const competition = summary.header?.competitions?.[0];
-          const homeId = competition?.competitors?.find((item) => item.homeAway === "home")?.team?.id;
-          const awayId = competition?.competitors?.find((item) => item.homeAway === "away")?.team?.id;
-          if (!homeId || !awayId || !summary.plays?.length) return null;
-
-          const inningPlays = summary.plays.filter((play) => play.period?.number === 1);
-          if (!inningPlays.length) return null;
-
-          const lastPlay = inningPlays[inningPlays.length - 1];
-          if (typeof lastPlay.homeScore !== "number" || typeof lastPlay.awayScore !== "number") {
-            return null;
-          }
-
-          return {
-            scored: teamId === homeId ? lastPlay.homeScore : lastPlay.awayScore,
-            allowed: teamId === homeId ? lastPlay.awayScore : lastPlay.homeScore,
-          };
-        } catch {
-          return null;
-        }
-      },
-      4,
-    );
-
+    // ESPN's team schedule already contains first-inning linescores for completed games.
+    // Using those avoids a second request to /summary for every historical game.
     let games = 0;
     let noRunGames = 0;
     let scored = 0;
     let allowed = 0;
 
-    for (const result of firstInningResults) {
-      if (!result) continue;
+    for (const event of completed) {
+      const competitors = event.competitions?.[0]?.competitors ?? [];
+      const team = competitors.find((c) => c.team?.id === teamId);
+      const opponent = competitors.find((c) => c.team?.id && c.team?.id !== teamId);
+      if (!team || !opponent) continue;
+
+      const teamFirst = getFirstInningRuns(team);
+      const opponentFirst = getFirstInningRuns(opponent);
+      if (teamFirst === null || opponentFirst === null) continue;
+
       games++;
-      scored += result.scored;
-      allowed += result.allowed;
-      if (result.scored === 0 && result.allowed === 0) noRunGames++;
+      scored += teamFirst;
+      allowed += opponentFirst;
+      if (teamFirst === 0 && opponentFirst === 0) noRunGames++;
     }
 
-    const value: TeamForm =
-      games > 0
-        ? {
-            games,
-            noRunPct: noRunGames / games,
-            firstInningRuns: scored / games,
-            firstInningAllowed: allowed / games,
-          }
-        : { games: 0, noRunPct: 0.55, firstInningRuns: 0.48, firstInningAllowed: 0.48 };
+    const value: TeamForm = games > 0
+      ? {
+          games,
+          noRunPct: noRunGames / games,
+          firstInningRuns: scored / games,
+          firstInningAllowed: allowed / games,
+        }
+      : { games: 0, noRunPct: 0.55, firstInningRuns: 0.48, firstInningAllowed: 0.48 };
 
     teamFormCache.set(cacheKey, { value, expiresAt: Date.now() + CACHE_TTL });
     return value;
   } catch {
-    const fallback: TeamForm = {
-      games: 0,
-      noRunPct: 0.55,
-      firstInningRuns: 0.48,
-      firstInningAllowed: 0.48,
-    };
+    const fallback: TeamForm = { games: 0, noRunPct: 0.55, firstInningRuns: 0.48, firstInningAllowed: 0.48 };
     teamFormCache.set(cacheKey, { value: fallback, expiresAt: Date.now() + 5 * 60 * 1000 });
     return fallback;
   }
@@ -311,24 +262,17 @@ function buildPrediction(
   homePitcher: NrfiPitcher,
   homeIndoor: boolean,
 ): Pick<NrfiGame, "nrfiProbability" | "recommendation" | "confidence" | "sampleSize" | "factors"> {
-  const awayExpected =
-    ((awayForm.firstInningRuns + homeForm.firstInningAllowed) / 2) *
-    pitcherRunAdjustment(homePitcher);
-  const homeExpected =
-    ((homeForm.firstInningRuns + awayForm.firstInningAllowed) / 2) *
-    pitcherRunAdjustment(awayPitcher);
-  const parkAdjustment = homeIndoor ? 0.98 : 1;
-  const expectedRuns = Math.max(0.05, (awayExpected + homeExpected) * parkAdjustment);
+  const awayExpected = ((awayForm.firstInningRuns + homeForm.firstInningAllowed) / 2) * pitcherRunAdjustment(homePitcher);
+  const homeExpected = ((homeForm.firstInningRuns + awayForm.firstInningAllowed) / 2) * pitcherRunAdjustment(awayPitcher);
+  const expectedRuns = Math.max(0.05, (awayExpected + homeExpected) * (homeIndoor ? 0.98 : 1));
   const probability = Math.round(clamp(Math.exp(-expectedRuns) * 100, 20, 85));
   const sampleSize = Math.min(awayForm.games, homeForm.games);
   const pitcherKnown = awayPitcher.era !== null && homePitcher.era !== null;
-  const confidence =
-    sampleSize >= 8 && pitcherKnown
-      ? "High"
-      : sampleSize >= 4 && (pitcherKnown || awayPitcher.name !== null || homePitcher.name !== null)
-        ? "Medium"
-        : "Low";
-
+  const confidence = sampleSize >= 8 && pitcherKnown
+    ? "High"
+    : sampleSize >= 4 && (pitcherKnown || awayPitcher.name !== null || homePitcher.name !== null)
+      ? "Medium"
+      : "Low";
   const factors: string[] = [];
   if (awayForm.noRunPct >= 0.55 && homeForm.noRunPct >= 0.55) {
     factors.push("Both teams have recently produced a high share of scoreless first innings");
@@ -336,70 +280,40 @@ function buildPrediction(
     factors.push("At least one offense has frequently scored in the first inning recently");
   }
   if (pitcherKnown && awayPitcher.era !== null && homePitcher.era !== null) {
-    factors.push(
-      `Probable starters included (ERAs ${awayPitcher.era.toFixed(2)} and ${homePitcher.era.toFixed(2)})`,
-    );
+    factors.push(`Probable starters included (ERAs ${awayPitcher.era.toFixed(2)} and ${homePitcher.era.toFixed(2)})`);
   } else {
     factors.push("One or both probable starters are not confirmed");
   }
   factors.push(`Based on ${sampleSize || "limited"} recent games per team`);
-
-  return {
-    nrfiProbability: probability,
-    recommendation: probability >= 50 ? "NRFI" : "YRFI",
-    confidence,
-    sampleSize,
-    factors,
-  };
+  return { nrfiProbability: probability, recommendation: probability >= 50 ? "NRFI" : "YRFI", confidence, sampleSize, factors };
 }
 
-async function withConcurrency<T, R>(
-  values: T[],
-  worker: (value: T) => Promise<R>,
-  limit = 4,
-): Promise<R[]> {
+async function withConcurrency<T, R>(values: T[], worker: (value: T) => Promise<R>, limit = 8): Promise<R[]> {
   const results: R[] = [];
   let next = 0;
-
   async function run(): Promise<void> {
     while (next < values.length) {
       const index = next++;
       results[index] = await worker(values[index]);
     }
   }
-
   await Promise.all(Array.from({ length: Math.min(limit, values.length) }, () => run()));
   return results;
 }
 
 async function buildNrfiData(date: string): Promise<NrfiResponse> {
-  const scoreboard = await fetchJson<{ events?: EspnEvent[] }>(
-    `${ESPN_BASE}/scoreboard?dates=${date.replace(/-/g, "")}`,
-  );
-
+  const scoreboard = await fetchJson<{ events?: EspnEvent[] }>(`${ESPN_BASE}/scoreboard?dates=${date.replace(/-/g, "")}`);
   const rawGames = (scoreboard.events ?? [])
     .map((event) => ({ event, competition: event.competitions?.[0] }))
-    .filter(
-      (item): item is { event: EspnEvent; competition: EspnCompetition } =>
-        Boolean(item.competition?.competitors?.length === 2),
-    );
+    .filter((item): item is { event: EspnEvent; competition: EspnCompetition } => Boolean(item.competition?.competitors?.length === 2));
 
-  const teamIds = Array.from(
-    new Set(
-      rawGames.flatMap(
-        ({ competition }) =>
-          competition.competitors
-            ?.map((competitor) => competitor.team?.id)
-            .filter((id): id is string => Boolean(id)) ?? [],
-      ),
-    ),
-  );
+  const teamIds = Array.from(new Set(rawGames.flatMap(({ competition }) =>
+    competition.competitors?.map((competitor) => competitor.team?.id).filter((id): id is string => Boolean(id)) ?? []
+  )));
 
-  const forms = await withConcurrency(
-    teamIds,
-    async (teamId) => [teamId, await fetchTeamForm(teamId, date)] as const,
-    4,
-  );
+  // Fetch each team's recent form concurrently. Each team's schedule response now
+  // contains the historical first-inning linescores, so this is one ESPN request/team.
+  const forms = await withConcurrency(teamIds, async (teamId) => [teamId, await fetchTeamForm(teamId, date)] as const, 8);
   const formMap = new Map(forms);
 
   const games = rawGames.map(({ event, competition }) => {
@@ -408,51 +322,39 @@ async function buildNrfiData(date: string): Promise<NrfiResponse> {
     const awayId = away.team?.id ?? "";
     const homeId = home.team?.id ?? "";
     const fallbackForm = { games: 0, noRunPct: 0.55, firstInningRuns: 0.48, firstInningAllowed: 0.48 };
-    const awayForm = formMap.get(awayId) ?? fallbackForm;
-    const homeForm = formMap.get(homeId) ?? fallbackForm;
-    const awayPitcher = getPitcher(away);
-    const homePitcher = getPitcher(home);
-    const status = competition.status?.type?.detail ?? "Scheduled";
     const prediction = buildPrediction(
-      awayForm,
-      homeForm,
-      awayPitcher,
-      homePitcher,
+      formMap.get(awayId) ?? fallbackForm,
+      formMap.get(homeId) ?? fallbackForm,
+      getPitcher(away),
+      getPitcher(home),
       competition.venue?.indoor === true,
     );
     const outcome = getOutcome(prediction.recommendation, competition);
-
     return {
       id: event.id,
       date: event.date ?? `${date}T00:00:00Z`,
-      shortName:
-        event.shortName ??
-        `${away.team?.abbreviation ?? "Away"} @ ${home.team?.abbreviation ?? "Home"}`,
+      shortName: event.shortName ?? `${away.team?.abbreviation ?? "Away"} @ ${home.team?.abbreviation ?? "Home"}`,
       away: {
         abbreviation: away.team?.abbreviation ?? "AWAY",
         name: away.team?.displayName ?? away.team?.shortDisplayName ?? "Away",
         logo: away.team?.logos?.[0]?.href ?? null,
-        pitcher: awayPitcher,
+        pitcher: getPitcher(away),
       },
       home: {
         abbreviation: home.team?.abbreviation ?? "HOME",
         name: home.team?.displayName ?? home.team?.shortDisplayName ?? "Home",
         logo: home.team?.logos?.[0]?.href ?? null,
-        pitcher: homePitcher,
+        pitcher: getPitcher(home),
       },
       venue: competition.venue?.fullName ?? null,
-      status,
+      status: competition.status?.type?.detail ?? "Scheduled",
       ...prediction,
       ...outcome,
     };
   });
 
-  const averageNrfiProbability =
-    games.length > 0
-      ? Math.round(games.reduce((sum, g) => sum + g.nrfiProbability, 0) / games.length)
-      : null;
+  const averageNrfiProbability = games.length > 0 ? Math.round(games.reduce((sum, g) => sum + g.nrfiProbability, 0) / games.length) : null;
   const topPick = [...games].sort((a, b) => b.nrfiProbability - a.nrfiProbability)[0] ?? null;
-
   return {
     date,
     games,
@@ -460,28 +362,22 @@ async function buildNrfiData(date: string): Promise<NrfiResponse> {
     topPick,
     updatedAt: new Date().toISOString(),
     source: "ESPN",
-    methodology:
-      "First-inning run expectancy model using recent team form + probable starter ERA adjustments",
+    methodology: "First-inning run expectancy model using recent team form + probable starter ERA adjustments",
   };
 }
 
 export async function fetchNrfiData(date = getTodayET()): Promise<NrfiResponse> {
   const age = Date.now() - cachedAt;
-
-  if (cachedResponse && cachedDate === date && age < CACHE_TTL) {
-    return cachedResponse;
-  }
+  if (cachedResponse && cachedDate === date && age < CACHE_TTL) return cachedResponse;
 
   if (cachedResponse && cachedDate === date && age < STALE_TTL) {
     if (!refreshInFlight.has(date)) {
-      const refresh = buildNrfiData(date)
-        .then((response) => {
-          cachedResponse = response;
-          cachedDate = date;
-          cachedAt = Date.now();
-          return response;
-        })
-        .finally(() => refreshInFlight.delete(date));
+      const refresh = buildNrfiData(date).then((response) => {
+        cachedResponse = response;
+        cachedDate = date;
+        cachedAt = Date.now();
+        return response;
+      }).finally(() => refreshInFlight.delete(date));
       refreshInFlight.set(date, refresh);
     }
     return cachedResponse;
@@ -489,15 +385,12 @@ export async function fetchNrfiData(date = getTodayET()): Promise<NrfiResponse> 
 
   const existingRefresh = refreshInFlight.get(date);
   if (existingRefresh) return existingRefresh;
-
-  const refresh = buildNrfiData(date)
-    .then((response) => {
-      cachedResponse = response;
-      cachedDate = date;
-      cachedAt = Date.now();
-      return response;
-    })
-    .finally(() => refreshInFlight.delete(date));
+  const refresh = buildNrfiData(date).then((response) => {
+    cachedResponse = response;
+    cachedDate = date;
+    cachedAt = Date.now();
+    return response;
+  }).finally(() => refreshInFlight.delete(date));
   refreshInFlight.set(date, refresh);
   return refresh;
 }
@@ -508,15 +401,10 @@ async function buildUpcomingNrfiData(days: number, start: string): Promise<NrfiW
     d.setDate(d.getDate() + i);
     return d.toISOString().slice(0, 10);
   });
-
-  const results = (await Promise.all(dates.map((date) => fetchNrfiData(date)))).filter(Boolean);
+  const results = await Promise.all(dates.map((date) => fetchNrfiData(date)));
   const allGames = results.flatMap((r) => r.games);
-  const averageNrfiProbability =
-    allGames.length > 0
-      ? Math.round(allGames.reduce((sum, g) => sum + g.nrfiProbability, 0) / allGames.length)
-      : null;
+  const averageNrfiProbability = allGames.length > 0 ? Math.round(allGames.reduce((sum, g) => sum + g.nrfiProbability, 0) / allGames.length) : null;
   const topPick = [...allGames].sort((a, b) => b.nrfiProbability - a.nrfiProbability)[0] ?? null;
-
   return {
     startDate: start,
     endDate: results[results.length - 1]?.date ?? start,
@@ -531,63 +419,34 @@ async function buildUpcomingNrfiData(days: number, start: string): Promise<NrfiW
 export async function fetchUpcomingNrfiData(days = 3): Promise<NrfiWindowResponse> {
   const start = getTodayET();
   const age = Date.now() - cachedWindowAt;
-
-  if (
-    cachedWindow &&
-    cachedWindowStart === start &&
-    cachedWindowDays === days &&
-    age < WINDOW_CACHE_TTL
-  ) {
-    return cachedWindow;
-  }
-
-  if (
-    cachedWindow &&
-    cachedWindowStart === start &&
-    cachedWindowDays === days &&
-    age < STALE_TTL
-  ) {
+  if (cachedWindow && cachedWindowStart === start && cachedWindowDays === days && age < WINDOW_CACHE_TTL) return cachedWindow;
+  if (cachedWindow && cachedWindowStart === start && cachedWindowDays === days && age < STALE_TTL) {
     if (!windowRefreshInFlight) {
-      windowRefreshInFlight = buildUpcomingNrfiData(days, start)
-        .then((response) => {
-          cachedWindow = response;
-          cachedWindowStart = start;
-          cachedWindowDays = days;
-          cachedWindowAt = Date.now();
-          return response;
-        })
-        .finally(() => {
-          windowRefreshInFlight = null;
-        });
+      windowRefreshInFlight = buildUpcomingNrfiData(days, start).then((response) => {
+        cachedWindow = response;
+        cachedWindowStart = start;
+        cachedWindowDays = days;
+        cachedWindowAt = Date.now();
+        return response;
+      }).finally(() => { windowRefreshInFlight = null; });
     }
     return cachedWindow;
   }
-
   if (windowRefreshInFlight) return windowRefreshInFlight;
-
-  windowRefreshInFlight = buildUpcomingNrfiData(days, start)
-    .then((response) => {
-      cachedWindow = response;
-      cachedWindowStart = start;
-      cachedWindowDays = days;
-      cachedWindowAt = Date.now();
-      return response;
-    })
-    .finally(() => {
-      windowRefreshInFlight = null;
-    });
-
+  windowRefreshInFlight = buildUpcomingNrfiData(days, start).then((response) => {
+    cachedWindow = response;
+    cachedWindowStart = start;
+    cachedWindowDays = days;
+    cachedWindowAt = Date.now();
+    return response;
+  }).finally(() => { windowRefreshInFlight = null; });
   return windowRefreshInFlight;
 }
 
-// Called after the HTTP server starts so Render can serve requests immediately
-// while MLB data warms in the background. This is intentionally fire-and-forget.
-export function warmMlbCache(days = 3): void {
-  void fetchUpcomingNrfiData(days)
-    .then((response) => {
-      console.log(`[MLB] Warmed NRFI cache: ${response.games.length} games across ${response.days.length} days`);
-    })
-    .catch((error) => {
-      console.warn("[MLB] Background cache warm failed:", error);
-    });
+// Warm only today's MLB slate at startup. This keeps Render cold starts cheap while
+// still making the first visitor's request hit an already-computed cache in normal use.
+export function warmMlbCache(): void {
+  void fetchNrfiData()
+    .then((response) => console.log(`[MLB] Warmed today's NRFI cache: ${response.games.length} games`))
+    .catch((error) => console.warn("[MLB] Background cache warm failed:", error));
 }
