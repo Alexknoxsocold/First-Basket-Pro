@@ -33,7 +33,10 @@ async function ensure(): Promise<void> {
       market_side text, sportsbook text, market_name text, market_odds integer, market_captured_at timestamp,
       market_implied_probability real, market_no_vig_probability real, market_edge real, market_expected_value real,
       value_play boolean NOT NULL DEFAULT false, created_at timestamp NOT NULL DEFAULT now(), graded_at timestamp,
-      UNIQUE(prediction_date, game_id, model_version)
+      UNIQUE(prediction_date,game_id,model_version),
+      CHECK (probability >= 0 AND probability <= 1),
+      CHECK (recommendation IN ('NRFI','YRFI','NO_PLAY')),
+      CHECK (outcome IS NULL OR outcome IN ('NRFI','YRFI'))
     );
     ALTER TABLE mlb_prediction_snapshots ADD COLUMN IF NOT EXISTS market_available boolean NOT NULL DEFAULT false;
     ALTER TABLE mlb_prediction_snapshots ADD COLUMN IF NOT EXISTS market_side text;
@@ -46,8 +49,62 @@ async function ensure(): Promise<void> {
     ALTER TABLE mlb_prediction_snapshots ADD COLUMN IF NOT EXISTS market_edge real;
     ALTER TABLE mlb_prediction_snapshots ADD COLUMN IF NOT EXISTS market_expected_value real;
     ALTER TABLE mlb_prediction_snapshots ADD COLUMN IF NOT EXISTS value_play boolean NOT NULL DEFAULT false;
+    ALTER TABLE mlb_prediction_snapshots ADD COLUMN IF NOT EXISTS created_at timestamp NOT NULL DEFAULT now();
+    ALTER TABLE mlb_prediction_snapshots ADD COLUMN IF NOT EXISTS graded_at timestamp;
+
+    -- Defense in depth: application upserts already preserve immutable fields,
+    -- but the database must also reject accidental post-lock mutation from any
+    -- other writer, admin script, migration, or future code path.
+    CREATE OR REPLACE FUNCTION protect_mlb_prediction_snapshot_lock()
+    RETURNS trigger AS $$
+    BEGIN
+      IF OLD.locked_at IS NOT NULL THEN
+        IF NEW.prediction_date IS DISTINCT FROM OLD.prediction_date
+          OR NEW.game_id IS DISTINCT FROM OLD.game_id
+          OR NEW.matchup IS DISTINCT FROM OLD.matchup
+          OR NEW.recommendation IS DISTINCT FROM OLD.recommendation
+          OR NEW.probability IS DISTINCT FROM OLD.probability
+          OR NEW.confidence IS DISTINCT FROM OLD.confidence
+          OR NEW.model_version IS DISTINCT FROM OLD.model_version
+          OR NEW.locked_at IS DISTINCT FROM OLD.locked_at
+          OR NEW.market_available IS DISTINCT FROM OLD.market_available
+          OR NEW.market_side IS DISTINCT FROM OLD.market_side
+          OR NEW.sportsbook IS DISTINCT FROM OLD.sportsbook
+          OR NEW.market_name IS DISTINCT FROM OLD.market_name
+          OR NEW.market_odds IS DISTINCT FROM OLD.market_odds
+          OR NEW.market_captured_at IS DISTINCT FROM OLD.market_captured_at
+          OR NEW.market_implied_probability IS DISTINCT FROM OLD.market_implied_probability
+          OR NEW.market_no_vig_probability IS DISTINCT FROM OLD.market_no_vig_probability
+          OR NEW.market_edge IS DISTINCT FROM OLD.market_edge
+          OR NEW.market_expected_value IS DISTINCT FROM OLD.market_expected_value
+          OR NEW.value_play IS DISTINCT FROM OLD.value_play
+          OR NEW.created_at IS DISTINCT FROM OLD.created_at
+        THEN
+          RAISE EXCEPTION 'MLB prediction snapshot is locked and immutable';
+        END IF;
+      ELSE
+        IF NEW.locked_at IS NOT NULL AND NEW.locked_at > now() + interval '2 minutes' THEN
+          RAISE EXCEPTION 'MLB prediction lock timestamp is too far in the future';
+        END IF;
+        IF NEW.locked_at IS NOT NULL
+          AND NEW.market_captured_at IS NOT NULL
+          AND NEW.market_captured_at > NEW.locked_at + interval '2 minutes'
+        THEN
+          RAISE EXCEPTION 'Market quote was captured after prediction lock';
+        END IF;
+      END IF;
+      RETURN NEW;
+    END;
+    $$ LANGUAGE plpgsql;
+
+    DROP TRIGGER IF EXISTS mlb_prediction_snapshot_lock_guard ON mlb_prediction_snapshots;
+    CREATE TRIGGER mlb_prediction_snapshot_lock_guard
+      BEFORE UPDATE ON mlb_prediction_snapshots
+      FOR EACH ROW EXECUTE FUNCTION protect_mlb_prediction_snapshot_lock();
+
     CREATE INDEX IF NOT EXISTS mlb_prediction_snapshots_date_idx ON mlb_prediction_snapshots(prediction_date DESC);
     CREATE INDEX IF NOT EXISTS mlb_prediction_snapshots_value_idx ON mlb_prediction_snapshots(value_play, prediction_date DESC);
+    CREATE INDEX IF NOT EXISTS mlb_prediction_snapshots_locked_idx ON mlb_prediction_snapshots(locked_at DESC);
   `).then(() => undefined).catch(error => { ready = null; throw error; });
   return ready;
 }
@@ -56,6 +113,18 @@ export async function snapshotPrediction(data: MlbPredictionSnapshot): Promise<v
   const connection = db(); if (!connection) return; await ensure();
   const id = `${data.date}:${data.gameId}:${data.modelVersion}`;
   const market = data.marketValue;
+  const lockedAt = data.lockedAt ?? null;
+
+  if (lockedAt && lockedAt.getTime() > Date.now() + 2 * 60 * 1000) {
+    throw new Error("Prediction lock timestamp cannot be materially in the future");
+  }
+  if (lockedAt && market?.capturedAt) {
+    const capturedAt = new Date(market.capturedAt);
+    if (Number.isFinite(capturedAt.getTime()) && capturedAt.getTime() > lockedAt.getTime() + 2 * 60 * 1000) {
+      throw new Error("Market quote was captured after prediction lock");
+    }
+  }
+
   await connection.query(`
     INSERT INTO mlb_prediction_snapshots
       (id,prediction_date,game_id,matchup,recommendation,probability,confidence,model_version,locked_at,outcome,first_inning_score,
@@ -63,12 +132,12 @@ export async function snapshotPrediction(data: MlbPredictionSnapshot): Promise<v
        market_edge,market_expected_value,value_play,created_at,graded_at)
     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,now(),CASE WHEN $10 IS NULL THEN NULL ELSE now() END)
     ON CONFLICT(prediction_date,game_id,model_version) DO UPDATE SET
-      -- The model recommendation, probability, confidence, lock time, and
-      -- market snapshot are immutable. Only the eventual result may change.
+      -- Pregame prediction/model/market fields are immutable. The only fields
+      -- that may change after creation are the eventual game result fields.
       outcome=COALESCE(EXCLUDED.outcome, mlb_prediction_snapshots.outcome),
       first_inning_score=COALESCE(EXCLUDED.first_inning_score, mlb_prediction_snapshots.first_inning_score),
       graded_at=COALESCE(EXCLUDED.graded_at, mlb_prediction_snapshots.graded_at)
-  `, [id,data.date,data.gameId,data.matchup,data.recommendation,data.probability,data.confidence ?? null,data.modelVersion,data.lockedAt ?? null,data.outcome ?? null,data.firstInningScore ?? null,
+  `, [id,data.date,data.gameId,data.matchup,data.recommendation,data.probability,data.confidence ?? null,data.modelVersion,lockedAt,data.outcome ?? null,data.firstInningScore ?? null,
       market?.available ?? false,market?.side ?? null,market?.sportsbook ?? null,market?.market ?? null,market?.americanOdds ?? null,
       market?.capturedAt ? new Date(market.capturedAt) : null,market?.impliedProbability ?? null,market?.noVigProbability ?? null,market?.edge ?? null,market?.expectedValue ?? null,market?.valuePlay ?? false]);
 }
