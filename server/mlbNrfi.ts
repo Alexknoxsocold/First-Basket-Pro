@@ -44,6 +44,9 @@ const CACHE_TTL = 20 * 60 * 1000;
 const STALE_TTL = 2 * 60 * 60 * 1000;
 const WINDOW_CACHE_TTL = 10 * 60 * 1000;
 const HISTORY_CACHE_TTL = 30 * 60 * 1000;
+// Keep enough recent history to stabilize predictions without turning every
+// request into a large fan-out of ESPN calls. Team form uses the most recent
+// 10 verified games from this window.
 const HISTORY_DAYS = 14;
 const HISTORY_GAMES = 10;
 
@@ -181,22 +184,46 @@ async function fetchRecentHistory(beforeDate: string): Promise<EspnEvent[]> {
 
 function calculateLeagueBaseline(allRecentGames: EspnEvent[]) {
   const observations: { runs: number }[] = [];
+  let completedGames = 0;
+  let nrfiGames = 0;
+
   for (const event of allRecentGames) {
     const competition = event.competitions?.[0];
     const state = competition?.status?.type?.state;
     if (!(state === "post" || competition?.status?.type?.completed === true)) continue;
-    for (const competitor of competition?.competitors ?? []) {
+
+    const competitors = competition?.competitors ?? [];
+    const away = competitors.find(c => c.homeAway === "away");
+    const home = competitors.find(c => c.homeAway === "home");
+    const awayRuns = away ? getFirstInningRuns(away) : null;
+    const homeRuns = home ? getFirstInningRuns(home) : null;
+
+    if (awayRuns !== null && homeRuns !== null) {
+      completedGames++;
+      if (awayRuns === 0 && homeRuns === 0) nrfiGames++;
+    }
+
+    for (const competitor of competitors) {
       const runs = getFirstInningRuns(competitor);
       if (runs !== null) observations.push({ runs });
     }
   }
-  if (!observations.length) return { games: 0, runsPerInning: 0.50, scorelessPct: 0.60 };
+
+  if (!observations.length) {
+    return { games: 0, runsPerInning: 0.50, scorelessPct: 0.60, gameNrfiPct: 0.49 };
+  }
+
   const mean = observations.reduce((sum, x) => sum + x.runs, 0) / observations.length;
   const scoreless = observations.filter(x => x.runs === 0).length / observations.length;
+  const gameNrfiPct = completedGames > 0 ? nrfiGames / completedGames : 0.49;
+
   return {
     games: observations.length,
     runsPerInning: clamp(mean, 0.20, 1.20),
     scorelessPct: clamp(scoreless, 0.40, 0.80),
+    // This is the strongest historical prior for the actual market outcome:
+    // did the entire first inning stay scoreless?
+    gameNrfiPct: clamp(gameNrfiPct, 0.35, 0.65),
   };
 }
 
@@ -295,11 +322,11 @@ function buildPrediction(
   awayPitcher: NrfiPitcher,
   homePitcher: NrfiPitcher,
   homeIndoor: boolean,
+  leagueNrfiProbability: number,
 ): Pick<NrfiGame, "nrfiProbability" | "recommendation" | "confidence" | "sampleSize" | "factors"> {
   // Estimate each side's first-inning run expectation from offense + opposing
-  // first-inning prevention. Then blend the result with each team's empirical
-  // scoreless rate. This avoids the old failure mode where a small sample could
-  // force nearly every game to the same side of 50%.
+  // first-inning prevention. Then blend that with empirical scoreless rates and
+  // the observed league-wide NRFI rate from the same recent historical window.
   const awayLambdaMean = ((awayForm.runsPerFirstInning + homeForm.allowedPerFirstInning) / 2) * pitcherRunAdjustment(homePitcher);
   const homeLambdaMean = ((homeForm.runsPerFirstInning + awayForm.allowedPerFirstInning) / 2) * pitcherRunAdjustment(awayPitcher);
 
@@ -312,8 +339,23 @@ function buildPrediction(
   const expectedRuns = Math.max(0.05, (awayLambda + homeLambda) * environment);
 
   const poissonNrfi = poissonNoRunProbability(expectedRuns);
-  const empiricalNrfi = clamp(awayForm.scorelessPct * homeForm.allowedScorelessPct, 0.20, 0.90);
-  const nrfiProbability = Math.round(clamp((0.72 * poissonNrfi + 0.28 * empiricalNrfi) * 100, 25, 75));
+
+  // Use both sides of the matchup. The old model only multiplied away offense
+  // by home prevention, which could systematically pull the entire slate toward
+  // YRFI. Averaging offense and defense for each side is more symmetric.
+  const awayNoRun = (awayForm.scorelessPct + homeForm.allowedScorelessPct) / 2;
+  const homeNoRun = (homeForm.scorelessPct + awayForm.allowedScorelessPct) / 2;
+  const matchupEmpiricalNrfi = clamp(awayNoRun * homeNoRun, 0.25, 0.75);
+
+  // Calibrate the raw Poisson estimate toward the observed recent league rate.
+  // This keeps the model from producing a slate of near-identical YRFI picks when
+  // the small recent samples happen to have elevated first-inning scoring.
+  const calibratedPoisson = 0.60 * poissonNrfi + 0.40 * leagueNrfiProbability;
+  const nrfiProbability = Math.round(clamp(
+    (0.42 * leagueNrfiProbability + 0.33 * matchupEmpiricalNrfi + 0.25 * calibratedPoisson) * 100,
+    25,
+    75,
+  ));
 
   const sampleSize = Math.min(awayForm.games, homeForm.games);
   const pitcherKnown = awayPitcher.era !== null && homePitcher.era !== null;
@@ -331,6 +373,7 @@ function buildPrediction(
   if (pitcherKnown) factors.push(`Probable starters included (ERAs ${awayPitcher.era!.toFixed(2)} and ${homePitcher.era!.toFixed(2)})`);
   else factors.push("One or both probable starters are not confirmed; confidence is reduced");
   factors.push(`Recent sample: ${sampleSize || "limited"} verified games per team with Bayesian shrinkage`);
+  factors.push(`Recent league NRFI baseline: ${Math.round(leagueNrfiProbability * 100)}%`);
 
   return {
     nrfiProbability,
@@ -351,6 +394,7 @@ async function buildNrfiData(date: string): Promise<NrfiResponse> {
     competition.competitors?.map(c => c.team?.id).filter((id): id is string => Boolean(id)) ?? []
   )));
   const sharedHistory = await fetchRecentHistory(date);
+  const leagueBaseline = calculateLeagueBaseline(sharedHistory);
   const forms = await withConcurrency(teamIds, async teamId =>
     [teamId, await fetchTeamForm(teamId, date, sharedHistory)] as const, 12
   );
@@ -372,6 +416,7 @@ async function buildNrfiData(date: string): Promise<NrfiResponse> {
       getPitcher(away),
       getPitcher(home),
       competition.venue?.indoor === true,
+      leagueBaseline.gameNrfiPct,
     );
     return {
       id: event.id,
@@ -410,7 +455,7 @@ async function buildNrfiData(date: string): Promise<NrfiResponse> {
     topPick,
     updatedAt: new Date().toISOString(),
     source: "ESPN MLB scoreboard + verified recent game summaries",
-    methodology: "Recent first-inning offensive and defensive rates with Bayesian league shrinkage, empirical scoreless-rate blending, modest probable-starter ERA adjustment, and Poisson no-run probability.",
+    methodology: "Recent first-inning offensive and defensive rates with Bayesian league shrinkage, symmetric matchup scoreless rates, recent league NRFI calibration, modest probable-starter ERA adjustment, and Poisson no-run probability.",
   };
 }
 
