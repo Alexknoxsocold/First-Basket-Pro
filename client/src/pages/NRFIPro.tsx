@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { CircleDot, Clock, RefreshCw, TrendingUp, Zap, Info } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -124,6 +124,7 @@ function GameCard({ game }: { game: NrfiGame }) {
 
 export default function NRFIPro() {
   const [filter, setFilter] = useState<Filter>("plays");
+  const hasInitializedFilter = useRef(false);
   const { data, isLoading, isFetching, error, refetch } = useQuery<NrfiResponse>({ queryKey: ["/api/mlb/nrfi"], staleTime: 5 * 60 * 1000, refetchInterval: 5 * 60 * 1000 });
   const games = data?.games ?? [];
   const promoted = games.filter(g => g.playStatus === "BEST_PLAY" || g.playStatus === "PLAY");
@@ -137,6 +138,13 @@ export default function NRFIPro() {
     .slice(0, 3);
   const topNrfi = nrfiGames[0];
   const topYrfi = yrfiGames[0];
+
+  useEffect(() => {
+    if (!isLoading && data && !hasInitializedFilter.current) {
+      setFilter(promoted.length > 0 ? "plays" : "all");
+      hasInitializedFilter.current = true;
+    }
+  }, [data, isLoading, promoted.length]);
 
   const visibleGames = filter === "all"
     ? games
