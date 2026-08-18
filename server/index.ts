@@ -97,11 +97,17 @@ function isNbaSeason(): boolean {
   }, async () => {
     log(`serving on port ${port}`);
 
-    // MLB cache warming happens after the HTTP server is listening and only
-    // warms today's slate. It does not block startup or the first request.
+    // Warm today's MLB prediction cache in the background after the HTTP
+    // server is listening. fetchNrfiData() already de-duplicates concurrent
+    // refreshes, so a user arriving during warm-up will join the same request
+    // instead of starting a second expensive ESPN/history fetch.
     try {
-      const { warmMlbCache } = await import('./mlbNrfi.js');
-      warmMlbCache();
+      const { fetchNrfiData } = await import('./mlbNrfi.js');
+      void fetchNrfiData().then(() => {
+        log('[Startup] MLB NRFI cache warmed for today.');
+      }).catch((error) => {
+        log('[Startup] MLB NRFI cache warm failed:', error);
+      });
       log('[Startup] MLB NRFI cache warming started in background.');
     } catch (error) {
       log('[Startup] MLB cache warm skipped:', error);
