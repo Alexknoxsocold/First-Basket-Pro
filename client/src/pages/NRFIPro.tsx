@@ -93,6 +93,12 @@ function GameCard({ game }: { game: NrfiGame }) {
     : lean
       ? "bg-yellow-500/10 border-yellow-500/25"
       : "bg-muted/20";
+  const visibleFactors = game.factors.filter(factor =>
+    !factor.startsWith("Missing ESPN pitcher metrics filled from MLB Stats API") &&
+    !factor.startsWith("Recent sample:") &&
+    !factor.startsWith("Recent league NRFI baseline:") &&
+    !factor.startsWith("Model v3:")
+  );
   return (
     <article className={`rounded-md border overflow-hidden ${cardTone} ${promoted ? "ring-1 ring-primary/20" : ""}`} data-testid={`card-nrfi-${game.id}`}>
       <div className={`flex flex-wrap items-center justify-between gap-2 px-4 py-3 border-b ${headerTone}`}>
@@ -109,7 +115,7 @@ function GameCard({ game }: { game: NrfiGame }) {
         {lean && <div className="mt-3 rounded-md px-3 py-2 text-xs bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border border-yellow-500/25">LEAN · The model sees an edge, but not enough separation or data quality for a stronger play.</div>}
         {game.outcome === "won" && <div className="mt-3 rounded-md px-3 py-2 text-xs bg-emerald-500/10 text-emerald-500">Pick won · First inning score: {game.firstInningScore ?? "—"}</div>}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-5 pt-4 border-t"><Pitcher label={`${game.away.abbreviation} pitcher`} pitcher={game.away.pitcher} /><Pitcher label={`${game.home.abbreviation} pitcher`} pitcher={game.home.pitcher} /></div>
-        <div className="mt-4 space-y-1">{game.factors.map(factor => <p key={factor} className="text-[10px] text-muted-foreground">• {factor}</p>)}</div>
+        <div className="mt-4 space-y-1">{visibleFactors.map(factor => <p key={factor} className="text-[10px] text-muted-foreground">• {factor}</p>)}</div>
       </div>
     </article>
   );
