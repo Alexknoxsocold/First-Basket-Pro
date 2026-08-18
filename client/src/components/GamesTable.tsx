@@ -36,7 +36,10 @@ export default function GamesTable({
 }: GamesTableProps) {
   if (games.length === 0) {
     return (
-      <div className="border rounded-md bg-card flex items-center justify-center h-40 text-muted-foreground text-sm" data-testid="container-games-table">
+      <div
+        className="border rounded-md bg-card flex items-center justify-center h-40 text-muted-foreground text-sm"
+        data-testid="container-games-table"
+      >
         No games scheduled for today.
       </div>
     );
@@ -44,25 +47,37 @@ export default function GamesTable({
 
   return (
     <div className="border rounded-md bg-card overflow-hidden" data-testid="container-games-table">
-      <div>
-        {games.map((game) => {
-          const awayEspn = espnAwayPicks[game.id];
-          const homeEspn = espnHomePicks[game.id];
+      {games.map((game) => {
+        const awayEspn = espnAwayPicks[game.id] ?? null;
+        const homeEspn = espnHomePicks[game.id] ?? null;
 
-          return (
-            <GameRow
-              key={game.id}
-              {...game}
-              awayPlayerHeadshot={awayEspn?.headshot || headshotMap[game.awayPlayer]}
-              homePlayerHeadshot={homeEspn?.headshot || headshotMap[game.homePlayer]}
-              awayEspnPick={awayEspn}
-              homeEspnPick={homeEspn}
-              awayJumpBall={espnAwayJumpBall[game.id]}
-              homeJumpBall={espnHomeJumpBall[game.id]}
-            />
-          );
-        })}
-      </div>
+        return (
+          <GameRow
+            key={game.id}
+            awayTeam={game.awayTeam}
+            awayPlayer={game.awayPlayer}
+            awayTipCount={game.awayTipCount}
+            awayTipPercent={game.awayTipPercent}
+            awayScorePercent={game.awayScorePercent}
+            awayStarters={game.awayStarters ?? undefined}
+            homeTeam={game.homeTeam}
+            homePlayer={game.homePlayer}
+            homeTipCount={game.homeTipCount}
+            homeTipPercent={game.homeTipPercent}
+            homeScorePercent={game.homeScorePercent}
+            homeStarters={game.homeStarters ?? undefined}
+            h2h={game.h2h}
+            gameTime={game.gameTime ?? undefined}
+            status={game.status}
+            awayPlayerHeadshot={awayEspn?.headshot ?? headshotMap[game.awayPlayer]}
+            homePlayerHeadshot={homeEspn?.headshot ?? headshotMap[game.homePlayer]}
+            awayEspnPick={awayEspn}
+            homeEspnPick={homeEspn}
+            awayJumpBall={espnAwayJumpBall[game.id] ?? null}
+            homeJumpBall={espnHomeJumpBall[game.id] ?? null}
+          />
+        );
+      })}
     </div>
   );
 }
