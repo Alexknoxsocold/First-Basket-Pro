@@ -10,7 +10,7 @@ import { setupVite, serveStatic, log } from "./vite";
 import { authMiddleware } from "./auth";
 import { createDailySyncService } from "./dailySync";
 import { storage } from "./storage";
-import { fetchMlbRfiMarkets, getCachedMlbRfiMarkets, valueFromMarketForTeams } from "./mlbOdds";
+import { fetchMlbRfiMarkets, getCachedMlbRfiQuotes, valueFromCachedQuotesForTeams } from "./mlbOdds";
 import { getCalibrationSummary } from "./mlbCalibration";
 import { evaluateMlbModelHealth } from "./mlbModelHealth";
 
@@ -60,8 +60,8 @@ app.use("/api/mlb/nrfi", (req, res, next) => {
   if (req.method !== "GET" || req.path !== "/") return next();
   const originalJson = res.json.bind(res);
   res.json = ((body: any) => {
-    const markets = getCachedMlbRfiMarkets();
-    if (!markets.size || !body?.games) {
+    const quotes = getCachedMlbRfiQuotes();
+    if (!quotes.length || !body?.games) {
       void fetchMlbRfiMarkets().catch(error => log('[MLB Odds] Background refresh failed:', error));
       return originalJson({ ...body, marketStatus: "unavailable" });
     }
@@ -69,7 +69,7 @@ app.use("/api/mlb/nrfi", (req, res, next) => {
     const games = body.games.map((game: any) => {
       const side = game.recommendation === "NRFI" ? "NRFI" : "YRFI";
       const modelProbability = side === "NRFI" ? game.nrfiProbability / 100 : (100 - game.nrfiProbability) / 100;
-      const market = valueFromMarketForTeams(markets, game.away?.name ?? "", game.home?.name ?? "", side, modelProbability);
+      const market = valueFromCachedQuotesForTeams(game.away?.name ?? "", game.home?.name ?? "", side, modelProbability);
       if (!market) return { ...game, marketValue: null };
 
       const edge = market.edge ?? 0;
@@ -85,8 +85,6 @@ app.use("/api/mlb/nrfi", (req, res, next) => {
       const marketFactor = `${side} market: ${probability.toFixed(1)}% model vs ${market.noVigProbability === null ? "—" : (market.noVigProbability * 100).toFixed(1) + "%"} no-vig, ${edge >= 0 ? "+" : ""}${(edge * 100).toFixed(1)}pp edge, ${ev >= 0 ? "+" : ""}${(ev * 100).toFixed(1)}% EV at ${market.book ?? "market"} ${market.price ?? "—"}`;
       return {
         ...game,
-        // Keep the model's status authoritative for Value Plays.
-        // marketPlayStatus is supplementary and never creates a play by itself.
         modelPlayStatus: game.playStatus,
         marketPlayStatus,
         marketValue: {
@@ -99,6 +97,7 @@ app.use("/api/mlb/nrfi", (req, res, next) => {
           edge: Math.round(edge * 1000) / 10,
           ev: Math.round(ev * 1000) / 10,
           updatedAt: market.updatedAt,
+          ageSeconds: market.ageSeconds === null || market.ageSeconds === undefined ? null : Math.round(market.ageSeconds),
         },
         factors: [...(game.factors ?? []), marketFactor],
       };
@@ -147,7 +146,7 @@ app.get("/api/mlb/performance", async (req, res) => {
       generatedAt: new Date().toISOString(),
       performance: summary,
       health,
-      market: { status: getCachedMlbRfiMarkets().size ? "live" : "unavailable", note: "Historical market ROI is reported only after verified market snapshots are persisted." },
+      market: { status: getCachedMlbRfiQuotes().length ? "live" : "unavailable", note: "Historical market ROI is reported only after verified market snapshots are persisted." },
     });
   } catch (error) {
     console.error("[MLB Performance] Error:", error);
