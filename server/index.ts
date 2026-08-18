@@ -16,6 +16,7 @@ import { evaluateMlbModelHealth } from "./mlbModelHealth";
 import { registerCalibrationSourceRoute } from "./mlbCalibrationSources";
 import { getMlbIntegritySummary } from "./mlbIntegrity";
 import { startMlbAutoGradeScheduler } from "./mlbAutoGrade";
+import { captureMlbClosingLines, getMlbClosingLineSummary } from "./mlbClosingLine";
 
 const app = express();
 app.set('trust proxy', 1);
@@ -86,10 +87,10 @@ app.get("/api/mlb/performance", async (req, res) => {
   try {
     const requestedDays = typeof req.query.days === "string" ? Number(req.query.days) : 30;
     if (!Number.isFinite(requestedDays) || requestedDays < 1 || requestedDays > 90) return res.status(400).json({ error: "days must be a number from 1 to 90" });
-    const summary = await getCalibrationSummary(requestedDays);
-    const health = evaluateMlbModelHealth({ predictionCount: summary.sampleSize, gradedCount: summary.gradedPredictions, brierScore: summary.brierScore, logLoss: summary.logLoss, ece: summary.expectedCalibrationError, marketQuoteCount: 0, staleMarketQuoteCount: 0, lineupConfirmedCount: 0, pitcherConfirmedCount: 0, missingPitcherMetricCount: 0 });
+    const [summary, closingLine] = await Promise.all([getCalibrationSummary(requestedDays), getMlbClosingLineSummary(requestedDays)]);
+    const health = evaluateMlbModelHealth({ predictionCount: summary.sampleSize, gradedCount: summary.gradedPredictions, brierScore: summary.brierScore, logLoss: summary.logLoss, ece: summary.expectedCalibrationError, marketQuoteCount: closingLine.eligible, staleMarketQuoteCount: Math.max(0, closingLine.eligible - closingLine.captured), lineupConfirmedCount: 0, pitcherConfirmedCount: 0, missingPitcherMetricCount: 0 });
     res.setHeader("Cache-Control", "public, max-age=60, stale-while-revalidate=300");
-    return res.json({ windowDays: Math.round(requestedDays), modelVersion: "v3", generatedAt: new Date().toISOString(), performance: summary, health, market: { status: getCachedMlbRfiQuotes().length ? "live" : "unavailable", note: "Historical market ROI is reported only after verified market snapshots are persisted." } });
+    return res.json({ windowDays: Math.round(requestedDays), modelVersion: "v4-live", generatedAt: new Date().toISOString(), performance: summary, closingLine, health, market: { status: getCachedMlbRfiQuotes().length ? "live" : "unavailable", note: "ROI and CLV use only verified sportsbook snapshots. Missing prices are never backfilled or invented." } });
   } catch (error) { console.error("[MLB Performance] Error:", error); return res.status(500).json({ error: "Unable to load MLB performance data" }); }
 });
 
@@ -117,6 +118,11 @@ function isNbaSeason(): boolean { const month = new Date().getUTCMonth() + 1; re
     try { const { fetchNrfiData } = await import('./mlbNrfi.js'); void fetchNrfiData().then(() => log('[Startup] MLB NRFI cache warmed for today.')).catch((error) => log('[Startup] MLB NRFI cache warm failed:', error)); log('[Startup] MLB NRFI cache warming started in background.'); } catch (error) { log('[Startup] MLB cache warm skipped:', error); }
     void fetchMlbRfiMarkets().then(markets => log(`[Startup] MLB RFI odds warm: ${markets.size / 2} games priced.`)).catch(error => log('[Startup] MLB RFI odds warm failed:', error));
     startMlbAutoGradeScheduler();
+    const closingRun = () => void captureMlbClosingLines(20).then(result => { if (result.captured > 0) log(`[MLB Closing] Captured ${result.captured}/${result.checked} closing lines.`); }).catch(error => log('[MLB Closing] Capture failed:', error));
+    closingRun();
+    const closingTimer = setInterval(closingRun, 5 * 60 * 1000);
+    if (typeof closingTimer.unref === 'function') closingTimer.unref();
+    log('[Startup] MLB closing-line capture scheduled every 5 minutes for games within 20 minutes of first pitch.');
     if (!isNbaSeason()) { log('[Startup] NBA offseason detected — skipping heavy NBA startup sync.'); return; }
     void (async () => {
       try { log('[Startup] Running initial NBA data sync in background...'); const startupSyncService = createDailySyncService(storage); await startupSyncService.runDailySync(); log('[Startup] Initial NBA sync complete'); } catch (error) { log('[Startup] Initial NBA sync failed:', error); }
