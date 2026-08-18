@@ -15,6 +15,7 @@ import { getCalibrationSummary } from "./mlbCalibration";
 import { evaluateMlbModelHealth } from "./mlbModelHealth";
 import { registerCalibrationSourceRoute } from "./mlbCalibrationSources";
 import { getMlbIntegritySummary } from "./mlbIntegrity";
+import { startMlbAutoGradeScheduler } from "./mlbAutoGrade";
 
 const app = express();
 app.set('trust proxy', 1);
@@ -115,7 +116,7 @@ function isNbaSeason(): boolean { const month = new Date().getUTCMonth() + 1; re
     log(`serving on port ${port}`);
     try { const { fetchNrfiData } = await import('./mlbNrfi.js'); void fetchNrfiData().then(() => log('[Startup] MLB NRFI cache warmed for today.')).catch((error) => log('[Startup] MLB NRFI cache warm failed:', error)); log('[Startup] MLB NRFI cache warming started in background.'); } catch (error) { log('[Startup] MLB cache warm skipped:', error); }
     void fetchMlbRfiMarkets().then(markets => log(`[Startup] MLB RFI odds warm: ${markets.size / 2} games priced.`)).catch(error => log('[Startup] MLB RFI odds warm failed:', error));
-    void import('./mlbAutoGrade.js').then(({ runMlbAutoGrade }) => runMlbAutoGrade()).then(result => log(`[Startup] MLB auto-grade complete: ${result.games} games checked.`)).catch(error => log('[Startup] MLB auto-grade failed:', error));
+    startMlbAutoGradeScheduler();
     if (!isNbaSeason()) { log('[Startup] NBA offseason detected — skipping heavy NBA startup sync.'); return; }
     void (async () => {
       try { log('[Startup] Running initial NBA data sync in background...'); const startupSyncService = createDailySyncService(storage); await startupSyncService.runDailySync(); log('[Startup] Initial NBA sync complete'); } catch (error) { log('[Startup] Initial NBA sync failed:', error); }
