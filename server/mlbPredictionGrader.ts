@@ -16,18 +16,34 @@ export type GraderGame = {
 };
 
 /**
+ * Parse only a canonical first-inning score. A prediction is never graded
+ * from a missing, malformed, or ambiguous score. The feed may contain values
+ * such as "0-0" or "2-1"; whitespace is harmless, but anything else is
+ * rejected so a status flag can never manufacture a YRFI result.
+ */
+function parseFirstInningScore(value: string | null): { away: number; home: number; normalized: string } | null {
+  if (typeof value !== "string") return null;
+  const match = value.trim().match(/^(\d+)\s*-\s*(\d+)$/);
+  if (!match) return null;
+  const away = Number(match[1]);
+  const home = Number(match[2]);
+  if (!Number.isSafeInteger(away) || !Number.isSafeInteger(home) || away < 0 || home < 0) return null;
+  return { away, home, normalized: `${away}-${home}` };
+}
+
+/**
  * Persists predictions and grades completed games without changing the
  * original recommendation or probability. Repeated calls are idempotent.
- * A new record is only marked locked when the game is still pending. If a
- * historical completed game is first seen after the fact, it is recorded as a
- * result/backfill without falsely claiming a pregame lock timestamp.
+ * A game is graded only from a valid first-inning score; the upstream
+ * won/lost flag is deliberately not trusted as the source of truth.
  */
 export async function persistAndGradeNrfiGames(games: GraderGame[], modelVersion = "v3"): Promise<void> {
   const quotes = getCachedMlbRfiQuotes();
   for (const game of games) {
-    const completed = game.outcome !== "pending" && game.firstInningScore !== null;
-    const actualOutcome = completed
-      ? game.firstInningScore === "0-0" ? "NRFI" : "YRFI"
+    const parsedScore = parseFirstInningScore(game.firstInningScore);
+    const completed = game.outcome !== "pending" && parsedScore !== null;
+    const actualOutcome = parsedScore
+      ? parsedScore.away === 0 && parsedScore.home === 0 ? "NRFI" : "YRFI"
       : null;
     const modelProbability = (game.recommendation === "NRFI" ? game.nrfiProbability : 100 - game.nrfiProbability) / 100;
     const away = game.away?.name ?? game.away?.abbreviation ?? "";
@@ -48,7 +64,7 @@ export async function persistAndGradeNrfiGames(games: GraderGame[], modelVersion
       // keep their original lock; completed backfills remain explicitly unlocked.
       lockedAt: completed ? null : new Date(),
       outcome: actualOutcome,
-      firstInningScore: game.firstInningScore,
+      firstInningScore: parsedScore?.normalized ?? null,
       marketValue: marketValue ? {
         available: marketValue.available,
         side: marketValue.selection,
