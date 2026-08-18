@@ -22,22 +22,31 @@ let inflight: Promise<NormalizedMlbMarketQuote[]> | null = null;
 const norm = (value: string | undefined) => (value ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
 const keyFor = (away: string | undefined, home: string | undefined) => `${norm(away)}@${norm(home)}`;
 
+function quoteToLegacyMarket(quote: NormalizedMlbMarketQuote): MlbRfiMarket {
+  return {
+    available: true,
+    book: quote.sportsbook,
+    selection: quote.side,
+    price: quote.americanOdds,
+    impliedProbability: null,
+    noVigProbability: null,
+    edge: null,
+    ev: null,
+    updatedAt: quote.capturedAt,
+  };
+}
+
+export function getCachedMlbRfiQuotes(): NormalizedMlbMarketQuote[] {
+  if (!cache || cache.expiresAt <= Date.now()) return [];
+  return cache.value;
+}
+
 export function getCachedMlbRfiMarkets(): Map<string, MlbRfiMarket> {
-  if (!cache || cache.expiresAt <= Date.now()) return new Map();
+  const quotes = getCachedMlbRfiQuotes();
   const out = new Map<string, MlbRfiMarket>();
-  for (const quote of cache.value) {
+  for (const quote of quotes) {
     const key = `${keyFor(quote.awayTeam ?? undefined, quote.homeTeam ?? undefined)}:${quote.side}:${quote.sportsbook}`;
-    out.set(key, {
-      available: true,
-      book: quote.sportsbook,
-      selection: quote.side,
-      price: quote.americanOdds,
-      impliedProbability: null,
-      noVigProbability: null,
-      edge: null,
-      ev: null,
-      updatedAt: quote.capturedAt,
-    });
+    out.set(key, quoteToLegacyMarket(quote));
   }
   return out;
 }
@@ -71,47 +80,14 @@ function quoteMatchesGame(quote: NormalizedMlbMarketQuote, away: string, home: s
   return keyFor(quote.awayTeam ?? undefined, quote.homeTeam ?? undefined) === keyFor(away, home);
 }
 
-export function valueFromMarketForTeams(
-  market: Map<string, MlbRfiMarket>,
-  away: string,
-  home: string,
-  side: "NRFI" | "YRFI",
-  modelProbability: number,
-): MlbRfiMarket | null {
-  // This compatibility path is retained for callers already consuming the
-  // cached Map shape. It cannot recover the opposite-side quote, so no-vig is
-  // intentionally unavailable here. The authoritative route should use the
-  // quote-aware evaluator below when live quotes are present.
-  const prefix = `${keyFor(away, home)}:${side}:`;
-  let best: MlbRfiMarket | null = null;
-  for (const [key, item] of market) {
-    if (!key.startsWith(prefix) || item.price === null) continue;
-    const ageSeconds = item.updatedAt ? Math.max(0, (Date.now() - new Date(item.updatedAt).getTime()) / 1000) : Infinity;
-    if (!Number.isFinite(ageSeconds) || ageSeconds > 15 * 60) continue;
-    const decimal = item.price > 0 ? 1 + item.price / 100 : 1 + 100 / Math.abs(item.price);
-    const ev = modelProbability * decimal - 1;
-    const scored = { ...item, ev, edge: item.noVigProbability === null ? null : modelProbability - item.noVigProbability, ageSeconds };
-    if (!best || (scored.ev ?? -Infinity) > (best.ev ?? -Infinity)) best = scored;
-  }
-  return best;
-}
-
-/**
- * Authoritative quote-aware valuation used by the NRFI API middleware. It
- * pairs NRFI/YRFI from the same sportsbook/market before computing no-vig,
- * rejects stale prices, and selects the best valid EV across books.
- */
-export async function valueLiveMarketForTeams(
+function evaluateQuotesForTeams(
+  quotes: NormalizedMlbMarketQuote[],
   away: string,
   home: string,
   side: "NRFI" | "YRFI",
   modelProbability: number,
   now = new Date(),
-): Promise<MlbRfiMarket | null> {
-  const quotes = cache && cache.expiresAt > Date.now()
-    ? cache.value
-    : await fetchLiveMlbMarketQuotes();
-
+): MlbRfiMarket | null {
   let best: MlbRfiMarket | null = null;
   for (const target of quotes.filter(q => q.side === side && quoteMatchesGame(q, away, home))) {
     const opposite = quotes.find(q =>
@@ -145,4 +121,56 @@ export async function valueLiveMarketForTeams(
     if (!best || (candidate.ev ?? -Infinity) > (best.ev ?? -Infinity)) best = candidate;
   }
   return best;
+}
+
+/**
+ * Synchronous path for the Express response decorator. It only evaluates the
+ * already-warmed verified quote cache; it never waits on a sportsbook source.
+ */
+export function valueFromCachedQuotesForTeams(
+  away: string,
+  home: string,
+  side: "NRFI" | "YRFI",
+  modelProbability: number,
+  now = new Date(),
+): MlbRfiMarket | null {
+  return evaluateQuotesForTeams(getCachedMlbRfiQuotes(), away, home, side, modelProbability, now);
+}
+
+/**
+ * Compatibility path for callers that already consume the legacy Map shape.
+ * It intentionally has no-vig unavailable because the opposite quote is not
+ * represented in that Map. New code should use valueFromCachedQuotesForTeams.
+ */
+export function valueFromMarketForTeams(
+  market: Map<string, MlbRfiMarket>,
+  away: string,
+  home: string,
+  side: "NRFI" | "YRFI",
+  modelProbability: number,
+): MlbRfiMarket | null {
+  const prefix = `${keyFor(away, home)}:${side}:`;
+  let best: MlbRfiMarket | null = null;
+  for (const [key, item] of market) {
+    if (!key.startsWith(prefix) || item.price === null) continue;
+    const captured = item.updatedAt ? new Date(item.updatedAt).getTime() : NaN;
+    const ageSeconds = Number.isFinite(captured) ? Math.max(0, (Date.now() - captured) / 1000) : Infinity;
+    if (!Number.isFinite(ageSeconds) || ageSeconds > 15 * 60) continue;
+    const decimal = item.price > 0 ? 1 + item.price / 100 : 1 + 100 / Math.abs(item.price);
+    const ev = modelProbability * decimal - 1;
+    const scored = { ...item, ev, ageSeconds };
+    if (!best || (scored.ev ?? -Infinity) > (best.ev ?? -Infinity)) best = scored;
+  }
+  return best;
+}
+
+export async function valueLiveMarketForTeams(
+  away: string,
+  home: string,
+  side: "NRFI" | "YRFI",
+  modelProbability: number,
+  now = new Date(),
+): Promise<MlbRfiMarket | null> {
+  const quotes = cache && cache.expiresAt > Date.now() ? cache.value : await fetchLiveMlbMarketQuotes();
+  return evaluateQuotesForTeams(quotes, away, home, side, modelProbability, now);
 }
