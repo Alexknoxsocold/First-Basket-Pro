@@ -70,18 +70,17 @@ const CACHE_TTL = 20 * 60 * 1000;
 const STALE_TTL = 2 * 60 * 60 * 1000;
 const WINDOW_CACHE_TTL = 10 * 60 * 1000;
 const HISTORY_CACHE_TTL = 30 * 60 * 1000;
-// More history makes the model less dependent on a short hot/cold streak.
-// Recency weighting still gives the newest games more influence.
 const HISTORY_DAYS = 30;
 const HISTORY_GAMES = 15;
 const PRIOR_WEIGHT = 7;
 const RECENCY_DECAY = 0.92;
 
-// A probability is not automatically a bet. Promotion requires meaningful
-// separation from 50% plus enough recent data quality.
-const BEST_PLAY_EDGE = 0.14;
-const PLAY_EDGE = 0.10;
-const LEAN_EDGE = 0.07;
+// Promotion tiers: a prediction can be useful without pretending every game
+// is a high-confidence wager. LEAN is intentionally more permissive than PLAY.
+const BEST_PLAY_EDGE = 0.12;
+const PLAY_EDGE = 0.07;
+const LEAN_EDGE = 0.04;
+const MIN_LEAN_SAMPLE = 3;
 const MIN_PLAY_SAMPLE = 5;
 
 let cachedResponse: NrfiResponse | null = null;
@@ -101,21 +100,14 @@ async function fetchJson<T>(url: string, timeoutMs = 8000): Promise<T> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const response = await fetch(url, {
-      signal: controller.signal,
-      headers: { "User-Agent": "First-Basket-Pro/1.0" },
-    });
+    const response = await fetch(url, { signal: controller.signal, headers: { "User-Agent": "First-Basket-Pro/1.0" } });
     if (!response.ok) throw new Error(`ESPN returned ${response.status}`);
     return (await response.json()) as T;
-  } finally {
-    clearTimeout(timer);
-  }
+  } finally { clearTimeout(timer); }
 }
 
 function getTodayET(): string {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit",
-  }).formatToParts(new Date());
+  const parts = new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date());
   return `${parts.find(p => p.type === "year")?.value}-${parts.find(p => p.type === "month")?.value}-${parts.find(p => p.type === "day")?.value}`;
 }
 
@@ -125,9 +117,7 @@ function addDays(dateISO: string, days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, value));
-}
+function clamp(value: number, min: number, max: number): number { return Math.min(max, Math.max(min, value)); }
 
 function getFirstInningRuns(competitor: EspnCompetitor): number | null {
   const first = competitor.linescores?.find(line => line.period === 1);
@@ -159,9 +149,7 @@ function getOutcome(recommendation: "NRFI" | "YRFI", competition: EspnCompetitio
   const homeRuns = home ? getFirstInningRuns(home) : null;
   const firstInningScore = awayRuns !== null && homeRuns !== null ? `${awayRuns}-${homeRuns}` : null;
   const state = competition.status?.type?.state;
-  if (!(state === "post" || (awayRuns !== null && homeRuns !== null && state !== "pre")) || awayRuns === null || homeRuns === null) {
-    return { outcome: "pending", firstInningScore };
-  }
+  if (!(state === "post" || (awayRuns !== null && homeRuns !== null && state !== "pre")) || awayRuns === null || homeRuns === null) return { outcome: "pending", firstInningScore };
   const wasNrfi = awayRuns === 0 && homeRuns === 0;
   return { outcome: recommendation === (wasNrfi ? "NRFI" : "YRFI") ? "won" : "lost", firstInningScore };
 }
@@ -170,12 +158,7 @@ async function withConcurrency<T, R>(values: T[], worker: (value: T) => Promise<
   if (!values.length) return [];
   const results: R[] = new Array(values.length);
   let next = 0;
-  async function run() {
-    while (next < values.length) {
-      const index = next++;
-      results[index] = await worker(values[index]);
-    }
-  }
+  async function run() { while (next < values.length) { const index = next++; results[index] = await worker(values[index]); } }
   await Promise.all(Array.from({ length: Math.min(limit, values.length) }, () => run()));
   return results;
 }
@@ -186,18 +169,14 @@ async function fetchDailyScoreboard(date: string): Promise<EspnEvent[]> {
   const key = `day:${date}`;
   const existing = historyInFlight.get(key);
   if (existing) return existing;
-
   const request = (async () => {
     try {
       const data = await fetchJson<{ events?: EspnEvent[] }>(`${ESPN_BASE}/scoreboard?dates=${date.replace(/-/g, "")}`);
       const events = data.events ?? [];
       dailyScoreboardCache.set(date, { events, expiresAt: Date.now() + HISTORY_CACHE_TTL });
       return events;
-    } catch {
-      return [];
-    } finally {
-      historyInFlight.delete(key);
-    }
+    } catch { return []; }
+    finally { historyInFlight.delete(key); }
   })();
   historyInFlight.set(key, request);
   return request;
@@ -213,11 +192,7 @@ async function fetchRecentHistory(beforeDate: string): Promise<EspnEvent[]> {
     return batches.flat();
   })();
   historyInFlight.set(key, request);
-  try {
-    return await request;
-  } finally {
-    historyInFlight.delete(key);
-  }
+  try { return await request; } finally { historyInFlight.delete(key); }
 }
 
 function calculateLeagueBaseline(allRecentGames: EspnEvent[]) {
@@ -226,15 +201,10 @@ function calculateLeagueBaseline(allRecentGames: EspnEvent[]) {
   let totalWeight = 0;
   let weightedRuns = 0;
   let weightedScoreless = 0;
-
-  const completed = allRecentGames
-    .map(event => ({ event, competition: event.competitions?.[0] }))
-    .filter(item => {
-      const state = item.competition?.status?.type?.state;
-      return state === "post" || item.competition?.status?.type?.completed === true;
-    })
-    .sort((a, b) => (b.event.date ?? "").localeCompare(a.event.date ?? ""));
-
+  const completed = allRecentGames.map(event => ({ event, competition: event.competitions?.[0] })).filter(item => {
+    const state = item.competition?.status?.type?.state;
+    return state === "post" || item.competition?.status?.type?.completed === true;
+  }).sort((a, b) => (b.event.date ?? "").localeCompare(a.event.date ?? ""));
   for (const [index, item] of completed.entries()) {
     const competitors = item.competition?.competitors ?? [];
     const away = competitors.find(c => c.homeAway === "away");
@@ -250,37 +220,23 @@ function calculateLeagueBaseline(allRecentGames: EspnEvent[]) {
       totalWeight += weight;
     }
   }
-
   if (!totalWeight) return { games: 0, runsPerInning: 0.50, scorelessPct: 0.60, gameNrfiPct: 0.49 };
-  const mean = weightedRuns / totalWeight;
-  const scorelessPct = weightedScoreless / totalWeight;
-  const gameNrfiPct = completedGames ? nrfiGames / completedGames : 0.49;
   return {
     games: completedGames,
-    runsPerInning: clamp(mean, 0.20, 1.20),
-    scorelessPct: clamp(scorelessPct, 0.40, 0.80),
-    gameNrfiPct: clamp(gameNrfiPct, 0.35, 0.65),
+    runsPerInning: clamp(weightedRuns / totalWeight, 0.20, 1.20),
+    scorelessPct: clamp(weightedScoreless / totalWeight, 0.40, 0.80),
+    gameNrfiPct: clamp(completedGames ? nrfiGames / completedGames : 0.49, 0.35, 0.65),
   };
 }
 
 function calculateTeamForm(teamId: string, allRecentGames: EspnEvent[]): TeamForm {
   const league = calculateLeagueBaseline(allRecentGames);
-  const fallback: TeamForm = {
-    games: 0,
-    scorelessPct: league.scorelessPct,
-    runsPerFirstInning: league.runsPerInning,
-    allowedPerFirstInning: league.runsPerInning,
-    allowedScorelessPct: league.scorelessPct,
-  };
-  const teamGames = allRecentGames
-    .filter(event => {
-      const competition = event.competitions?.[0];
-      const state = competition?.status?.type?.state;
-      return (state === "post" || competition?.status?.type?.completed === true) && competition?.competitors?.some(c => c.team?.id === teamId);
-    })
-    .sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""))
-    .slice(0, HISTORY_GAMES);
-
+  const fallback: TeamForm = { games: 0, scorelessPct: league.scorelessPct, runsPerFirstInning: league.runsPerInning, allowedPerFirstInning: league.runsPerInning, allowedScorelessPct: league.scorelessPct };
+  const teamGames = allRecentGames.filter(event => {
+    const competition = event.competitions?.[0];
+    const state = competition?.status?.type?.state;
+    return (state === "post" || competition?.status?.type?.completed === true) && competition?.competitors?.some(c => c.team?.id === teamId);
+  }).sort((a, b) => (b.date ?? "").localeCompare(a.date ?? "")).slice(0, HISTORY_GAMES);
   const valid: { teamRuns: number; opponentRuns: number }[] = [];
   for (const event of teamGames) {
     const competitors = event.competitions?.[0]?.competitors ?? [];
@@ -294,14 +250,7 @@ function calculateTeamForm(teamId: string, allRecentGames: EspnEvent[]): TeamFor
     valid.push({ teamRuns: teamIsAway ? awayRuns : homeRuns, opponentRuns: teamIsAway ? homeRuns : awayRuns });
   }
   if (!valid.length) return fallback;
-
-  // Recency weighting plus Bayesian shrinkage prevents both stale history and
-  // tiny hot/cold streaks from creating fake certainty.
-  let weightTotal = 0;
-  let weightedScored = 0;
-  let weightedAllowed = 0;
-  let weightedScoreless = 0;
-  let weightedAllowedScoreless = 0;
+  let weightTotal = 0, weightedScored = 0, weightedAllowed = 0, weightedScoreless = 0, weightedAllowedScoreless = 0;
   valid.forEach((x, index) => {
     const weight = Math.pow(RECENCY_DECAY, index);
     weightTotal += weight;
@@ -310,7 +259,6 @@ function calculateTeamForm(teamId: string, allRecentGames: EspnEvent[]): TeamFor
     weightedScoreless += (x.teamRuns === 0 ? 1 : 0) * weight;
     weightedAllowedScoreless += (x.opponentRuns === 0 ? 1 : 0) * weight;
   });
-
   return {
     games: valid.length,
     scorelessPct: (weightedScoreless + league.scorelessPct * PRIOR_WEIGHT) / (weightTotal + PRIOR_WEIGHT),
@@ -331,21 +279,20 @@ async function fetchTeamForm(teamId: string, beforeDate: string, sharedHistory: 
 
 function pitcherRunAdjustment(pitcher: NrfiPitcher): number {
   const eraAdjustment = pitcher.era === null ? 1 : clamp(0.88 + (pitcher.era / 4.25) * 0.12, 0.88, 1.15);
-  // WHIP is a traffic/base-runner signal. It is intentionally bounded so it
-  // strengthens the model without overpowering first-inning history.
   const whipAdjustment = pitcher.whip === null ? 1 : clamp(0.93 + (pitcher.whip / 1.30) * 0.07, 0.93, 1.10);
   return 0.58 * eraAdjustment + 0.42 * whipAdjustment;
 }
 
-function poissonNoRunProbability(expectedRuns: number): number {
-  return Math.exp(-Math.max(0.01, expectedRuns));
-}
+function poissonNoRunProbability(expectedRuns: number): number { return Math.exp(-Math.max(0.01, expectedRuns)); }
 
 function classifyPlay(nrfiProbability: number, confidence: "High" | "Medium" | "Low", sampleSize: number): NrfiGame["playStatus"] {
   const edge = Math.abs(nrfiProbability / 100 - 0.50);
-  if (sampleSize < MIN_PLAY_SAMPLE || confidence === "Low") return "NO_PLAY";
+  // A missing pitcher metric should reduce the tier, not erase the signal.
+  // Low-confidence games can still be shown as LEAN when the historical model
+  // has enough observations; PLAY/BEST_PLAY still require stronger confidence.
+  if (sampleSize < MIN_LEAN_SAMPLE) return "NO_PLAY";
   if (edge >= BEST_PLAY_EDGE && confidence === "High") return "BEST_PLAY";
-  if (edge >= PLAY_EDGE) return "PLAY";
+  if (edge >= PLAY_EDGE && confidence !== "Low" && sampleSize >= MIN_PLAY_SAMPLE) return "PLAY";
   if (edge >= LEAN_EDGE) return "LEAN";
   return "NO_PLAY";
 }
@@ -364,14 +311,8 @@ function buildPrediction(
   const homeLambdaBinary = -Math.log(clamp((homeForm.scorelessPct + awayForm.allowedScorelessPct) / 2, 0.25, 0.90));
   const expectedRuns = Math.max(0.05, (0.65 * awayLambdaMean + 0.35 * awayLambdaBinary + 0.65 * homeLambdaMean + 0.35 * homeLambdaBinary) * (homeIndoor ? 0.98 : 1));
   const poissonNrfi = poissonNoRunProbability(expectedRuns);
-  const matchupEmpiricalNrfi = clamp(
-    ((awayForm.scorelessPct + homeForm.allowedScorelessPct) / 2) * ((homeForm.scorelessPct + awayForm.allowedScorelessPct) / 2),
-    0.25,
-    0.75,
-  );
+  const matchupEmpiricalNrfi = clamp(((awayForm.scorelessPct + homeForm.allowedScorelessPct) / 2) * ((homeForm.scorelessPct + awayForm.allowedScorelessPct) / 2), 0.25, 0.75);
   const calibratedPoisson = 0.60 * poissonNrfi + 0.40 * leagueNrfiProbability;
-  // The league prior is important for stability, but the matchup and Poisson
-  // components now get enough weight to avoid a slate full of artificial 50s.
   const rawProbability = 0.30 * leagueNrfiProbability + 0.40 * matchupEmpiricalNrfi + 0.30 * calibratedPoisson;
   const nrfiProbability = Math.round(clamp(rawProbability * 100, 25, 75) * 10) / 10;
   const recommendation = nrfiProbability >= 50 ? "NRFI" : "YRFI";
@@ -384,9 +325,9 @@ function buildPrediction(
   const factors: string[] = [];
   if (playStatus === "BEST_PLAY") factors.push(`Best model separation: ${recommendation} at ${recommendation === "NRFI" ? nrfiProbability : 100 - nrfiProbability}%`);
   else if (playStatus === "PLAY") factors.push(`Qualifying model edge: ${recommendation} at ${recommendation === "NRFI" ? nrfiProbability : 100 - nrfiProbability}%`);
-  else if (playStatus === "LEAN") factors.push(`Small model lean: ${recommendation}`);
+  else if (playStatus === "LEAN") factors.push(`Model lean: ${recommendation} at ${recommendation === "NRFI" ? nrfiProbability : 100 - nrfiProbability}% with ${modelEdge}% separation from 50/50`);
   else factors.push("No meaningful model edge; pass rather than force a play");
-  if (awayPitcher.era !== null || homePitcher.era !== null) factors.push(`Probable starters included (ERAs ${awayPitcher.era !== null ? awayPitcher.era.toFixed(2) : "pending"} and ${homePitcher.era !== null ? homePitcher.era.toFixed(2) : "pending"})`);
+  if (awayPitcher.era !== null || homePitcher.era !== null) factors.push(`Probable starter ERAs included (${awayPitcher.era !== null ? awayPitcher.era.toFixed(2) : "pending"} and ${homePitcher.era !== null ? homePitcher.era.toFixed(2) : "pending"})`);
   else factors.push("Probable starter ERAs are unconfirmed");
   if (awayPitcher.whip !== null || homePitcher.whip !== null) factors.push(`WHIP signal included (${awayPitcher.whip !== null ? awayPitcher.whip.toFixed(2) : "pending"} and ${homePitcher.whip !== null ? homePitcher.whip.toFixed(2) : "pending"})`);
   else factors.push("Probable starter WHIPs are unconfirmed");
@@ -398,33 +339,17 @@ function buildPrediction(
 
 async function buildNrfiData(date: string): Promise<NrfiResponse> {
   const scoreboard = await fetchJson<{ events?: EspnEvent[] }>(`${ESPN_BASE}/scoreboard?dates=${date.replace(/-/g, "")}`);
-  const rawGames = (scoreboard.events ?? [])
-    .map(event => ({ event, competition: event.competitions?.[0] }))
-    .filter((item): item is { event: EspnEvent; competition: EspnCompetition } => Boolean(item.competition?.competitors?.length === 2));
+  const rawGames = (scoreboard.events ?? []).map(event => ({ event, competition: event.competitions?.[0] })).filter((item): item is { event: EspnEvent; competition: EspnCompetition } => Boolean(item.competition?.competitors?.length === 2));
   const teamIds = Array.from(new Set(rawGames.flatMap(({ competition }) => competition.competitors?.map(c => c.team?.id).filter((id): id is string => Boolean(id)) ?? [])));
   const sharedHistory = await fetchRecentHistory(date);
   const leagueBaseline = calculateLeagueBaseline(sharedHistory);
   const forms = await withConcurrency(teamIds, async teamId => [teamId, await fetchTeamForm(teamId, date, sharedHistory)] as const, 12);
   const formMap = new Map(forms);
-  const fallback: TeamForm = {
-    games: 0,
-    scorelessPct: leagueBaseline.scorelessPct,
-    runsPerFirstInning: leagueBaseline.runsPerInning,
-    allowedPerFirstInning: leagueBaseline.runsPerInning,
-    allowedScorelessPct: leagueBaseline.scorelessPct,
-  };
-
+  const fallback: TeamForm = { games: 0, scorelessPct: leagueBaseline.scorelessPct, runsPerFirstInning: leagueBaseline.runsPerInning, allowedPerFirstInning: leagueBaseline.runsPerInning, allowedScorelessPct: leagueBaseline.scorelessPct };
   const games = rawGames.map(({ event, competition }) => {
     const away = competition.competitors!.find(c => c.homeAway === "away")!;
     const home = competition.competitors!.find(c => c.homeAway === "home")!;
-    const prediction = buildPrediction(
-      formMap.get(away.team?.id ?? "") ?? fallback,
-      formMap.get(home.team?.id ?? "") ?? fallback,
-      getPitcher(away),
-      getPitcher(home),
-      competition.venue?.indoor === true,
-      leagueBaseline.gameNrfiPct,
-    );
+    const prediction = buildPrediction(formMap.get(away.team?.id ?? "") ?? fallback, formMap.get(home.team?.id ?? "") ?? fallback, getPitcher(away), getPitcher(home), competition.venue?.indoor === true, leagueBaseline.gameNrfiPct);
     return {
       id: event.id,
       date: event.date ?? `${date}T00:00:00Z`,
@@ -437,7 +362,6 @@ async function buildNrfiData(date: string): Promise<NrfiResponse> {
       ...getOutcome(prediction.recommendation, competition),
     };
   });
-
   const promoted = games.filter(game => game.playStatus === "BEST_PLAY" || game.playStatus === "PLAY");
   const ranked = [...promoted].sort((a, b) => b.modelEdge - a.modelEdge || (b.confidence === "High" ? 1 : 0) - (a.confidence === "High" ? 1 : 0));
   const averageNrfiProbability = games.length ? Math.round(games.reduce((sum, g) => sum + g.nrfiProbability, 0) / games.length * 10) / 10 : null;
@@ -447,8 +371,8 @@ async function buildNrfiData(date: string): Promise<NrfiResponse> {
     averageNrfiProbability,
     topPick: ranked[0] ?? null,
     updatedAt: new Date().toISOString(),
-    source: "ESPN MLB scoreboard + verified 30-day first-inning history",
-    methodology: "Model v2 uses a 30-day historical window with the latest 15 verified team games weighted most heavily, Bayesian shrinkage toward the league baseline, matchup offense/prevention rates, Poisson no-run probability, probable-starter ERA and WHIP adjustments, and a league NRFI prior. Promotion requires meaningful separation from 50% and sufficient sample quality; the model passes rather than manufacture plays.",
+    source: "ESPN MLB scoreboard + verified recent game summaries",
+    methodology: "Model v2: recency-weighted first-inning offense and prevention with Bayesian shrinkage, symmetric matchup scoring, league calibration, probable-starter ERA/WHIP adjustments, and Poisson no-run probability. LEAN requires at least a 4-point model separation and 3 verified team games; PLAY/BEST PLAY require stronger data quality.",
   };
 }
 
@@ -467,9 +391,7 @@ export async function fetchNrfiData(date = getTodayET()): Promise<NrfiResponse> 
     } catch (error) {
       if (cachedResponse && cachedDate === date && now - cachedAt < STALE_TTL) return cachedResponse;
       throw error;
-    } finally {
-      refreshInFlight.delete(date);
-    }
+    } finally { refreshInFlight.delete(date); }
   })();
   refreshInFlight.set(date, refresh);
   return refresh;
@@ -485,29 +407,14 @@ export async function fetchUpcomingNrfiData(days = 3, startDate = getTodayET()):
     const games = responses.flatMap(r => r.games);
     const promoted = games.filter(g => g.playStatus === "BEST_PLAY" || g.playStatus === "PLAY");
     const topPick = [...promoted].sort((a, b) => b.modelEdge - a.modelEdge)[0] ?? null;
-    const result: NrfiWindowResponse = {
-      startDate,
-      endDate: dates[dates.length - 1],
-      days: responses,
-      games,
-      averageNrfiProbability: games.length ? Math.round(games.reduce((sum, g) => sum + g.nrfiProbability, 0) / games.length * 10) / 10 : null,
-      topPick,
-      updatedAt: new Date().toISOString(),
-    };
+    const result: NrfiWindowResponse = { startDate, endDate: dates[dates.length - 1], days: responses, games, averageNrfiProbability: games.length ? Math.round(games.reduce((sum, g) => sum + g.nrfiProbability, 0) / games.length * 10) / 10 : null, topPick, updatedAt: new Date().toISOString() };
     cachedWindow = result;
     cachedWindowStart = startDate;
     cachedWindowDays = safeDays;
     cachedWindowAt = Date.now();
     return result;
   })();
-  try {
-    return await windowRefreshInFlight;
-  } finally {
-    windowRefreshInFlight = null;
-  }
+  try { return await windowRefreshInFlight; } finally { windowRefreshInFlight = null; }
 }
 
-// Used by production startup to warm today's MLB cache without blocking the server.
-export async function warmMlbCache(): Promise<NrfiResponse> {
-  return fetchNrfiData();
-}
+export async function warmMlbCache(): Promise<NrfiResponse> { return fetchNrfiData(); }
