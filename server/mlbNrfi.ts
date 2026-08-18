@@ -95,11 +95,15 @@ const HISTORY_GAMES = 15;
 const PRIOR_WEIGHT = 7;
 const RECENCY_DECAY = 0.92;
 
-const BEST_PLAY_EDGE = 0.12;
-const PLAY_EDGE = 0.07;
-const LEAN_EDGE = 0.04;
+// Promotion thresholds are intentionally moderate rather than forcing the
+// model to manufacture a play on every slate. A 6-point model separation is
+// enough for a normal PLAY when the data quality is adequate; 10 points is a
+// higher-quality BEST_PLAY. LEAN remains the softer 3-point signal.
+const BEST_PLAY_EDGE = 0.10;
+const PLAY_EDGE = 0.06;
+const LEAN_EDGE = 0.03;
 const MIN_LEAN_SAMPLE = 3;
-const MIN_PLAY_SAMPLE = 5;
+const MIN_PLAY_SAMPLE = 4;
 
 let cachedResponse: NrfiResponse | null = null;
 let cachedDate: string | null = null;
@@ -494,7 +498,7 @@ async function buildNrfiData(date: string): Promise<NrfiResponse> {
     topPick: ranked[0] ?? null,
     updatedAt: new Date().toISOString(),
     source: "ESPN MLB scoreboard + MLB Stats API pitcher fallback + verified recent game summaries",
-    methodology: "Model v3: recency-weighted first-inning offense/prevention, Bayesian shrinkage, symmetric matchup scoring, league calibration, probable-starter ERA/WHIP from ESPN with MLB Stats API fallback, Poisson no-run probability, and conservative walk-forward calibration. Pregame predictions refresh every 5 minutes so probable-starter changes can be reflected quickly.",
+    methodology: "Model v3: recency-weighted first-inning offense/prevention, Bayesian shrinkage, symmetric matchup scoring, league calibration, probable-starter ERA/WHIP from ESPN with MLB Stats API fallback, Poisson no-run probability, and calibrated play thresholds. Pregame predictions refresh every 5 minutes so probable-starter changes can be reflected quickly.",
   };
 }
 
