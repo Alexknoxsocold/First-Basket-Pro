@@ -364,6 +364,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       const { fetchNrfiData } = await import("./mlbNrfi.js");
       const data = await fetchNrfiData(requestedDate);
+      // Public prediction data is safe to cache briefly at the browser/CDN layer.
+      // The server remains the source of truth and its model cache is longer-lived.
+      res.setHeader("Cache-Control", "public, max-age=60, stale-while-revalidate=300");
       res.json(data);
     } catch (error) {
       console.error("[MLB NRFI] Error:", error);
@@ -379,6 +382,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       const { fetchUpcomingNrfiData } = await import("./mlbNrfi.js");
       const data = await fetchUpcomingNrfiData(requestedDays);
+      res.setHeader("Cache-Control", "public, max-age=60, stale-while-revalidate=300");
       res.json(data);
     } catch (error) {
       console.error("[MLB NRFI] Upcoming error:", error);
