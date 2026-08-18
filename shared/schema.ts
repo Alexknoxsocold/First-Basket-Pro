@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, real, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, real, timestamp, index, uniqueIndex } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -10,22 +10,27 @@ export const games = pgTable("games", {
   awayTipCount: integer("away_tip_count").notNull(),
   awayTipPercent: integer("away_tip_percent").notNull(),
   awayScorePercent: integer("away_score_percent").notNull(),
-  awayStarters: text("away_starters").array(), // full starting lineup (5 players)
+  awayStarters: text("away_starters").array(),
   homeTeam: text("home_team").notNull(),
   homePlayer: text("home_player").notNull(),
   homeTipCount: integer("home_tip_count").notNull(),
   homeTipPercent: integer("home_tip_percent").notNull(),
   homeScorePercent: integer("home_score_percent").notNull(),
-  homeStarters: text("home_starters").array(), // full starting lineup (5 players)
+  homeStarters: text("home_starters").array(),
   h2h: text("h2h").notNull(),
   gameDate: text("game_date").notNull(),
-  gameTime: text("game_time"), // ISO timestamp for sorting games chronologically
-  status: text("status").notNull().default('scheduled'), // scheduled, in_progress, completed
-  awayScore: integer("away_score"), // actual final score
-  homeScore: integer("home_score"), // actual final score
-  espnGameId: text("espn_game_id"), // ESPN's game ID for tracking
-  lastSynced: text("last_synced"), // timestamp of last daily sync update
-});
+  gameTime: text("game_time"),
+  status: text("status").notNull().default('scheduled'),
+  awayScore: integer("away_score"),
+  homeScore: integer("home_score"),
+  espnGameId: text("espn_game_id"),
+  lastSynced: text("last_synced"),
+}, (table) => ({
+  gameDateIdx: index("games_game_date_idx").on(table.gameDate),
+  gameTimeIdx: index("games_game_time_idx").on(table.gameTime),
+  statusIdx: index("games_status_idx").on(table.status),
+  espnGameIdIdx: uniqueIndex("games_espn_game_id_idx").on(table.espnGameId),
+}));
 
 export const playerStats = pgTable("player_stats", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -44,7 +49,11 @@ export const playerStats = pgTable("player_stats", {
   odds: text("odds"),
   sportsbook: text("sportsbook"),
   season: text("season").notNull().default('2024/2025'),
-});
+}, (table) => ({
+  playerTeamIdx: index("player_stats_team_idx").on(table.team),
+  playerNameIdx: index("player_stats_player_idx").on(table.player),
+  seasonIdx: index("player_stats_season_idx").on(table.season),
+}));
 
 export const teamStats = pgTable("team_stats", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -53,7 +62,9 @@ export const teamStats = pgTable("team_stats", {
   firstToScore: integer("first_to_score").notNull(),
   percentage: real("percentage").notNull(),
   avgPoints: real("avg_points").notNull(),
-});
+}, (table) => ({
+  teamIdx: uniqueIndex("team_stats_team_idx").on(table.team),
+}));
 
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -68,9 +79,11 @@ export const sessions = pgTable("sessions", {
   userId: varchar("user_id").notNull().references(() => users.id),
   sessionToken: text("session_token").notNull().unique(),
   expiresAt: timestamp("expires_at").notNull(),
-});
+}, (table) => ({
+  userIdIdx: index("sessions_user_id_idx").on(table.userId),
+  expiresAtIdx: index("sessions_expires_at_idx").on(table.expiresAt),
+}));
 
-// Persistent first basket tracking — seeded manually, auto-incremented after each game
 export const fbTracking = pgTable("fb_tracking", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   playerName: text("player_name").notNull(),
@@ -79,16 +92,20 @@ export const fbTracking = pgTable("fb_tracking", {
   gamesTracked: integer("games_tracked").notNull().default(0),
   season: text("season").notNull().default("2025/26"),
   lastUpdated: text("last_updated"),
-});
+}, (table) => ({
+  playerTeamIdx: uniqueIndex("fb_tracking_player_team_idx").on(table.playerName, table.team),
+  seasonIdx: index("fb_tracking_season_idx").on(table.season),
+}));
 
-// Which ESPN game IDs have already been processed (prevents double-counting)
 export const fbProcessedGames = pgTable("fb_processed_games", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   espnGameId: text("espn_game_id").notNull().unique(),
   firstScorer: text("first_scorer"),
   firstScorerTeam: text("first_scorer_team"),
   processedAt: text("processed_at").notNull(),
-});
+}, (table) => ({
+  processedAtIdx: index("fb_processed_games_processed_at_idx").on(table.processedAt),
+}));
 
 export const insertGameSchema = createInsertSchema(games).omit({ id: true });
 export const insertPlayerStatSchema = createInsertSchema(playerStats).omit({ id: true });
