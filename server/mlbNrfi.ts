@@ -27,7 +27,7 @@ type TeamForm = {
   allowedScorelessPct: number;
 };
 
-export type NrfiPitcher = { name: string | null; era: number | null; headshot: string | null };
+export type NrfiPitcher = { name: string | null; era: number | null; whip: number | null; headshot: string | null };
 export type NrfiGame = {
   id: string;
   date: string;
@@ -73,10 +73,8 @@ const HISTORY_CACHE_TTL = 30 * 60 * 1000;
 const HISTORY_DAYS = 14;
 const HISTORY_GAMES = 10;
 
-// A probability is not automatically a bet. We only promote a game when the
-// model is sufficiently separated from the neutral 50% baseline and the data
-// quality is adequate. This prevents a slate of 50/50 games from becoming a
-// misleading list of "plays".
+// A probability is not automatically a bet. Promotion requires meaningful
+// separation from 50% plus enough recent data quality.
 const BEST_PLAY_EDGE = 0.14;
 const PLAY_EDGE = 0.10;
 const LEAN_EDGE = 0.07;
@@ -132,13 +130,19 @@ function getFirstInningRuns(competitor: EspnCompetitor): number | null {
   return typeof first?.value === "number" ? first.value : null;
 }
 
+function parsePitcherStat(probable: NonNullable<EspnCompetitor["probables"]>[number] | undefined, name: string): number | null {
+  const text = probable?.statistics?.find(stat => stat.name?.toUpperCase() === name)?.displayValue;
+  if (!text) return null;
+  const value = Number.parseFloat(text);
+  return Number.isFinite(value) ? value : null;
+}
+
 function getPitcher(competitor: EspnCompetitor): NrfiPitcher {
   const probable = competitor.probables?.find(item => item.name === "probableStartingPitcher") ?? competitor.probables?.[0];
-  const eraText = probable?.statistics?.find(stat => stat.name === "ERA")?.displayValue;
-  const era = eraText ? Number.parseFloat(eraText) : null;
   return {
     name: probable?.athlete?.displayName ?? probable?.athlete?.fullName ?? null,
-    era: Number.isFinite(era) ? era : null,
+    era: parsePitcherStat(probable, "ERA"),
+    whip: parsePitcherStat(probable, "WHIP"),
     headshot: probable?.athlete?.headshot ?? null,
   };
 }
@@ -306,7 +310,11 @@ async function fetchTeamForm(teamId: string, beforeDate: string, sharedHistory: 
 }
 
 function pitcherRunAdjustment(pitcher: NrfiPitcher): number {
-  return pitcher.era === null ? 1 : clamp(0.90 + (pitcher.era / 4.25) * 0.10, 0.90, 1.12);
+  const eraAdjustment = pitcher.era === null ? 1 : clamp(0.90 + (pitcher.era / 4.25) * 0.10, 0.90, 1.12);
+  // WHIP adds a modest baserunner/traffic signal without overpowering the
+  // first-inning historical rates. 1.30 is the neutral reference point.
+  const whipAdjustment = pitcher.whip === null ? 1 : clamp(0.94 + (pitcher.whip / 1.30) * 0.06, 0.94, 1.08);
+  return 0.60 * eraAdjustment + 0.40 * whipAdjustment;
 }
 
 function poissonNoRunProbability(expectedRuns: number): number {
@@ -343,11 +351,14 @@ function buildPrediction(
   );
   const calibratedPoisson = 0.60 * poissonNrfi + 0.40 * leagueNrfiProbability;
   const rawProbability = 0.42 * leagueNrfiProbability + 0.33 * matchupEmpiricalNrfi + 0.25 * calibratedPoisson;
-  const nrfiProbability = Math.round(clamp(rawProbability * 100, 25, 75));
+  // Keep one decimal so small model differences are not collapsed into a wall
+  // of 50% predictions while still avoiding false precision.
+  const nrfiProbability = Math.round(clamp(rawProbability * 100, 25, 75) * 10) / 10;
   const recommendation = nrfiProbability >= 50 ? "NRFI" : "YRFI";
   const sampleSize = Math.min(awayForm.games, homeForm.games);
-  const pitcherKnown = awayPitcher.era !== null && homePitcher.era !== null;
-  const confidence: NrfiGame["confidence"] = sampleSize >= 7 && pitcherKnown ? "High" : sampleSize >= 4 && (pitcherKnown || awayPitcher.name !== null || homePitcher.name !== null) ? "Medium" : "Low";
+  const pitcherMetricsKnown = awayPitcher.era !== null || awayPitcher.whip !== null || homePitcher.era !== null || homePitcher.whip !== null;
+  const bothPitcherMetricsKnown = awayPitcher.era !== null && awayPitcher.whip !== null && homePitcher.era !== null && homePitcher.whip !== null;
+  const confidence: NrfiGame["confidence"] = sampleSize >= 7 && bothPitcherMetricsKnown ? "High" : sampleSize >= 4 && pitcherMetricsKnown ? "Medium" : "Low";
   const modelEdge = Math.round(Math.abs(nrfiProbability - 50) * 10) / 10;
   const playStatus = classifyPlay(nrfiProbability, confidence, sampleSize);
   const factors: string[] = [];
@@ -355,8 +366,10 @@ function buildPrediction(
   else if (playStatus === "PLAY") factors.push(`Qualifying model edge: ${recommendation} at ${recommendation === "NRFI" ? nrfiProbability : 100 - nrfiProbability}%`);
   else if (playStatus === "LEAN") factors.push(`Small model lean: ${recommendation}`);
   else factors.push("No meaningful model edge; pass rather than force a play");
-  if (pitcherKnown) factors.push(`Probable starters included (ERAs ${awayPitcher.era!.toFixed(2)} and ${homePitcher.era!.toFixed(2)})`);
-  else factors.push("One or both probable starters are unconfirmed");
+  if (awayPitcher.era !== null || homePitcher.era !== null) factors.push(`Probable starters included (ERAs ${awayPitcher.era !== null ? awayPitcher.era.toFixed(2) : "pending"} and ${homePitcher.era !== null ? homePitcher.era.toFixed(2) : "pending"})`);
+  else factors.push("Probable starter ERAs are unconfirmed");
+  if (awayPitcher.whip !== null || homePitcher.whip !== null) factors.push(`WHIP signal included (${awayPitcher.whip !== null ? awayPitcher.whip.toFixed(2) : "pending"} and ${homePitcher.whip !== null ? homePitcher.whip.toFixed(2) : "pending"})`);
+  else factors.push("Probable starter WHIPs are unconfirmed");
   factors.push(`Recent sample: ${sampleSize || "limited"} verified games per team with Bayesian shrinkage`);
   factors.push(`Recent league NRFI baseline: ${Math.round(leagueNrfiProbability * 100)}%`);
   return { nrfiProbability, recommendation, playStatus, modelEdge, confidence, sampleSize, factors };
@@ -406,7 +419,7 @@ async function buildNrfiData(date: string): Promise<NrfiResponse> {
 
   const promoted = games.filter(game => game.playStatus === "BEST_PLAY" || game.playStatus === "PLAY");
   const ranked = [...promoted].sort((a, b) => b.modelEdge - a.modelEdge || (b.confidence === "High" ? 1 : 0) - (a.confidence === "High" ? 1 : 0));
-  const averageNrfiProbability = games.length ? Math.round(games.reduce((sum, g) => sum + g.nrfiProbability, 0) / games.length) : null;
+  const averageNrfiProbability = games.length ? Math.round(games.reduce((sum, g) => sum + g.nrfiProbability, 0) / games.length * 10) / 10 : null;
   return {
     date,
     games,
@@ -414,7 +427,7 @@ async function buildNrfiData(date: string): Promise<NrfiResponse> {
     topPick: ranked[0] ?? null,
     updatedAt: new Date().toISOString(),
     source: "ESPN MLB scoreboard + verified recent game summaries",
-    methodology: "Recent first-inning offense and prevention rates with Bayesian shrinkage, symmetric matchup scoring, league NRFI calibration, modest probable-starter ERA adjustment, and Poisson no-run probability. A game is only promoted when the model has meaningful separation from 50% and sufficient data quality.",
+    methodology: "Recent first-inning offense and prevention rates with Bayesian shrinkage, symmetric matchup scoring, league NRFI calibration, probable-starter ERA and WHIP adjustments, and Poisson no-run probability. A game is only promoted when the model has meaningful separation from 50% and sufficient data quality.",
   };
 }
 
@@ -456,7 +469,7 @@ export async function fetchUpcomingNrfiData(days = 3, startDate = getTodayET()):
       endDate: dates[dates.length - 1],
       days: responses,
       games,
-      averageNrfiProbability: games.length ? Math.round(games.reduce((sum, g) => sum + g.nrfiProbability, 0) / games.length) : null,
+      averageNrfiProbability: games.length ? Math.round(games.reduce((sum, g) => sum + g.nrfiProbability, 0) / games.length * 10) / 10 : null,
       topPick,
       updatedAt: new Date().toISOString(),
     };
