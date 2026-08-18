@@ -10,6 +10,7 @@ import { setupVite, serveStatic, log } from "./vite";
 import { authMiddleware } from "./auth";
 import { createDailySyncService } from "./dailySync";
 import { storage } from "./storage";
+import { fetchMlbRfiMarkets, valueFromMarketForTeams } from "./mlbOdds";
 
 const app = express();
 app.set('trust proxy', 1);
@@ -40,9 +41,7 @@ declare module 'http' {
   interface IncomingMessage { rawBody: unknown }
 }
 
-app.use(express.json({
-  verify: (req, _res, buf) => { req.rawBody = buf; }
-}));
+app.use(express.json({ verify: (req, _res, buf) => { req.rawBody = buf; } }));
 app.use(express.urlencoded({ extended: false }));
 app.use(sessionMiddleware);
 app.use(authMiddleware);
@@ -68,6 +67,46 @@ app.use((req, res, next) => {
   next();
 });
 
+// Enrich the existing MLB NRFI response with live market pricing when an odds
+// API key is configured. This runs after the prediction engine has produced its
+// calibrated probability, so market data never changes the underlying model.
+// It only adds the market edge/EV layer used by the Value Plays tab.
+app.use("/api/mlb/nrfi", (req, res, next) => {
+  if (req.method !== "GET" || req.path !== "/") return next();
+  const originalJson = res.json.bind(res);
+  res.json = ((body: any) => {
+    void fetchMlbRfiMarkets().then(markets => {
+      if (!markets.size || !body?.games) return originalJson(body);
+      const games = body.games.map((game: any) => {
+        const side = game.recommendation === "NRFI" ? "NRFI" : "YRFI";
+        const modelProbability = side === "NRFI" ? game.nrfiProbability / 100 : (100 - game.nrfiProbability) / 100;
+        const market = valueFromMarketForTeams(markets, game.away?.name ?? "", game.home?.name ?? "", side, modelProbability);
+        if (!market) return { ...game, marketValue: null };
+        return {
+          ...game,
+          marketValue: {
+            available: true,
+            book: market.book,
+            selection: market.selection,
+            price: market.price,
+            impliedProbability: market.impliedProbability === null ? null : Math.round(market.impliedProbability * 1000) / 10,
+            noVigProbability: market.noVigProbability === null ? null : Math.round(market.noVigProbability * 1000) / 10,
+            edge: market.edge === null ? null : Math.round(market.edge * 1000) / 10,
+            ev: market.ev === null ? null : Math.round(market.ev * 1000) / 10,
+            updatedAt: market.updatedAt,
+          },
+        };
+      });
+      return originalJson({ ...body, games });
+    }).catch(error => {
+      log('[MLB Odds] Market enrichment skipped:', error);
+      return originalJson(body);
+    });
+    return res;
+  }) as typeof res.json;
+  next();
+});
+
 function isNbaSeason(): boolean {
   const month = new Date().getUTCMonth() + 1;
   return month >= 10 || month <= 6;
@@ -83,35 +122,17 @@ function isNbaSeason(): boolean {
     throw err;
   });
 
-  if (app.get("env") === "development") {
-    await setupVite(app, server);
-  } else {
-    serveStatic(app);
-  }
+  if (app.get("env") === "development") await setupVite(app, server);
+  else serveStatic(app);
 
   const port = parseInt(process.env.PORT || '5000', 10);
-  server.listen({
-    port,
-    host: "0.0.0.0",
-    ...(process.platform !== 'darwin' && { reusePort: true }),
-  }, async () => {
+  server.listen({ port, host: "0.0.0.0", ...(process.platform !== 'darwin' && { reusePort: true }) }, async () => {
     log(`serving on port ${port}`);
-
-    // Warm today's MLB prediction cache in the background after the HTTP
-    // server is listening. fetchNrfiData() already de-duplicates concurrent
-    // refreshes, so a user arriving during warm-up will join the same request
-    // instead of starting a second expensive ESPN/history fetch.
     try {
       const { fetchNrfiData } = await import('./mlbNrfi.js');
-      void fetchNrfiData().then(() => {
-        log('[Startup] MLB NRFI cache warmed for today.');
-      }).catch((error) => {
-        log('[Startup] MLB NRFI cache warm failed:', error);
-      });
+      void fetchNrfiData().then(() => log('[Startup] MLB NRFI cache warmed for today.')).catch((error) => log('[Startup] MLB NRFI cache warm failed:', error));
       log('[Startup] MLB NRFI cache warming started in background.');
-    } catch (error) {
-      log('[Startup] MLB cache warm skipped:', error);
-    }
+    } catch (error) { log('[Startup] MLB cache warm skipped:', error); }
 
     if (!isNbaSeason()) {
       log('[Startup] NBA offseason detected — skipping heavy NBA startup sync.');
@@ -124,17 +145,13 @@ function isNbaSeason(): boolean {
         const startupSyncService = createDailySyncService(storage);
         await startupSyncService.runDailySync();
         log('[Startup] Initial NBA sync complete');
-      } catch (error) {
-        log('[Startup] Initial NBA sync failed:', error);
-      }
+      } catch (error) { log('[Startup] Initial NBA sync failed:', error); }
 
       try {
         const { populateTodayStarters } = await import('./populate-player-stats.js');
         await populateTodayStarters(storage);
         log('[Startup] Player stats populated successfully');
-      } catch (error) {
-        log('[Startup] Failed to populate player stats:', error);
-      }
+      } catch (error) { log('[Startup] Failed to populate player stats:', error); }
 
       try {
         const { warmFirstBasketCache } = await import('./firstBasketHistory.js');
@@ -146,9 +163,7 @@ function isNbaSeason(): boolean {
           warmFirstBasketCache(teams as string[]);
           log(`[Startup] Warming FB history cache for: ${teams.join(', ')}`);
         }
-      } catch (error) {
-        log('[Startup] FB history warm skipped:', error);
-      }
+      } catch (error) { log('[Startup] FB history warm skipped:', error); }
     })();
   });
 })();
