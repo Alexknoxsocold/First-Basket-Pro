@@ -49,6 +49,11 @@ type TeamForm = {
   firstInningAllowed: number;
 };
 
+type CachedSchedule = {
+  events: EspnEvent[];
+  expiresAt: number;
+};
+
 export type NrfiPitcher = {
   name: string | null;
   era: number | null;
@@ -105,11 +110,19 @@ export type NrfiWindowResponse = {
 const ESPN_BASE = "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb";
 const CACHE_TTL = 20 * 60 * 1000; // 20 minutes
 const STALE_TTL = 2 * 60 * 60 * 1000; // serve up to 2 hours stale while refreshing
+const WINDOW_CACHE_TTL = 10 * 60 * 1000; // 10 minutes for the 3-day MLB tab payload
+const SCHEDULE_CACHE_TTL = 30 * 60 * 1000; // schedules change much less often than predictions
 let cachedResponse: NrfiResponse | null = null;
 let cachedDate: string | null = null;
 let cachedAt = 0;
 const refreshInFlight = new Map<string, Promise<NrfiResponse>>();
 const teamFormCache = new Map<string, { value: TeamForm; expiresAt: number }>();
+const teamScheduleCache = new Map<string, CachedSchedule>();
+let cachedWindow: NrfiWindowResponse | null = null;
+let cachedWindowStart: string | null = null;
+let cachedWindowDays = 0;
+let cachedWindowAt = 0;
+let windowRefreshInFlight: Promise<NrfiWindowResponse> | null = null;
 
 async function fetchJson<T>(url: string, timeoutMs = 8000): Promise<T> {
   const controller = new AbortController();
@@ -186,17 +199,30 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
+async function fetchTeamSchedule(teamId: string): Promise<EspnEvent[]> {
+  const cached = teamScheduleCache.get(teamId);
+  if (cached && cached.expiresAt > Date.now()) return cached.events;
+
+  const data = await fetchJson<{ events?: EspnEvent[] }>(
+    `${ESPN_BASE}/teams/${encodeURIComponent(teamId)}/schedule?limit=40`,
+  );
+  const events = data.events ?? [];
+  teamScheduleCache.set(teamId, {
+    events,
+    expiresAt: Date.now() + SCHEDULE_CACHE_TTL,
+  });
+  return events;
+}
+
 async function fetchTeamForm(teamId: string, beforeDate: string): Promise<TeamForm> {
   const cacheKey = `${teamId}:${beforeDate}`;
   const cached = teamFormCache.get(cacheKey);
   if (cached && cached.expiresAt > Date.now()) return cached.value;
 
   try {
-    const data = await fetchJson<{ events?: EspnEvent[] }>(
-      `${ESPN_BASE}/teams/${encodeURIComponent(teamId)}/schedule?limit=40`,
-    );
+    const events = await fetchTeamSchedule(teamId);
 
-    const completed = (data.events ?? [])
+    const completed = events
       .filter((event) => (event.date ?? "").slice(0, 10) < beforeDate)
       .filter((event) => {
         const state = event.competitions?.[0]?.status?.type?.state;
@@ -442,13 +468,10 @@ async function buildNrfiData(date: string): Promise<NrfiResponse> {
 export async function fetchNrfiData(date = getTodayET()): Promise<NrfiResponse> {
   const age = Date.now() - cachedAt;
 
-  // Fast path: fresh cache.
   if (cachedResponse && cachedDate === date && age < CACHE_TTL) {
     return cachedResponse;
   }
 
-  // Stale-while-revalidate: never make a user wait for a refresh if we already
-  // have usable data for this date. Only one refresh is allowed at a time.
   if (cachedResponse && cachedDate === date && age < STALE_TTL) {
     if (!refreshInFlight.has(date)) {
       const refresh = buildNrfiData(date)
@@ -479,18 +502,14 @@ export async function fetchNrfiData(date = getTodayET()): Promise<NrfiResponse> 
   return refresh;
 }
 
-export async function fetchUpcomingNrfiData(days = 3): Promise<NrfiWindowResponse> {
-  const start = getTodayET();
+async function buildUpcomingNrfiData(days: number, start: string): Promise<NrfiWindowResponse> {
   const dates = Array.from({ length: days }, (_, i) => {
     const d = new Date(`${start}T12:00:00`);
     d.setDate(d.getDate() + i);
     return d.toISOString().slice(0, 10);
   });
 
-  // Build uncached days in parallel instead of making users wait through
-  // three full ESPN pipelines one after another.
   const results = (await Promise.all(dates.map((date) => fetchNrfiData(date)))).filter(Boolean);
-
   const allGames = results.flatMap((r) => r.games);
   const averageNrfiProbability =
     allGames.length > 0
@@ -507,4 +526,68 @@ export async function fetchUpcomingNrfiData(days = 3): Promise<NrfiWindowRespons
     topPick,
     updatedAt: new Date().toISOString(),
   };
+}
+
+export async function fetchUpcomingNrfiData(days = 3): Promise<NrfiWindowResponse> {
+  const start = getTodayET();
+  const age = Date.now() - cachedWindowAt;
+
+  if (
+    cachedWindow &&
+    cachedWindowStart === start &&
+    cachedWindowDays === days &&
+    age < WINDOW_CACHE_TTL
+  ) {
+    return cachedWindow;
+  }
+
+  if (
+    cachedWindow &&
+    cachedWindowStart === start &&
+    cachedWindowDays === days &&
+    age < STALE_TTL
+  ) {
+    if (!windowRefreshInFlight) {
+      windowRefreshInFlight = buildUpcomingNrfiData(days, start)
+        .then((response) => {
+          cachedWindow = response;
+          cachedWindowStart = start;
+          cachedWindowDays = days;
+          cachedWindowAt = Date.now();
+          return response;
+        })
+        .finally(() => {
+          windowRefreshInFlight = null;
+        });
+    }
+    return cachedWindow;
+  }
+
+  if (windowRefreshInFlight) return windowRefreshInFlight;
+
+  windowRefreshInFlight = buildUpcomingNrfiData(days, start)
+    .then((response) => {
+      cachedWindow = response;
+      cachedWindowStart = start;
+      cachedWindowDays = days;
+      cachedWindowAt = Date.now();
+      return response;
+    })
+    .finally(() => {
+      windowRefreshInFlight = null;
+    });
+
+  return windowRefreshInFlight;
+}
+
+// Called after the HTTP server starts so Render can serve requests immediately
+// while MLB data warms in the background. This is intentionally fire-and-forget.
+export function warmMlbCache(days = 3): void {
+  void fetchUpcomingNrfiData(days)
+    .then((response) => {
+      console.log(`[MLB] Warmed NRFI cache: ${response.games.length} games across ${response.days.length} days`);
+    })
+    .catch((error) => {
+      console.warn("[MLB] Background cache warm failed:", error);
+    });
 }
