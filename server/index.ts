@@ -13,6 +13,7 @@ import { storage } from "./storage";
 import { fetchMlbRfiMarkets, getCachedMlbRfiQuotes, valueFromCachedQuotesForTeams } from "./mlbOdds";
 import { getCalibrationSummary } from "./mlbCalibration";
 import { evaluateMlbModelHealth } from "./mlbModelHealth";
+import { registerCalibrationSourceRoute } from "./mlbCalibrationSources";
 
 const app = express();
 app.set('trust proxy', 1);
@@ -153,6 +154,10 @@ app.get("/api/mlb/performance", async (req, res) => {
     return res.status(500).json({ error: "Unable to load MLB performance data" });
   }
 });
+
+// Explicit provenance breakdown keeps verified live results, walk-forward replay,
+// and unlocked retrospective snapshots separate in the product UI.
+registerCalibrationSourceRoute(app);
 
 function isNbaSeason(): boolean { const month = new Date().getUTCMonth() + 1; return month >= 10 || month <= 6; }
 
