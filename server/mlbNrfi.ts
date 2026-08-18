@@ -70,15 +70,19 @@ const CACHE_TTL = 20 * 60 * 1000;
 const STALE_TTL = 2 * 60 * 60 * 1000;
 const WINDOW_CACHE_TTL = 10 * 60 * 1000;
 const HISTORY_CACHE_TTL = 30 * 60 * 1000;
-const HISTORY_DAYS = 14;
-const HISTORY_GAMES = 10;
+// More history makes the model less dependent on a short hot/cold streak.
+// Recency weighting still gives the newest games more influence.
+const HISTORY_DAYS = 30;
+const HISTORY_GAMES = 15;
+const PRIOR_WEIGHT = 7;
+const RECENCY_DECAY = 0.92;
 
 // A probability is not automatically a bet. Promotion requires meaningful
 // separation from 50% plus enough recent data quality.
 const BEST_PLAY_EDGE = 0.14;
 const PLAY_EDGE = 0.10;
 const LEAN_EDGE = 0.07;
-const MIN_PLAY_SAMPLE = 4;
+const MIN_PLAY_SAMPLE = 5;
 
 let cachedResponse: NrfiResponse | null = null;
 let cachedDate: string | null = null;
@@ -205,7 +209,7 @@ async function fetchRecentHistory(beforeDate: string): Promise<EspnEvent[]> {
   if (existing) return existing;
   const request = (async () => {
     const dates = Array.from({ length: HISTORY_DAYS }, (_, i) => addDays(beforeDate, -(i + 1)));
-    const batches = await withConcurrency(dates, date => fetchDailyScoreboard(date), 6);
+    const batches = await withConcurrency(dates, date => fetchDailyScoreboard(date), 8);
     return batches.flat();
   })();
   historyInFlight.set(key, request);
@@ -219,33 +223,40 @@ async function fetchRecentHistory(beforeDate: string): Promise<EspnEvent[]> {
 function calculateLeagueBaseline(allRecentGames: EspnEvent[]) {
   let completedGames = 0;
   let nrfiGames = 0;
-  const observations: number[] = [];
+  let totalWeight = 0;
+  let weightedRuns = 0;
+  let weightedScoreless = 0;
 
-  for (const event of allRecentGames) {
-    const competition = event.competitions?.[0];
-    const state = competition?.status?.type?.state;
-    if (!(state === "post" || competition?.status?.type?.completed === true)) continue;
-    const competitors = competition?.competitors ?? [];
+  const completed = allRecentGames
+    .map(event => ({ event, competition: event.competitions?.[0] }))
+    .filter(item => {
+      const state = item.competition?.status?.type?.state;
+      return state === "post" || item.competition?.status?.type?.completed === true;
+    })
+    .sort((a, b) => (b.event.date ?? "").localeCompare(a.event.date ?? ""));
+
+  for (const [index, item] of completed.entries()) {
+    const competitors = item.competition?.competitors ?? [];
     const away = competitors.find(c => c.homeAway === "away");
     const home = competitors.find(c => c.homeAway === "home");
     const awayRuns = away ? getFirstInningRuns(away) : null;
     const homeRuns = home ? getFirstInningRuns(home) : null;
+    const weight = Math.pow(RECENCY_DECAY, index);
     if (awayRuns !== null && homeRuns !== null) {
       completedGames++;
       if (awayRuns === 0 && homeRuns === 0) nrfiGames++;
-    }
-    for (const competitor of competitors) {
-      const runs = getFirstInningRuns(competitor);
-      if (runs !== null) observations.push(runs);
+      weightedRuns += (awayRuns + homeRuns) / 2 * weight;
+      weightedScoreless += ((awayRuns === 0 ? 1 : 0) + (homeRuns === 0 ? 1 : 0)) / 2 * weight;
+      totalWeight += weight;
     }
   }
 
-  if (!observations.length) return { games: 0, runsPerInning: 0.50, scorelessPct: 0.60, gameNrfiPct: 0.49 };
-  const mean = observations.reduce((sum, runs) => sum + runs, 0) / observations.length;
-  const scorelessPct = observations.filter(runs => runs === 0).length / observations.length;
+  if (!totalWeight) return { games: 0, runsPerInning: 0.50, scorelessPct: 0.60, gameNrfiPct: 0.49 };
+  const mean = weightedRuns / totalWeight;
+  const scorelessPct = weightedScoreless / totalWeight;
   const gameNrfiPct = completedGames ? nrfiGames / completedGames : 0.49;
   return {
-    games: observations.length,
+    games: completedGames,
     runsPerInning: clamp(mean, 0.20, 1.20),
     scorelessPct: clamp(scorelessPct, 0.40, 0.80),
     gameNrfiPct: clamp(gameNrfiPct, 0.35, 0.65),
@@ -284,19 +295,28 @@ function calculateTeamForm(teamId: string, allRecentGames: EspnEvent[]): TeamFor
   }
   if (!valid.length) return fallback;
 
-  // Bayesian shrinkage keeps small samples from creating fake certainty.
-  const priorWeight = 5;
-  const n = valid.length;
-  const scored = valid.reduce((sum, x) => sum + x.teamRuns, 0);
-  const allowed = valid.reduce((sum, x) => sum + x.opponentRuns, 0);
-  const scoreless = valid.filter(x => x.teamRuns === 0).length;
-  const allowedScoreless = valid.filter(x => x.opponentRuns === 0).length;
+  // Recency weighting plus Bayesian shrinkage prevents both stale history and
+  // tiny hot/cold streaks from creating fake certainty.
+  let weightTotal = 0;
+  let weightedScored = 0;
+  let weightedAllowed = 0;
+  let weightedScoreless = 0;
+  let weightedAllowedScoreless = 0;
+  valid.forEach((x, index) => {
+    const weight = Math.pow(RECENCY_DECAY, index);
+    weightTotal += weight;
+    weightedScored += x.teamRuns * weight;
+    weightedAllowed += x.opponentRuns * weight;
+    weightedScoreless += (x.teamRuns === 0 ? 1 : 0) * weight;
+    weightedAllowedScoreless += (x.opponentRuns === 0 ? 1 : 0) * weight;
+  });
+
   return {
-    games: n,
-    scorelessPct: (scoreless + league.scorelessPct * priorWeight) / (n + priorWeight),
-    runsPerFirstInning: (scored + league.runsPerInning * priorWeight) / (n + priorWeight),
-    allowedPerFirstInning: (allowed + league.runsPerInning * priorWeight) / (n + priorWeight),
-    allowedScorelessPct: (allowedScoreless + league.scorelessPct * priorWeight) / (n + priorWeight),
+    games: valid.length,
+    scorelessPct: (weightedScoreless + league.scorelessPct * PRIOR_WEIGHT) / (weightTotal + PRIOR_WEIGHT),
+    runsPerFirstInning: (weightedScored + league.runsPerInning * PRIOR_WEIGHT) / (weightTotal + PRIOR_WEIGHT),
+    allowedPerFirstInning: (weightedAllowed + league.runsPerInning * PRIOR_WEIGHT) / (weightTotal + PRIOR_WEIGHT),
+    allowedScorelessPct: (weightedAllowedScoreless + league.scorelessPct * PRIOR_WEIGHT) / (weightTotal + PRIOR_WEIGHT),
   };
 }
 
@@ -310,11 +330,11 @@ async function fetchTeamForm(teamId: string, beforeDate: string, sharedHistory: 
 }
 
 function pitcherRunAdjustment(pitcher: NrfiPitcher): number {
-  const eraAdjustment = pitcher.era === null ? 1 : clamp(0.90 + (pitcher.era / 4.25) * 0.10, 0.90, 1.12);
-  // WHIP adds a modest baserunner/traffic signal without overpowering the
-  // first-inning historical rates. 1.30 is the neutral reference point.
-  const whipAdjustment = pitcher.whip === null ? 1 : clamp(0.94 + (pitcher.whip / 1.30) * 0.06, 0.94, 1.08);
-  return 0.60 * eraAdjustment + 0.40 * whipAdjustment;
+  const eraAdjustment = pitcher.era === null ? 1 : clamp(0.88 + (pitcher.era / 4.25) * 0.12, 0.88, 1.15);
+  // WHIP is a traffic/base-runner signal. It is intentionally bounded so it
+  // strengthens the model without overpowering first-inning history.
+  const whipAdjustment = pitcher.whip === null ? 1 : clamp(0.93 + (pitcher.whip / 1.30) * 0.07, 0.93, 1.10);
+  return 0.58 * eraAdjustment + 0.42 * whipAdjustment;
 }
 
 function poissonNoRunProbability(expectedRuns: number): number {
@@ -350,15 +370,15 @@ function buildPrediction(
     0.75,
   );
   const calibratedPoisson = 0.60 * poissonNrfi + 0.40 * leagueNrfiProbability;
-  const rawProbability = 0.42 * leagueNrfiProbability + 0.33 * matchupEmpiricalNrfi + 0.25 * calibratedPoisson;
-  // Keep one decimal so small model differences are not collapsed into a wall
-  // of 50% predictions while still avoiding false precision.
+  // The league prior is important for stability, but the matchup and Poisson
+  // components now get enough weight to avoid a slate full of artificial 50s.
+  const rawProbability = 0.30 * leagueNrfiProbability + 0.40 * matchupEmpiricalNrfi + 0.30 * calibratedPoisson;
   const nrfiProbability = Math.round(clamp(rawProbability * 100, 25, 75) * 10) / 10;
   const recommendation = nrfiProbability >= 50 ? "NRFI" : "YRFI";
   const sampleSize = Math.min(awayForm.games, homeForm.games);
   const pitcherMetricsKnown = awayPitcher.era !== null || awayPitcher.whip !== null || homePitcher.era !== null || homePitcher.whip !== null;
   const bothPitcherMetricsKnown = awayPitcher.era !== null && awayPitcher.whip !== null && homePitcher.era !== null && homePitcher.whip !== null;
-  const confidence: NrfiGame["confidence"] = sampleSize >= 7 && bothPitcherMetricsKnown ? "High" : sampleSize >= 4 && pitcherMetricsKnown ? "Medium" : "Low";
+  const confidence: NrfiGame["confidence"] = sampleSize >= 10 && bothPitcherMetricsKnown ? "High" : sampleSize >= 5 && pitcherMetricsKnown ? "Medium" : "Low";
   const modelEdge = Math.round(Math.abs(nrfiProbability - 50) * 10) / 10;
   const playStatus = classifyPlay(nrfiProbability, confidence, sampleSize);
   const factors: string[] = [];
@@ -370,8 +390,9 @@ function buildPrediction(
   else factors.push("Probable starter ERAs are unconfirmed");
   if (awayPitcher.whip !== null || homePitcher.whip !== null) factors.push(`WHIP signal included (${awayPitcher.whip !== null ? awayPitcher.whip.toFixed(2) : "pending"} and ${homePitcher.whip !== null ? homePitcher.whip.toFixed(2) : "pending"})`);
   else factors.push("Probable starter WHIPs are unconfirmed");
-  factors.push(`Recent sample: ${sampleSize || "limited"} verified games per team with Bayesian shrinkage`);
+  factors.push(`Recent sample: ${sampleSize || "limited"} verified games per team with recency weighting and Bayesian shrinkage`);
   factors.push(`Recent league NRFI baseline: ${Math.round(leagueNrfiProbability * 100)}%`);
+  factors.push("Model v2: recency-weighted first-inning rates + Poisson + starter ERA/WHIP + league prior");
   return { nrfiProbability, recommendation, playStatus, modelEdge, confidence, sampleSize, factors };
 }
 
@@ -426,8 +447,8 @@ async function buildNrfiData(date: string): Promise<NrfiResponse> {
     averageNrfiProbability,
     topPick: ranked[0] ?? null,
     updatedAt: new Date().toISOString(),
-    source: "ESPN MLB scoreboard + verified recent game summaries",
-    methodology: "Recent first-inning offense and prevention rates with Bayesian shrinkage, symmetric matchup scoring, league NRFI calibration, probable-starter ERA and WHIP adjustments, and Poisson no-run probability. A game is only promoted when the model has meaningful separation from 50% and sufficient data quality.",
+    source: "ESPN MLB scoreboard + verified 30-day first-inning history",
+    methodology: "Model v2 uses a 30-day historical window with the latest 15 verified team games weighted most heavily, Bayesian shrinkage toward the league baseline, matchup offense/prevention rates, Poisson no-run probability, probable-starter ERA and WHIP adjustments, and a league NRFI prior. Promotion requires meaningful separation from 50% and sufficient sample quality; the model passes rather than manufacture plays.",
   };
 }
 
