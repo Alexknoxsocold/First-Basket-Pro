@@ -54,7 +54,8 @@ async function ensure(): Promise<void> {
 
 export async function snapshotPrediction(data: MlbPredictionSnapshot): Promise<void> {
   const connection = db(); if (!connection) return; await ensure();
-  const id = `${data.date}:${data.gameId}:${data.modelVersion}`; const market = data.marketValue;
+  const id = `${data.date}:${data.gameId}:${data.modelVersion}`;
+  const market = data.marketValue;
   await connection.query(`
     INSERT INTO mlb_prediction_snapshots
       (id,prediction_date,game_id,matchup,recommendation,probability,confidence,model_version,locked_at,outcome,first_inning_score,
@@ -62,13 +63,10 @@ export async function snapshotPrediction(data: MlbPredictionSnapshot): Promise<v
        market_edge,market_expected_value,value_play,created_at,graded_at)
     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,now(),CASE WHEN $10 IS NULL THEN NULL ELSE now() END)
     ON CONFLICT(prediction_date,game_id,model_version) DO UPDATE SET
-      locked_at=COALESCE(mlb_prediction_snapshots.locked_at, EXCLUDED.locked_at),
+      -- The model recommendation, probability, confidence, lock time, and
+      -- market snapshot are immutable. Only the eventual result may change.
       outcome=COALESCE(EXCLUDED.outcome, mlb_prediction_snapshots.outcome),
       first_inning_score=COALESCE(EXCLUDED.first_inning_score, mlb_prediction_snapshots.first_inning_score),
-      market_available=EXCLUDED.market_available, market_side=EXCLUDED.market_side, sportsbook=EXCLUDED.sportsbook,
-      market_name=EXCLUDED.market_name, market_odds=EXCLUDED.market_odds, market_captured_at=EXCLUDED.market_captured_at,
-      market_implied_probability=EXCLUDED.market_implied_probability, market_no_vig_probability=EXCLUDED.market_no_vig_probability,
-      market_edge=EXCLUDED.market_edge, market_expected_value=EXCLUDED.market_expected_value, value_play=EXCLUDED.value_play,
       graded_at=COALESCE(EXCLUDED.graded_at, mlb_prediction_snapshots.graded_at)
   `, [id,data.date,data.gameId,data.matchup,data.recommendation,data.probability,data.confidence ?? null,data.modelVersion,data.lockedAt ?? null,data.outcome ?? null,data.firstInningScore ?? null,
       market?.available ?? false,market?.side ?? null,market?.sportsbook ?? null,market?.market ?? null,market?.americanOdds ?? null,
