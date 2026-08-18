@@ -18,8 +18,9 @@ export type GraderGame = {
 /**
  * Persists predictions and grades completed games without changing the
  * original recommendation or probability. Repeated calls are idempotent.
- * The first persisted snapshot also captures the verified market quote that
- * was actually available at lock time; later grading calls only fill results.
+ * A new record is only marked locked when the game is still pending. If a
+ * historical completed game is first seen after the fact, it is recorded as a
+ * result/backfill without falsely claiming a pregame lock timestamp.
  */
 export async function persistAndGradeNrfiGames(games: GraderGame[], modelVersion = "v3"): Promise<void> {
   const quotes = getCachedMlbRfiQuotes();
@@ -31,7 +32,7 @@ export async function persistAndGradeNrfiGames(games: GraderGame[], modelVersion
     const modelProbability = (game.recommendation === "NRFI" ? game.nrfiProbability : 100 - game.nrfiProbability) / 100;
     const away = game.away?.name ?? game.away?.abbreviation ?? "";
     const home = game.home?.name ?? game.home?.abbreviation ?? "";
-    const marketValue = quotes.length
+    const marketValue = !completed && quotes.length
       ? valueFromCachedQuotesForTeams(away, home, game.recommendation, modelProbability)
       : null;
 
@@ -43,9 +44,9 @@ export async function persistAndGradeNrfiGames(games: GraderGame[], modelVersion
       probability: modelProbability,
       confidence: game.confidence,
       modelVersion,
-      // The first call locks the prediction; later completed calls preserve
-      // the existing lock and only fill the final result.
-      lockedAt: new Date(),
+      // Only a live/pregame snapshot gets a new lock timestamp. Existing rows
+      // keep their original lock; completed backfills remain explicitly unlocked.
+      lockedAt: completed ? null : new Date(),
       outcome: actualOutcome,
       firstInningScore: game.firstInningScore,
       marketValue: marketValue ? {
