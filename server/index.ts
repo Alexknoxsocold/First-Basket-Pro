@@ -53,9 +53,9 @@ app.use((req, res, next) => {
   next();
 });
 
-// Add live sportsbook pricing to the calibrated prediction when the odds cache
-// is warm. The first request never waits on the sportsbook API; startup warms it
-// in the background so normal page loads stay fast.
+// Attach verified live market information without allowing missing market data
+// to erase a model-qualified play. The model layer remains authoritative for
+// BEST_PLAY/PLAY/LEAN; market data is an additional value layer.
 app.use("/api/mlb/nrfi", (req, res, next) => {
   if (req.method !== "GET" || req.path !== "/") return next();
   const originalJson = res.json.bind(res);
@@ -74,23 +74,21 @@ app.use("/api/mlb/nrfi", (req, res, next) => {
 
       const edge = market.edge ?? 0;
       const ev = market.ev ?? 0;
-      const sampleReady = (game.sampleSize ?? 0) >= 4;
-      const qualityReady = game.confidence !== "Low";
-      const marketStatus = !sampleReady || !qualityReady
-        ? "NO_PLAY"
-        : ev >= 0.08 && edge >= 0.05
-          ? "BEST_PLAY"
-          : ev >= 0.04 && edge >= 0.03
-            ? "PLAY"
-            : ev >= 0.02 && edge >= 0.015
-              ? "LEAN"
-              : "NO_PLAY";
+      const marketPlayStatus = ev >= 0.08 && edge >= 0.05
+        ? "BEST_PLAY"
+        : ev >= 0.04 && edge >= 0.03
+          ? "PLAY"
+          : ev >= 0.02 && edge >= 0.015
+            ? "LEAN"
+            : "NO_PLAY";
       const probability = side === "NRFI" ? game.nrfiProbability : 100 - game.nrfiProbability;
       const marketFactor = `${side} market: ${probability.toFixed(1)}% model vs ${market.noVigProbability === null ? "—" : (market.noVigProbability * 100).toFixed(1) + "%"} no-vig, ${edge >= 0 ? "+" : ""}${(edge * 100).toFixed(1)}pp edge, ${ev >= 0 ? "+" : ""}${(ev * 100).toFixed(1)}% EV at ${market.book ?? "market"} ${market.price ?? "—"}`;
       return {
         ...game,
+        // Keep the model's status authoritative for Value Plays.
+        // marketPlayStatus is supplementary and never creates a play by itself.
         modelPlayStatus: game.playStatus,
-        playStatus: marketStatus,
+        marketPlayStatus,
         marketValue: {
           available: true,
           book: market.book,
@@ -106,11 +104,15 @@ app.use("/api/mlb/nrfi", (req, res, next) => {
       };
     });
 
-    const valueGames = games.filter((g: any) => g.marketValue?.available && (g.playStatus === "BEST_PLAY" || g.playStatus === "PLAY"));
+    const valueGames = games.filter((g: any) => g.playStatus === "BEST_PLAY" || g.playStatus === "PLAY");
     return originalJson({
       ...body,
       games,
-      topPick: valueGames.sort((a: any, b: any) => (b.marketValue?.ev ?? -Infinity) - (a.marketValue?.ev ?? -Infinity))[0] ?? null,
+      topPick: [...valueGames].sort((a: any, b: any) => {
+        const aScore = a.marketValue?.available ? (a.marketValue.ev ?? -Infinity) : a.modelEdge;
+        const bScore = b.marketValue?.available ? (b.marketValue.ev ?? -Infinity) : b.modelEdge;
+        return bScore - aScore;
+      })[0] ?? null,
       marketStatus: "live",
     });
   }) as typeof res.json;
@@ -118,8 +120,7 @@ app.use("/api/mlb/nrfi", (req, res, next) => {
 });
 
 // Premium performance endpoint: exposes only persisted historical results.
-// It never recalculates old probabilities from today's model, which keeps the
-// public record auditable and prevents retroactive performance inflation.
+// It never recalculates old probabilities from today's model.
 app.get("/api/mlb/performance", async (req, res) => {
   try {
     const requestedDays = typeof req.query.days === "string" ? Number(req.query.days) : 30;
@@ -169,8 +170,6 @@ function isNbaSeason(): boolean { const month = new Date().getUTCMonth() + 1; re
       log('[Startup] MLB NRFI cache warming started in background.');
     } catch (error) { log('[Startup] MLB cache warm skipped:', error); }
     void fetchMlbRfiMarkets().then(markets => log(`[Startup] MLB RFI odds warm: ${markets.size / 2} games priced.`)).catch(error => log('[Startup] MLB RFI odds warm failed:', error));
-    // Run the immutable prediction/result reconciliation once at startup. It is
-    // safe to repeat because the grader is idempotent.
     void import('./mlbAutoGrade.js').then(({ runMlbAutoGrade }) => runMlbAutoGrade()).then(result => log(`[Startup] MLB auto-grade complete: ${result.games} games checked.`)).catch(error => log('[Startup] MLB auto-grade failed:', error));
     if (!isNbaSeason()) { log('[Startup] NBA offseason detected — skipping heavy NBA startup sync.'); return; }
     void (async () => {
