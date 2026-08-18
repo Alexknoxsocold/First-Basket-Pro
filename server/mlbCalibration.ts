@@ -114,8 +114,6 @@ export async function recordPredictionSnapshot(data: {
   await ensureTable();
   let written = 0;
   for (const game of data.games) {
-    // Do not overwrite a saved pregame probability with a later recalculation.
-    // Outcome fields are allowed to move from pending -> won/lost.
     const id = `${data.date}:${game.id}`;
     const outcome = game.outcome === "pending" ? null : game.outcome;
     const gradedAt = outcome ? new Date() : null;
@@ -255,13 +253,23 @@ export async function calibrateRecommendedProbability(rawProbability: number): P
   const n = Number(result.rows[0]?.n ?? 0);
   if (n < 10) return rawProbability;
   const wins = Number(result.rows[0]?.wins ?? 0);
-  const observed = wins / n;
-  // 20 pseudo-observations centered on the raw probability prevents overreaction.
   const calibrated = (wins + rawProbability * 20) / (n + 20);
-  // Never manufacture a bigger edge than the model already had.
   const distance = Math.abs(rawProbability - 0.50);
   const maxDistance = Math.max(0.01, distance);
   return Math.round((0.50 + Math.min(Math.abs(calibrated - 0.50), maxDistance) * Math.sign(calibrated - 0.50)) * 1000) / 1000;
+}
+
+function getTodayET(): string {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit",
+  }).formatToParts(new Date());
+  return `${parts.find(p => p.type === "year")?.value}-${parts.find(p => p.type === "month")?.value}-${parts.find(p => p.type === "day")?.value}`;
+}
+
+function addDays(dateISO: string, days: number): string {
+  const d = new Date(`${dateISO}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
 }
 
 export async function backfillWalkForward(
@@ -270,12 +278,9 @@ export async function backfillWalkForward(
 ): Promise<{ datesProcessed: number; predictionsWritten: number; gamesGraded: number }> {
   const safeDays = Math.min(Math.max(Math.round(days), 1), 30);
   const dates: string[] = [];
-  const now = new Date();
-  for (let i = safeDays; i >= 1; i--) {
-    const d = new Date(now.getTime());
-    d.setUTCDate(d.getUTCDate() - i);
-    dates.push(d.toISOString().slice(0, 10));
-  }
+  const today = getTodayET();
+  for (let i = safeDays; i >= 1; i--) dates.push(addDays(today, -i));
+
   let predictionsWritten = 0;
   let gamesGraded = 0;
   for (const date of dates) {
