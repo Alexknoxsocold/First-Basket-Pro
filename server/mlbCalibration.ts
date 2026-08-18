@@ -1,5 +1,6 @@
 import { Pool, neonConfig } from "@neondatabase/serverless";
 import ws from "ws";
+import { snapshotPrediction } from "./mlbPredictionSnapshots.js";
 import type { MlbMarketValue } from "./mlbMarketValue.js";
 
 neonConfig.webSocketConstructor = ws;
@@ -67,11 +68,17 @@ async function ensureTable(): Promise<void> {
 }
 
 function safeProbability(value: number): number { return Math.min(0.999, Math.max(0.001, value)); }
-function isGraded(row: CalibrationRow): boolean { return (row.recommendation === "NRFI" || row.recommendation === "YRFI") && (row.outcome === "NRFI" || row.outcome === "YRFI"); }
+
+// Calibration must only score predictions that were actually locked. This prevents
+// retrospective backfills (which have a known outcome but no historical lock time)
+// from being presented as genuine pregame model performance.
+function isGraded(row: CalibrationRow): boolean {
+  return !!row.lockedAt && (row.recommendation === "NRFI" || row.recommendation === "YRFI") && (row.outcome === "NRFI" || row.outcome === "YRFI");
+}
 function didWin(row: CalibrationRow): boolean { return row.outcome === row.recommendation; }
 function decimalOdds(americanOdds: number): number | null { if (!Number.isFinite(americanOdds) || americanOdds === 0) return null; return americanOdds > 0 ? 1 + americanOdds / 100 : 1 + 100 / Math.abs(americanOdds); }
 function unitProfit(row: CalibrationRow): number | null {
-  if (!row.valuePlay || !row.marketAvailable || row.marketOdds === null || !isGraded(row)) return null;
+  if (!isGraded(row) || !row.valuePlay || !row.marketAvailable || row.marketOdds === null) return null;
   const decimal = decimalOdds(row.marketOdds); if (decimal === null) return null;
   return didWin(row) ? decimal - 1 : -1;
 }
@@ -142,22 +149,96 @@ export async function getCalibrationSummary(days = 30): Promise<CalibrationSumma
 export async function calibrateRecommendedProbability(rawProbability: number): Promise<number> {
   const db = getPool(); if (!db || !Number.isFinite(rawProbability)) return rawProbability; await ensureTable();
   const raw = Math.min(0.999, Math.max(0.001, rawProbability)); if (raw < 0.50 || raw > 0.95) return raw;
-  const total = await db.query<{ count: string }>(`SELECT COUNT(*)::text AS count FROM mlb_prediction_snapshots WHERE recommendation IN ('NRFI','YRFI') AND outcome IN ('NRFI','YRFI')`);
+  const total = await db.query<{ count: string }>(`SELECT COUNT(*)::text AS count FROM mlb_prediction_snapshots WHERE locked_at IS NOT NULL AND recommendation IN ('NRFI','YRFI') AND outcome IN ('NRFI','YRFI')`);
   if (Number(total.rows[0]?.count ?? 0) < 50) return raw;
   const bucket = bucketFor(raw);
-  const result = await db.query<{ n: string; wins: string }>(`SELECT COUNT(*)::text AS n, COUNT(*) FILTER (WHERE outcome = recommendation)::text AS wins FROM mlb_prediction_snapshots WHERE recommendation IN ('NRFI','YRFI') AND outcome IN ('NRFI','YRFI') AND probability >= $1 AND probability < $2`, [bucket.min, bucket.max]);
+  const result = await db.query<{ n: string; wins: string }>(`SELECT COUNT(*)::text AS n, COUNT(*) FILTER (WHERE outcome = recommendation)::text AS wins FROM mlb_prediction_snapshots WHERE locked_at IS NOT NULL AND recommendation IN ('NRFI','YRFI') AND outcome IN ('NRFI','YRFI') AND probability >= $1 AND probability < $2`, [bucket.min, bucket.max]);
   const n = Number(result.rows[0]?.n ?? 0); if (n < 10) return raw;
   const wins = Number(result.rows[0]?.wins ?? 0); const empirical = wins / n; const calibrated = (wins + raw * 20) / (n + 20);
   const bounded = Math.min(Math.max(raw, empirical), Math.max(raw, calibrated));
   return Math.round(bounded * 1000) / 1000;
 }
 
-export async function backfillWalkForward(days: number, fetchForDate: (date: string) => Promise<{ date: string; games: Array<any> }>): Promise<{ datesProcessed: number; predictionsWritten: number; gamesGraded: number }> {
+type BackfillGame = {
+  id?: string | number;
+  gameId?: string | number;
+  shortName?: string;
+  matchup?: string;
+  recommendation?: "NRFI" | "YRFI" | "NO_PLAY";
+  nrfiProbability?: number;
+  probability?: number;
+  confidence?: string | null;
+  outcome?: "won" | "lost" | "pending" | "NRFI" | "YRFI" | null;
+  firstInningScore?: string | null;
+  lockedAt?: Date | string | null;
+  modelVersion?: string | null;
+  marketValue?: MlbMarketValue | null;
+};
+
+function normalizeBackfillOutcome(game: BackfillGame): "NRFI" | "YRFI" | null {
+  if (game.outcome === "NRFI" || game.outcome === "YRFI") return game.outcome;
+  if (game.outcome !== "won" && game.outcome !== "lost") return null;
+  if (game.recommendation !== "NRFI" && game.recommendation !== "YRFI") return null;
+  return game.outcome === "won" ? game.recommendation : game.recommendation === "NRFI" ? "YRFI" : "NRFI";
+}
+
+/**
+ * Backfill historical snapshots without manufacturing a historical lock.
+ *
+ * The old implementation fetched historical games, counted completed outcomes,
+ * and discarded every prediction. This implementation persists the model output
+ * and result so the audit trail is complete. Rows are intentionally left
+ * unlocked when the source does not provide a real historical lock timestamp;
+ * calibration/performance metrics exclude those retrospective rows. That keeps
+ * the public track record honest while still preserving the data for later audit.
+ */
+export async function backfillWalkForward(days: number, fetchForDate: (date: string) => Promise<{ date: string; games: Array<BackfillGame> }>): Promise<{ datesProcessed: number; predictionsWritten: number; gamesGraded: number; retrospectiveSnapshots: number }> {
   const safeDays = Math.min(Math.max(Math.round(days), 1), 30); const dates: string[] = []; const today = getTodayET();
   for (let i = safeDays; i >= 1; i--) dates.push(addDays(today, -i));
-  let predictionsWritten = 0; let gamesGraded = 0;
-  for (const date of dates) { const response = await fetchForDate(date); gamesGraded += response.games.filter((game: any) => game.outcome === "NRFI" || game.outcome === "YRFI").length; }
-  return { datesProcessed: dates.length, predictionsWritten, gamesGraded };
+  let predictionsWritten = 0; let gamesGraded = 0; let retrospectiveSnapshots = 0;
+
+  for (const date of dates) {
+    let response: { date: string; games: Array<BackfillGame> };
+    try {
+      response = await fetchForDate(date);
+    } catch (error) {
+      console.warn(`[MLB Calibration] Backfill failed for ${date}:`, error);
+      continue;
+    }
+
+    for (const game of response.games ?? []) {
+      const gameId = String(game.gameId ?? game.id ?? "").trim();
+      const recommendation = game.recommendation;
+      const rawProbability = game.probability ?? (typeof game.nrfiProbability === "number" ? (recommendation === "YRFI" ? 1 - game.nrfiProbability / 100 : game.nrfiProbability / 100) : NaN);
+      if (!gameId || (recommendation !== "NRFI" && recommendation !== "YRFI" && recommendation !== "NO_PLAY") || !Number.isFinite(rawProbability)) continue;
+
+      const outcome = normalizeBackfillOutcome(game);
+      if (outcome) gamesGraded++;
+
+      const lockedAt = game.lockedAt ? new Date(game.lockedAt) : null;
+      const validLockedAt = lockedAt && Number.isFinite(lockedAt.getTime()) ? lockedAt : null;
+      const market = game.marketValue ?? null;
+      const snapshotModelVersion = game.modelVersion?.trim() || "mlb-nrfi-walk-forward-v1";
+
+      await snapshotPrediction({
+        date: response.date || date,
+        gameId,
+        matchup: game.matchup || game.shortName || gameId,
+        recommendation,
+        probability: safeProbability(rawProbability),
+        confidence: game.confidence ?? null,
+        modelVersion: snapshotModelVersion,
+        lockedAt: validLockedAt,
+        outcome,
+        firstInningScore: game.firstInningScore ?? null,
+        marketValue: market,
+      });
+      predictionsWritten++;
+      if (!validLockedAt) retrospectiveSnapshots++;
+    }
+  }
+
+  return { datesProcessed: dates.length, predictionsWritten, gamesGraded, retrospectiveSnapshots };
 }
 
 export type { MlbMarketValue };
