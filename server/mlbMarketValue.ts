@@ -31,6 +31,7 @@ export type MlbMarketValue = {
 };
 
 const MAX_QUOTE_AGE_SECONDS = 15 * 60;
+const MAX_FUTURE_SKEW_SECONDS = 2 * 60;
 const MIN_VALUE_EDGE = 0.02;
 
 function clamp(value: number, min: number, max: number): number {
@@ -38,7 +39,7 @@ function clamp(value: number, min: number, max: number): number {
 }
 
 export function americanToImpliedProbability(americanOdds: number): number | null {
-  if (!Number.isFinite(americanOdds) || americanOdds === 0) return null;
+  if (!Number.isFinite(americanOdds) || americanOdds === 0 || Math.abs(americanOdds) > 10000) return null;
   return americanOdds > 0
     ? 100 / (americanOdds + 100)
     : Math.abs(americanOdds) / (Math.abs(americanOdds) + 100);
@@ -48,17 +49,19 @@ export function calculateNoVigProbability(
   target: MlbMarketQuote,
   opposite: MlbMarketQuote | null | undefined,
 ): number | null {
+  if (!opposite) return null;
+  if (target.sportsbook.toLowerCase() !== opposite.sportsbook.toLowerCase()) return null;
+  if (target.market.toLowerCase() !== opposite.market.toLowerCase()) return null;
   const targetImplied = americanToImpliedProbability(target.americanOdds);
-  if (targetImplied === null) return null;
-  const oppositeImplied = opposite ? americanToImpliedProbability(opposite.americanOdds) : null;
-  if (oppositeImplied === null) return null;
+  const oppositeImplied = americanToImpliedProbability(opposite.americanOdds);
+  if (targetImplied === null || oppositeImplied === null) return null;
   const total = targetImplied + oppositeImplied;
   return total > 0 ? targetImplied / total : null;
 }
 
 export function calculateExpectedValue(modelProbability: number, americanOdds: number): number | null {
   const p = clamp(modelProbability, 0, 1);
-  if (!Number.isFinite(americanOdds) || americanOdds === 0) return null;
+  if (!Number.isFinite(americanOdds) || americanOdds === 0 || Math.abs(americanOdds) > 10000) return null;
   const netProfit = americanOdds > 0 ? americanOdds / 100 : 100 / Math.abs(americanOdds);
   return p * netProfit - (1 - p);
 }
@@ -99,7 +102,10 @@ export function evaluateMlbMarketValue(input: {
   const captured = new Date(input.target.capturedAt).getTime();
   const now = (input.now ?? new Date()).getTime();
   if (!Number.isFinite(captured)) return empty("Invalid market timestamp", input.modelProbability);
-  const ageSeconds = Math.max(0, (now - captured) / 1000);
+  const ageSeconds = (now - captured) / 1000;
+  if (ageSeconds < -MAX_FUTURE_SKEW_SECONDS) {
+    return { ...empty("Market timestamp is in the future", input.modelProbability), capturedAt: input.target.capturedAt, ageSeconds };
+  }
   if (ageSeconds > MAX_QUOTE_AGE_SECONDS) {
     return { ...empty("Market price is stale", input.modelProbability), capturedAt: input.target.capturedAt, ageSeconds };
   }
@@ -117,13 +123,17 @@ export function evaluateMlbMarketValue(input: {
     market: input.target.market,
     americanOdds: input.target.americanOdds,
     capturedAt: input.target.capturedAt,
-    ageSeconds,
+    ageSeconds: Math.max(0, ageSeconds),
     impliedProbability: implied,
     noVigProbability: noVig,
     modelProbability: input.modelProbability,
     edge,
     expectedValue,
     valuePlay: edge >= MIN_VALUE_EDGE && (expectedValue ?? -1) > 0,
-    reason: noVig === null ? "Verified market price; no-vig comparison unavailable" : edge >= MIN_VALUE_EDGE && (expectedValue ?? -1) > 0 ? "Verified market value" : "Verified market price, but no qualifying edge",
+    reason: noVig === null
+      ? "Verified market price; no-vig comparison unavailable"
+      : edge >= MIN_VALUE_EDGE && (expectedValue ?? -1) > 0
+        ? "Verified market value"
+        : "Verified market price, but no qualifying edge",
   };
 }
