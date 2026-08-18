@@ -26,7 +26,7 @@ const sessionStore = process.env.DATABASE_URL
       const pool = new Pool({ connectionString: process.env.DATABASE_URL });
       return new PgSession({ pool, tableName: 'session', createTableIfMissing: true });
     })()
-  : undefined; // express-session defaults to MemoryStore when no store is provided
+  : undefined;
 
 const sessionMiddleware = session({
   ...(sessionStore ? { store: sessionStore } : {}),
@@ -36,7 +36,7 @@ const sessionMiddleware = session({
   cookie: {
     secure: process.env.NODE_ENV === 'production',
     httpOnly: true,
-    maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
+    maxAge: 30 * 24 * 60 * 60 * 1000,
     sameSite: 'lax'
   }
 });
@@ -85,6 +85,15 @@ app.use((req, res, next) => {
   next();
 });
 
+// NBA is seasonal. Render's free tier can wake the process outside the season,
+// so don't spend a cold-start on NBA/lineup/injury requests when there cannot
+// be any NBA games. The normal API auto-sync still repopulates the schedule
+// as soon as the season is active.
+function isNbaSeason(): boolean {
+  const month = new Date().getUTCMonth() + 1;
+  return month >= 10 || month <= 6;
+}
+
 (async () => {
   const server = await registerRoutes(app);
 
@@ -96,19 +105,12 @@ app.use((req, res, next) => {
     throw err;
   });
 
-  // importantly only setup vite in development and after
-  // setting up all the other routes so the catch-all route
-  // doesn't interfere with the other routes
   if (app.get("env") === "development") {
     await setupVite(app, server);
   } else {
     serveStatic(app);
   }
 
-  // ALWAYS serve the app on the port specified in the environment variable PORT
-  // Other ports are firewalled. Default to 5000 if not specified.
-  // this serves both the API and the client.
-  // It is the only port that is not firewalled.
   const port = parseInt(process.env.PORT || '5000', 10);
   server.listen({
     port,
@@ -116,39 +118,47 @@ app.use((req, res, next) => {
     ...(process.platform !== 'darwin' && { reusePort: true }),
   }, async () => {
     log(`serving on port ${port}`);
-    
-    // Run full daily sync on startup to populate games + player stats from ESPN
-    try {
-      log('[Startup] Running initial data sync...');
-      const startupSyncService = createDailySyncService(storage);
-      await startupSyncService.runDailySync();
-      log('[Startup] Initial sync complete');
-    } catch (error) {
-      log('[Startup] Initial sync failed:', error);
+
+    // Keep cold starts cheap outside the NBA season. MLB NRFI is request-driven
+    // and has its own cache, so it does not need a startup data crawl.
+    if (!isNbaSeason()) {
+      log('[Startup] NBA offseason detected — skipping heavy NBA startup sync.');
+      return;
     }
 
-    // Populate player stats after games exist
-    try {
-      const { populateTodayStarters } = await import('./populate-player-stats.js');
-      await populateTodayStarters(storage);
-      log('[Startup] Player stats populated successfully');
-    } catch (error) {
-      log('[Startup] Failed to populate player stats:', error);
-    }
-
-    // Warm first basket history cache in background (fires & forgets)
-    try {
-      const { warmFirstBasketCache } = await import('./firstBasketHistory.js');
-      const games = await storage.getGames();
-      const today = new Date().toISOString().split('T')[0];
-      const todayGames = games.filter(g => g.gameDate?.startsWith(today));
-      const teams = [...new Set(todayGames.flatMap(g => [g.awayTeam, g.homeTeam].filter(Boolean)))];
-      if (teams.length > 0) {
-        warmFirstBasketCache(teams as string[]);
-        log(`[Startup] Warming FB history cache for: ${teams.join(', ')}`);
+    // Run NBA sync in the background after the server is already accepting traffic.
+    // This prevents a Render cold start from waiting on ESPN/API-Sports calls.
+    void (async () => {
+      try {
+        log('[Startup] Running initial NBA data sync in background...');
+        const startupSyncService = createDailySyncService(storage);
+        await startupSyncService.runDailySync();
+        log('[Startup] Initial NBA sync complete');
+      } catch (error) {
+        log('[Startup] Initial NBA sync failed:', error);
       }
-    } catch (error) {
-      log('[Startup] FB history warm skipped:', error);
-    }
+
+      try {
+        const { populateTodayStarters } = await import('./populate-player-stats.js');
+        await populateTodayStarters(storage);
+        log('[Startup] Player stats populated successfully');
+      } catch (error) {
+        log('[Startup] Failed to populate player stats:', error);
+      }
+
+      try {
+        const { warmFirstBasketCache } = await import('./firstBasketHistory.js');
+        const games = await storage.getGames();
+        const today = new Date().toISOString().split('T')[0];
+        const todayGames = games.filter(g => g.gameDate?.startsWith(today));
+        const teams = [...new Set(todayGames.flatMap(g => [g.awayTeam, g.homeTeam].filter(Boolean)))];
+        if (teams.length > 0) {
+          warmFirstBasketCache(teams as string[]);
+          log(`[Startup] Warming FB history cache for: ${teams.join(', ')}`);
+        }
+      } catch (error) {
+        log('[Startup] FB history warm skipped:', error);
+      }
+    })();
   });
 })();
