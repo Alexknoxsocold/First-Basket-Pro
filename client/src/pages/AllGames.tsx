@@ -2,13 +2,8 @@ import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import GamesTable from "@/components/GamesTable";
 import StatsCard from "@/components/StatsCard";
-import { getTeamLogoUrl } from "@/components/GameRow";
-import dkLogoImg from "@assets/fyz4mydi8ceuovtoaooy_1775294282507.avif";
-
 import { Target, TrendingUp, Zap, Trophy } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Badge } from "@/components/ui/badge";
-
 import type { Game } from "@shared/schema";
 
 interface EspnPlayerStat {
@@ -22,36 +17,6 @@ interface EspnPlayerStat {
   liveOdds?: string;
   isStarter?: boolean;
   position?: string;
-}
-
-function DkLogo({ dimmed = false }: { dimmed?: boolean }) {
-  return (
-    <img
-      src={dkLogoImg}
-      alt="DraftKings"
-      className="w-4 h-4 shrink-0 rounded object-contain"
-      style={{ opacity: dimmed ? 0.4 : 1 }}
-    />
-  );
-}
-
-function TeamLogo({ team, size = "md" }: { team: string; size?: "sm" | "md" | "lg" }) {
-  const logoUrl = getTeamLogoUrl(team);
-  const sizeClass = size === "sm" ? "w-6 h-6" : size === "lg" ? "w-14 h-14" : "w-9 h-9";
-  return (
-    <div className={`${sizeClass} rounded-md bg-muted/40 flex items-center justify-center shrink-0 overflow-hidden`}>
-      {logoUrl ? (
-        <img
-          src={logoUrl}
-          alt={`${team} logo`}
-          className="w-full h-full object-contain p-0.5"
-          onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
-        />
-      ) : (
-        <span className="text-[10px] font-bold text-muted-foreground">{team.slice(0, 3)}</span>
-      )}
-    </div>
-  );
 }
 
 interface JumpBallPlayer {
@@ -69,92 +34,179 @@ interface GamePickSummary {
   homeJumpBall: JumpBallPlayer | null;
 }
 
+const EMPTY_STATS = {
+  avgFbPct: "0.0",
+  highestFbPct: 0,
+  highestFbMatchup: "",
+  topPlayer: "",
+  topJumpBallPct: 0,
+  topJumpBallPlayer: "",
+  topJumpBallTeam: "",
+  topTeam: "",
+  topTeamPct: 0,
+};
+
+const ET_DATE_FORMATTER = new Intl.DateTimeFormat("en-US", {
+  timeZone: "America/New_York",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+
+function getActiveDateISO(): string {
+  const now = new Date();
+  const etHour = Number(
+    new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/New_York",
+      hour: "numeric",
+      hour12: false,
+    }).format(now),
+  );
+  const target = etHour >= 23 ? new Date(now.getTime() + 86_400_000) : now;
+  const parts = ET_DATE_FORMATTER.formatToParts(target);
+  const year = parts.find((p) => p.type === "year")?.value ?? "";
+  const month = parts.find((p) => p.type === "month")?.value ?? "";
+  const day = parts.find((p) => p.type === "day")?.value ?? "";
+  return `${year}-${month}-${day}`;
+}
+
+function getGameDateInET(gameTime: string): string | null {
+  const date = new Date(gameTime);
+  if (Number.isNaN(date.getTime())) return null;
+  const parts = ET_DATE_FORMATTER.formatToParts(date);
+  const year = parts.find((p) => p.type === "year")?.value ?? "";
+  const month = parts.find((p) => p.type === "month")?.value ?? "";
+  const day = parts.find((p) => p.type === "day")?.value ?? "";
+  return `${year}-${month}-${day}`;
+}
+
+function findJumpBall(players: EspnPlayerStat[]): JumpBallPlayer | null {
+  if (players.length === 0) return null;
+
+  // Prefer announced starters. If ESPN has not marked starters yet, use the
+  // available roster data so the card can still populate during pregame.
+  const starters = players.filter((p) => p.isStarter);
+  const pool = starters.length > 0 ? starters : players;
+
+  let best: EspnPlayerStat | undefined;
+  for (const player of pool) {
+    if (player.position !== "C" && player.position !== "F") continue;
+    if (!best) {
+      best = player;
+      continue;
+    }
+    // Centers win over forwards; within a position use FB% as the tiebreaker.
+    const playerRank = player.position === "C" ? 2 : 1;
+    const bestRank = best.position === "C" ? 2 : 1;
+    if (
+      playerRank > bestRank ||
+      (playerRank === bestRank && player.firstBasketPct > best.firstBasketPct)
+    ) {
+      best = player;
+    }
+  }
+
+  return best
+    ? {
+        player: best.player,
+        headshot: best.headshot,
+        position: best.position ?? "F",
+      }
+    : null;
+}
 
 export default function AllGames() {
   const { data: allGames, isLoading: gamesLoading } = useQuery<Game[]>({
     queryKey: ["/api/games"],
+    staleTime: 60_000,
+    gcTime: 10 * 60_000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: true,
   });
 
   const { data: espnStats } = useQuery<EspnPlayerStat[]>({
     queryKey: ["/api/espn-player-stats"],
-    staleTime: 5 * 60 * 1000,
+    staleTime: 5 * 60_000,
+    gcTime: 15 * 60_000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: true,
   });
 
-  const headshotMap = useMemo<Record<string, string>>(() => {
-    if (!espnStats) return {};
-    return espnStats.reduce((acc, s) => {
-      if (s.headshot) acc[s.player] = s.headshot;
-      return acc;
-    }, {} as Record<string, string>);
-  }, [espnStats]);
-
   const games = useMemo(() => {
-    if (!allGames) return [];
+    if (!allGames?.length) return [];
 
-    // Get active date in ET: after 11 PM ET, advance to tomorrow automatically
-    const now = new Date();
-    const etHour = parseInt(new Intl.DateTimeFormat('en-US', {
-      timeZone: 'America/New_York', hour: 'numeric', hour12: false
-    }).format(now));
-    const targetDate = etHour >= 23 ? new Date(now.getTime() + 24 * 60 * 60 * 1000) : now;
-    const parts = new Intl.DateTimeFormat('en-US', {
-      timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit'
-    }).formatToParts(targetDate);
-    const y = parseInt(parts.find(p => p.type === 'year')!.value);
-    const mo = parseInt(parts.find(p => p.type === 'month')!.value) - 1;
-    const d = parseInt(parts.find(p => p.type === 'day')!.value);
-    const activeDateISO = `${y}-${String(mo + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-    const etFormatter = new Intl.DateTimeFormat('en-US', {
-      timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit'
-    });
+    const activeDateISO = getActiveDateISO();
+    const etHour = Number(
+      new Intl.DateTimeFormat("en-US", {
+        timeZone: "America/New_York",
+        hour: "numeric",
+        hour12: false,
+      }).format(new Date()),
+    );
 
-    return allGames.filter(game => {
-      // gameDate is authoritative when it's a specific date
-      if (game.gameDate && game.gameDate !== 'Today') return game.gameDate === activeDateISO;
-      // Legacy "Today" label
-      if (game.gameDate === 'Today' && etHour < 23) return true;
-      // No gameDate — fall back to gameTime in ET
-      if (game.gameTime) {
-        const gameParts = etFormatter.formatToParts(new Date(game.gameTime));
-        const gy = gameParts.find(p => p.type === 'year')?.value;
-        const gm = gameParts.find(p => p.type === 'month')?.value;
-        const gd = gameParts.find(p => p.type === 'day')?.value;
-        return `${gy}-${gm}-${gd}` === activeDateISO;
+    return allGames.filter((game) => {
+      if (game.gameDate && game.gameDate !== "Today") {
+        return game.gameDate === activeDateISO;
       }
-      return false;
+      if (game.gameDate === "Today" && etHour < 23) return true;
+      return game.gameTime ? getGameDateInET(game.gameTime) === activeDateISO : false;
     });
   }, [allGames]);
 
-  // Find the jump ball player (center) for a team
-  const findJumpBall = (players: EspnPlayerStat[]): JumpBallPlayer | null => {
-    const starters = players.filter(p => p.isStarter);
-    const pool = starters.length > 0 ? starters : players;
-    // ESPN only uses C, F, G — no PF/SF distinction
-    // Pick C first; among Fs, pick the one with highest FB% (the featured big man, e.g. Wembanyama not Champagnie)
-    const centers = pool.filter(p => p.position === 'C');
-    if (centers.length > 0) {
-      const best = [...centers].sort((a, b) => b.firstBasketPct - a.firstBasketPct)[0];
-      return { player: best.player, headshot: best.headshot, position: best.position ?? 'C' };
+  // Index ESPN players once. The previous implementation filtered the full
+  // stats array once per game, which gets unnecessarily expensive as the NBA
+  // slate and player dataset grow.
+  const playersByTeam = useMemo(() => {
+    const map = new Map<string, EspnPlayerStat[]>();
+    for (const player of espnStats ?? []) {
+      const list = map.get(player.team);
+      if (list) list.push(player);
+      else map.set(player.team, [player]);
     }
-    const forwards = pool.filter(p => p.position === 'F');
-    if (forwards.length > 0) {
-      const best = [...forwards].sort((a, b) => b.firstBasketPct - a.firstBasketPct)[0];
-      return { player: best.player, headshot: best.headshot, position: best.position ?? 'F' };
-    }
-    return null;
-  };
+    return map;
+  }, [espnStats]);
 
-  // Build per-game pick summaries using ESPN stats
+  const headshotMap = useMemo<Record<string, string>>(() => {
+    const map: Record<string, string> = {};
+    for (const stat of espnStats ?? []) {
+      if (stat.headshot) map[stat.player] = stat.headshot;
+    }
+    return map;
+  }, [espnStats]);
+
   const gamePicks = useMemo<GamePickSummary[]>(() => {
-    if (!games.length) return [];
-    return games.map(game => {
-      const awayPlayers = espnStats?.filter(s => s.team === game.awayTeam) ?? [];
-      const homePlayers = espnStats?.filter(s => s.team === game.homeTeam) ?? [];
-      const awayTop = [...awayPlayers].sort((a, b) => b.firstBasketPct - a.firstBasketPct)[0] ?? null;
-      const homeTop = [...homePlayers].sort((a, b) => b.firstBasketPct - a.firstBasketPct)[0] ?? null;
-      const topPlayer = !awayTop ? homeTop
-        : !homeTop ? awayTop
-        : awayTop.firstBasketPct >= homeTop.firstBasketPct ? awayTop : homeTop;
+    if (!games.length || !espnStats?.length) {
+      return games.map((game) => ({
+        game,
+        topPlayer: null,
+        awayTop: null,
+        homeTop: null,
+        awayJumpBall: null,
+        homeJumpBall: null,
+      }));
+    }
+
+    return games.map((game) => {
+      const awayPlayers = playersByTeam.get(game.awayTeam) ?? [];
+      const homePlayers = playersByTeam.get(game.homeTeam) ?? [];
+
+      let awayTop: EspnPlayerStat | null = null;
+      let homeTop: EspnPlayerStat | null = null;
+      for (const player of awayPlayers) {
+        if (!awayTop || player.firstBasketPct > awayTop.firstBasketPct) awayTop = player;
+      }
+      for (const player of homePlayers) {
+        if (!homeTop || player.firstBasketPct > homeTop.firstBasketPct) homeTop = player;
+      }
+
+      const topPlayer = !awayTop
+        ? homeTop
+        : !homeTop
+          ? awayTop
+          : awayTop.firstBasketPct >= homeTop.firstBasketPct
+            ? awayTop
+            : homeTop;
+
       return {
         game,
         topPlayer,
@@ -164,58 +216,79 @@ export default function AllGames() {
         homeJumpBall: findJumpBall(homePlayers),
       };
     });
-  }, [games, espnStats]);
+  }, [games, espnStats, playersByTeam]);
 
   const stats = useMemo(() => {
-    const empty = {
-      avgFbPct: "0.0", highestFbPct: 0, highestFbMatchup: "", topPlayer: "",
-      topJumpBallPct: 0, topJumpBallPlayer: "", topJumpBallTeam: "",
-      topTeam: "", topTeamPct: 0,
-    };
-    if (!games || games.length === 0) return empty;
+    if (!games.length || !espnStats?.length) return EMPTY_STATS;
 
-    const allFbPcts = espnStats?.map(s => s.firstBasketPct) ?? [];
-    const avgFbPct = allFbPcts.length > 0
-      ? (allFbPcts.reduce((a, b) => a + b, 0) / allFbPcts.length).toFixed(1)
-      : "0.0";
+    let pctTotal = 0;
+    for (const stat of espnStats) pctTotal += stat.firstBasketPct;
 
     let highestFbPct = 0;
     let highestFbMatchup = "";
     let topPlayer = "";
     let topTeam = "";
     let topTeamPct = 0;
-    gamePicks.forEach(({ game, topPlayer: tp, awayTop, homeTop }) => {
-      if (tp && tp.firstBasketPct > highestFbPct) {
-        highestFbPct = tp.firstBasketPct;
-        highestFbMatchup = `${game.awayTeam} @ ${game.homeTeam}`;
-        topPlayer = tp.player;
-      }
-      [awayTop, homeTop].forEach(pick => {
-        if (pick && pick.firstBasketPct > topTeamPct) {
-          topTeamPct = pick.firstBasketPct;
-          topTeam = pick.team;
-        }
-      });
-    });
-
-    // Top jump ball: the center with the highest firstBasketPct today
     let topJumpBallPct = 0;
     let topJumpBallPlayer = "";
     let topJumpBallTeam = "";
-    gamePicks.forEach(({ awayJumpBall, homeJumpBall }) => {
-      [awayJumpBall, homeJumpBall].forEach(jb => {
-        if (!jb) return;
-        const stat = espnStats?.find(s => s.player === jb.player);
+
+    const statByPlayer = new Map(espnStats.map((stat) => [stat.player, stat]));
+
+    for (const pick of gamePicks) {
+      if (pick.topPlayer && pick.topPlayer.firstBasketPct > highestFbPct) {
+        highestFbPct = pick.topPlayer.firstBasketPct;
+        highestFbMatchup = `${pick.game.awayTeam} @ ${pick.game.homeTeam}`;
+        topPlayer = pick.topPlayer.player;
+      }
+
+      for (const teamPick of [pick.awayTop, pick.homeTop]) {
+        if (teamPick && teamPick.firstBasketPct > topTeamPct) {
+          topTeamPct = teamPick.firstBasketPct;
+          topTeam = teamPick.team;
+        }
+      }
+
+      for (const jumpBall of [pick.awayJumpBall, pick.homeJumpBall]) {
+        if (!jumpBall) continue;
+        const stat = statByPlayer.get(jumpBall.player);
         if (stat && stat.firstBasketPct > topJumpBallPct) {
           topJumpBallPct = stat.firstBasketPct;
-          topJumpBallPlayer = jb.player;
+          topJumpBallPlayer = jumpBall.player;
           topJumpBallTeam = stat.team;
         }
-      });
-    });
+      }
+    }
 
-    return { avgFbPct, highestFbPct, highestFbMatchup, topPlayer, topJumpBallPct, topJumpBallPlayer, topJumpBallTeam, topTeam, topTeamPct };
+    return {
+      avgFbPct: (pctTotal / espnStats.length).toFixed(1),
+      highestFbPct,
+      highestFbMatchup,
+      topPlayer,
+      topJumpBallPct,
+      topJumpBallPlayer,
+      topJumpBallTeam,
+      topTeam,
+      topTeamPct,
+    };
   }, [games, espnStats, gamePicks]);
+
+  const awayPicks = useMemo(
+    () => Object.fromEntries(gamePicks.map((pick) => [pick.game.id, pick.awayTop])),
+    [gamePicks],
+  );
+  const homePicks = useMemo(
+    () => Object.fromEntries(gamePicks.map((pick) => [pick.game.id, pick.homeTop])),
+    [gamePicks],
+  );
+  const awayJumpBalls = useMemo(
+    () => Object.fromEntries(gamePicks.map((pick) => [pick.game.id, pick.awayJumpBall])),
+    [gamePicks],
+  );
+  const homeJumpBalls = useMemo(
+    () => Object.fromEntries(gamePicks.map((pick) => [pick.game.id, pick.homeJumpBall])),
+    [gamePicks],
+  );
 
   if (gamesLoading) {
     return (
@@ -234,8 +307,6 @@ export default function AllGames() {
 
   return (
     <div className="space-y-6">
-
-      {/* Stats Row */}
       <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
         <StatsCard
           title="Today's Games"
@@ -263,21 +334,25 @@ export default function AllGames() {
         />
       </div>
 
-      {/* Games Table */}
       <div>
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-base font-semibold">All Games — Opening Tips</h2>
           <span className="text-xs text-muted-foreground font-mono">
-            {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
+            {new Date().toLocaleDateString("en-US", {
+              weekday: "long",
+              month: "long",
+              day: "numeric",
+              year: "numeric",
+            })}
           </span>
         </div>
         <GamesTable
           games={games}
           headshotMap={headshotMap}
-          espnAwayPicks={Object.fromEntries(gamePicks.map(gp => [gp.game.id, gp.awayTop]))}
-          espnHomePicks={Object.fromEntries(gamePicks.map(gp => [gp.game.id, gp.homeTop]))}
-          espnAwayJumpBall={Object.fromEntries(gamePicks.map(gp => [gp.game.id, gp.awayJumpBall]))}
-          espnHomeJumpBall={Object.fromEntries(gamePicks.map(gp => [gp.game.id, gp.homeJumpBall]))}
+          espnAwayPicks={awayPicks}
+          espnHomePicks={homePicks}
+          espnAwayJumpBall={awayJumpBalls}
+          espnHomeJumpBall={homeJumpBalls}
         />
       </div>
     </div>
