@@ -80,13 +80,24 @@ function GameCard({ game }: { game: NrfiGame }) {
   const isNrfi = game.recommendation === "NRFI";
   const sideProbability = isNrfi ? game.nrfiProbability : 100 - game.nrfiProbability;
   const promoted = game.playStatus === "BEST_PLAY" || game.playStatus === "PLAY";
+  const lean = game.playStatus === "LEAN";
   const noPlay = game.playStatus === "NO_PLAY";
   const probabilityColor = sideProbability >= 60 ? "text-emerald-500" : sideProbability >= 55 ? "text-yellow-500" : "text-muted-foreground";
+  const cardTone = noPlay
+    ? "border-red-500/30 bg-red-500/5"
+    : lean
+      ? "border-yellow-500/40 bg-yellow-500/5"
+      : "bg-card";
+  const headerTone = noPlay
+    ? "bg-red-500/10 border-red-500/20"
+    : lean
+      ? "bg-yellow-500/10 border-yellow-500/25"
+      : "bg-muted/20";
   return (
-    <article className={`rounded-md border overflow-hidden ${noPlay ? "border-red-500/30 bg-red-500/5" : "bg-card"} ${promoted ? "ring-1 ring-primary/20" : ""}`} data-testid={`card-nrfi-${game.id}`}>
-      <div className={`flex flex-wrap items-center justify-between gap-2 px-4 py-3 border-b ${noPlay ? "bg-red-500/10 border-red-500/20" : "bg-muted/20"}`}>
-        <div className="flex items-center gap-2 min-w-0"><CircleDot className={`w-4 h-4 shrink-0 ${noPlay ? "text-red-500" : "text-primary"}`} /><span className="font-bold text-sm truncate">{game.shortName}</span><span className="text-xs text-muted-foreground flex items-center gap-1 whitespace-nowrap"><Clock className="w-3 h-3" />{formatTime(game.date)}</span></div>
-        <div className="flex items-center gap-1.5"><Badge className={isNrfi ? "bg-emerald-500/15 text-emerald-500 border-emerald-500/30" : "bg-orange-500/15 text-orange-500 border-orange-500/30"}>{game.recommendation}</Badge><Badge variant={noPlay ? "destructive" : promoted ? "default" : "secondary"}>{statusLabel(game.playStatus)}</Badge>{game.outcome === "won" && <Badge className="bg-emerald-500/15 text-emerald-500 border-emerald-500/30">WON</Badge>}</div>
+    <article className={`rounded-md border overflow-hidden ${cardTone} ${promoted ? "ring-1 ring-primary/20" : ""}`} data-testid={`card-nrfi-${game.id}`}>
+      <div className={`flex flex-wrap items-center justify-between gap-2 px-4 py-3 border-b ${headerTone}`}>
+        <div className="flex items-center gap-2 min-w-0"><CircleDot className={`w-4 h-4 shrink-0 ${noPlay ? "text-red-500" : lean ? "text-yellow-500" : "text-primary"}`} /><span className="font-bold text-sm truncate">{game.shortName}</span><span className="text-xs text-muted-foreground flex items-center gap-1 whitespace-nowrap"><Clock className="w-3 h-3" />{formatTime(game.date)}</span></div>
+        <div className="flex items-center gap-1.5"><Badge className={isNrfi ? "bg-emerald-500/15 text-emerald-500 border-emerald-500/30" : "bg-orange-500/15 text-orange-500 border-orange-500/30"}>{game.recommendation}</Badge><Badge variant={noPlay ? "destructive" : promoted ? "default" : "secondary"} className={lean ? "bg-yellow-500/15 text-yellow-600 border-yellow-500/30" : ""}>{statusLabel(game.playStatus)}</Badge>{game.outcome === "won" && <Badge className="bg-emerald-500/15 text-emerald-500 border-emerald-500/30">WON</Badge>}</div>
       </div>
       <div className="p-4">
         <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3"><Team team={game.away} /><span className="text-xs text-muted-foreground">@</span><Team team={game.home} /></div>
@@ -94,7 +105,8 @@ function GameCard({ game }: { game: NrfiGame }) {
           <div><p className="text-[10px] uppercase tracking-wide text-muted-foreground">{isNrfi ? "NRFI probability" : "YRFI probability"}</p><p className={`text-3xl font-bold font-mono ${probabilityColor}`}>{sideProbability.toFixed(1)}%</p><p className="text-[10px] text-muted-foreground mt-1">Model separation from 50%: {game.modelEdge.toFixed(1)} pts</p></div>
           <div className="text-right"><p className="text-[10px] uppercase tracking-wide text-muted-foreground">Confidence</p><p className="text-sm font-semibold">{game.confidence}</p><p className="text-[10px] text-muted-foreground">{game.sampleSize || "Limited"} recent games</p></div>
         </div>
-        <div className="h-2 rounded-full bg-muted overflow-hidden mt-2"><div className={`h-full rounded-full ${sideProbability >= 60 ? "bg-emerald-500" : sideProbability >= 55 ? "bg-yellow-500" : noPlay ? "bg-red-500/60" : "bg-muted-foreground/40"}`} style={{ width: `${sideProbability}%` }} /></div>
+        <div className="h-2 rounded-full bg-muted overflow-hidden mt-2"><div className={`h-full rounded-full ${sideProbability >= 60 ? "bg-emerald-500" : sideProbability >= 55 ? "bg-yellow-500" : noPlay ? "bg-red-500/60" : lean ? "bg-yellow-500/70" : "bg-muted-foreground/40"}`} style={{ width: `${sideProbability}%` }} /></div>
+        {lean && <div className="mt-3 rounded-md px-3 py-2 text-xs bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border border-yellow-500/25">LEAN · The model sees an edge, but not enough separation or data quality for a stronger play.</div>}
         {noPlay && <div className="mt-3 rounded-md px-3 py-2 text-xs bg-red-500/10 text-red-500 border border-red-500/20">NO PLAY · Model edge is not strong enough to recommend a wager.</div>}
         {game.outcome === "won" && <div className="mt-3 rounded-md px-3 py-2 text-xs bg-emerald-500/10 text-emerald-500">Pick won · First inning score: {game.firstInningScore ?? "—"}</div>}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-5 pt-4 border-t"><Pitcher label={`${game.away.abbreviation} pitcher`} pitcher={game.away.pitcher} /><Pitcher label={`${game.home.abbreviation} pitcher`} pitcher={game.home.pitcher} /></div>
