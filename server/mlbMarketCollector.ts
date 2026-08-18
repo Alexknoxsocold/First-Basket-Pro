@@ -10,6 +10,8 @@ import type { MlbMarketQuote, MlbMarketSide } from "./mlbMarketValue.js";
 
 export type RawMlbMarketQuote = {
   gameId: string;
+  awayTeam?: string;
+  homeTeam?: string;
   side: "NRFI" | "YRFI" | string;
   americanOdds: number;
   sportsbook: string;
@@ -20,6 +22,8 @@ export type RawMlbMarketQuote = {
 
 export type NormalizedMlbMarketQuote = MlbMarketQuote & {
   gameId: string;
+  awayTeam: string | null;
+  homeTeam: string | null;
 };
 
 const VALID_SIDES: MlbMarketSide[] = ["NRFI", "YRFI"];
@@ -41,6 +45,8 @@ export function normalizeMlbMarketQuote(raw: RawMlbMarketQuote): NormalizedMlbMa
 
   return {
     gameId: raw.gameId,
+    awayTeam: raw.awayTeam?.trim() || null,
+    homeTeam: raw.homeTeam?.trim() || null,
     side,
     americanOdds: odds,
     sportsbook: raw.sportsbook.trim(),
