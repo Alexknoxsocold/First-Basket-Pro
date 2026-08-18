@@ -17,7 +17,7 @@ type Event = { id?: string; home_team?: string; away_team?: string; bookmakers?:
 
 const BASE = "https://api.the-odds-api.com/v4";
 const TTL = 60_000;
-const EVENT_FALLBACK_TTL = 5 * 60_000;
+const EMPTY_TTL = 60_000;
 let cache: { value: Map<string, MlbRfiMarket>; expiresAt: number } | null = null;
 let inflight: Promise<Map<string, MlbRfiMarket>> | null = null;
 
@@ -39,8 +39,8 @@ function extractMarkets(events: Event[]): Map<string, MlbRfiMarket> {
     const gameKey = keyFor(event.away_team, event.home_team);
     if (gameKey === "@") continue;
     for (const book of event.bookmakers ?? event.books ?? []) {
-      // Never fall back to an unrelated market. If the bookmaker does not
-      // expose NRFI/YRFI, it must not be interpreted as first-inning pricing.
+      // Never interpret an unrelated market as RFI pricing. Some API responses
+      // can omit the requested market when a bookmaker has not opened it yet.
       const market = (book.markets ?? []).find(m => m.key === "nrfi" || m.key === "yrfi" || m.title?.toLowerCase().includes("first inning"));
       if (!market) continue;
       const prices = new Map<"NRFI" | "YRFI", number>();
@@ -132,6 +132,11 @@ async function fetchPrimaryRfi(apiKey: string): Promise<Map<string, MlbRfiMarket
   return extractMarkets(events);
 }
 
+export function getCachedMlbRfiMarkets(): Map<string, MlbRfiMarket> {
+  if (!cache || cache.expiresAt <= Date.now()) return new Map();
+  return cache.value;
+}
+
 export async function fetchMlbRfiMarkets(): Promise<Map<string, MlbRfiMarket>> {
   if (cache && cache.expiresAt > Date.now()) return cache.value;
   if (inflight) return inflight;
@@ -140,7 +145,13 @@ export async function fetchMlbRfiMarkets(): Promise<Map<string, MlbRfiMarket>> {
 
   inflight = (async () => {
     try {
-      let out = await fetchPrimaryRfi(apiKey);
+      let out = new Map<string, MlbRfiMarket>();
+      try {
+        out = await fetchPrimaryRfi(apiKey);
+      } catch (primaryError) {
+        console.warn("[MLB Odds] Bulk RFI endpoint failed:", primaryError);
+      }
+
       if (out.size === 0 && process.env.THE_ODDS_API_EVENT_FALLBACK !== "false") {
         console.log("[MLB Odds] No RFI prices from bulk endpoint; checking event markets.");
         try {
@@ -149,8 +160,9 @@ export async function fetchMlbRfiMarkets(): Promise<Map<string, MlbRfiMarket>> {
           console.warn("[MLB Odds] Event-market fallback failed:", fallbackError);
         }
       }
+
       console.log(`[MLB Odds] RFI market refresh: ${out.size / 2} games priced.`);
-      cache = { value: out, expiresAt: Date.now() + (out.size ? TTL : EVENT_FALLBACK_TTL) };
+      cache = { value: out, expiresAt: Date.now() + (out.size ? TTL : EMPTY_TTL) };
       return out;
     } catch (error) {
       console.warn("[MLB Odds] Refresh failed:", error);
