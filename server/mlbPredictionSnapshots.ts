@@ -1,5 +1,6 @@
 import { Pool, neonConfig } from "@neondatabase/serverless";
 import ws from "ws";
+import type { MlbMarketValue } from "./mlbMarketValue.js";
 
 neonConfig.webSocketConstructor = ws;
 
@@ -14,81 +15,85 @@ export type MlbPredictionSnapshot = {
   lockedAt?: Date | null;
   outcome?: "NRFI" | "YRFI" | null;
   firstInningScore?: string | null;
+  marketValue?: MlbMarketValue | null;
 };
 
 let pool: Pool | null = null;
 let ready: Promise<void> | null = null;
-
-function db(): Pool | null {
-  if (!process.env.DATABASE_URL) return null;
-  if (!pool) pool = new Pool({ connectionString: process.env.DATABASE_URL });
-  return pool;
-}
+function db(): Pool | null { if (!process.env.DATABASE_URL) return null; if (!pool) pool = new Pool({ connectionString: process.env.DATABASE_URL }); return pool; }
 
 async function ensure(): Promise<void> {
   if (ready) return ready;
-  const connection = db();
-  if (!connection) return;
+  const connection = db(); if (!connection) return;
   ready = connection.query(`
     CREATE TABLE IF NOT EXISTS mlb_prediction_snapshots (
-      id varchar(160) PRIMARY KEY,
-      prediction_date text NOT NULL,
-      game_id text NOT NULL,
-      matchup text NOT NULL,
-      recommendation text NOT NULL,
-      probability real NOT NULL,
-      confidence text,
-      model_version text NOT NULL,
-      locked_at timestamp,
-      outcome text,
-      first_inning_score text,
-      created_at timestamp NOT NULL DEFAULT now(),
-      graded_at timestamp,
+      id varchar(160) PRIMARY KEY, prediction_date text NOT NULL, game_id text NOT NULL, matchup text NOT NULL,
+      recommendation text NOT NULL, probability real NOT NULL, confidence text, model_version text NOT NULL,
+      locked_at timestamp, outcome text, first_inning_score text, market_available boolean NOT NULL DEFAULT false,
+      market_side text, sportsbook text, market_name text, market_odds integer, market_captured_at timestamp,
+      market_implied_probability real, market_no_vig_probability real, market_edge real, market_expected_value real,
+      value_play boolean NOT NULL DEFAULT false, created_at timestamp NOT NULL DEFAULT now(), graded_at timestamp,
       UNIQUE(prediction_date, game_id, model_version)
     );
-    CREATE INDEX IF NOT EXISTS mlb_prediction_snapshots_date_idx
-      ON mlb_prediction_snapshots(prediction_date DESC);
+    ALTER TABLE mlb_prediction_snapshots ADD COLUMN IF NOT EXISTS market_available boolean NOT NULL DEFAULT false;
+    ALTER TABLE mlb_prediction_snapshots ADD COLUMN IF NOT EXISTS market_side text;
+    ALTER TABLE mlb_prediction_snapshots ADD COLUMN IF NOT EXISTS sportsbook text;
+    ALTER TABLE mlb_prediction_snapshots ADD COLUMN IF NOT EXISTS market_name text;
+    ALTER TABLE mlb_prediction_snapshots ADD COLUMN IF NOT EXISTS market_odds integer;
+    ALTER TABLE mlb_prediction_snapshots ADD COLUMN IF NOT EXISTS market_captured_at timestamp;
+    ALTER TABLE mlb_prediction_snapshots ADD COLUMN IF NOT EXISTS market_implied_probability real;
+    ALTER TABLE mlb_prediction_snapshots ADD COLUMN IF NOT EXISTS market_no_vig_probability real;
+    ALTER TABLE mlb_prediction_snapshots ADD COLUMN IF NOT EXISTS market_edge real;
+    ALTER TABLE mlb_prediction_snapshots ADD COLUMN IF NOT EXISTS market_expected_value real;
+    ALTER TABLE mlb_prediction_snapshots ADD COLUMN IF NOT EXISTS value_play boolean NOT NULL DEFAULT false;
+    CREATE INDEX IF NOT EXISTS mlb_prediction_snapshots_date_idx ON mlb_prediction_snapshots(prediction_date DESC);
+    CREATE INDEX IF NOT EXISTS mlb_prediction_snapshots_value_idx ON mlb_prediction_snapshots(value_play, prediction_date DESC);
   `).then(() => undefined).catch(error => { ready = null; throw error; });
   return ready;
 }
 
 export async function snapshotPrediction(data: MlbPredictionSnapshot): Promise<void> {
-  const connection = db();
-  if (!connection) return;
-  await ensure();
-  const id = `${data.date}:${data.gameId}:${data.modelVersion}`;
+  const connection = db(); if (!connection) return; await ensure();
+  const id = `${data.date}:${data.gameId}:${data.modelVersion}`; const market = data.marketValue;
   await connection.query(`
     INSERT INTO mlb_prediction_snapshots
-      (id,prediction_date,game_id,matchup,recommendation,probability,confidence,model_version,locked_at,outcome,first_inning_score,created_at,graded_at)
-    VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,now(),CASE WHEN $10 IS NULL THEN NULL ELSE now() END)
+      (id,prediction_date,game_id,matchup,recommendation,probability,confidence,model_version,locked_at,outcome,first_inning_score,
+       market_available,market_side,sportsbook,market_name,market_odds,market_captured_at,market_implied_probability,market_no_vig_probability,
+       market_edge,market_expected_value,value_play,created_at,graded_at)
+    VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,now(),CASE WHEN $10 IS NULL THEN NULL ELSE now() END)
     ON CONFLICT(prediction_date,game_id,model_version) DO UPDATE SET
       locked_at=COALESCE(mlb_prediction_snapshots.locked_at, EXCLUDED.locked_at),
       outcome=COALESCE(EXCLUDED.outcome, mlb_prediction_snapshots.outcome),
       first_inning_score=COALESCE(EXCLUDED.first_inning_score, mlb_prediction_snapshots.first_inning_score),
+      market_available=EXCLUDED.market_available, market_side=EXCLUDED.market_side, sportsbook=EXCLUDED.sportsbook,
+      market_name=EXCLUDED.market_name, market_odds=EXCLUDED.market_odds, market_captured_at=EXCLUDED.market_captured_at,
+      market_implied_probability=EXCLUDED.market_implied_probability, market_no_vig_probability=EXCLUDED.market_no_vig_probability,
+      market_edge=EXCLUDED.market_edge, market_expected_value=EXCLUDED.market_expected_value, value_play=EXCLUDED.value_play,
       graded_at=COALESCE(EXCLUDED.graded_at, mlb_prediction_snapshots.graded_at)
-  `, [id,data.date,data.gameId,data.matchup,data.recommendation,data.probability,data.confidence ?? null,data.modelVersion,data.lockedAt ?? null,data.outcome ?? null,data.firstInningScore ?? null]);
+  `, [id,data.date,data.gameId,data.matchup,data.recommendation,data.probability,data.confidence ?? null,data.modelVersion,data.lockedAt ?? null,data.outcome ?? null,data.firstInningScore ?? null,
+      market?.available ?? false,market?.side ?? null,market?.sportsbook ?? null,market?.market ?? null,market?.americanOdds ?? null,
+      market?.capturedAt ? new Date(market.capturedAt) : null,market?.impliedProbability ?? null,market?.noVigProbability ?? null,market?.edge ?? null,market?.expectedValue ?? null,market?.valuePlay ?? false]);
 }
 
 export async function getPredictionHistory(days = 30): Promise<MlbPredictionSnapshot[]> {
-  const connection = db();
-  if (!connection) return [];
-  await ensure();
+  const connection = db(); if (!connection) return []; await ensure();
   const result = await connection.query(`
-    SELECT prediction_date,game_id,matchup,recommendation,probability,confidence,model_version,locked_at,outcome,first_inning_score
-    FROM mlb_prediction_snapshots
-    WHERE prediction_date >= to_char(current_date - ($1::int - 1),'YYYY-MM-DD')
+    SELECT prediction_date,game_id,matchup,recommendation,probability,confidence,model_version,locked_at,outcome,first_inning_score,
+           market_available,market_side,sportsbook,market_name,market_odds,market_captured_at,market_implied_probability,market_no_vig_probability,
+           market_edge,market_expected_value,value_play
+    FROM mlb_prediction_snapshots WHERE prediction_date >= to_char(current_date - ($1::int - 1),'YYYY-MM-DD')
     ORDER BY prediction_date DESC, locked_at DESC NULLS LAST, created_at DESC
   `, [Math.min(Math.max(Math.round(days),1),365)]);
   return result.rows.map(row => ({
-    date: row.prediction_date,
-    gameId: row.game_id,
-    matchup: row.matchup,
-    recommendation: row.recommendation,
-    probability: Number(row.probability),
-    confidence: row.confidence,
-    modelVersion: row.model_version,
-    lockedAt: row.locked_at,
-    outcome: row.outcome,
-    firstInningScore: row.first_inning_score,
+    date: row.prediction_date, gameId: row.game_id, matchup: row.matchup, recommendation: row.recommendation,
+    probability: Number(row.probability), confidence: row.confidence, modelVersion: row.model_version, lockedAt: row.locked_at,
+    outcome: row.outcome, firstInningScore: row.first_inning_score,
+    marketValue: row.market_available ? {
+      available: true, side: row.market_side, sportsbook: row.sportsbook, market: row.market_name, americanOdds: row.market_odds,
+      capturedAt: row.market_captured_at, ageSeconds: null, impliedProbability: row.market_implied_probability,
+      noVigProbability: row.market_no_vig_probability, modelProbability: Number(row.probability), edge: row.market_edge,
+      expectedValue: row.market_expected_value, valuePlay: row.value_play,
+      reason: row.value_play ? "Verified market value" : "Verified market price, but no qualifying edge",
+    } : null,
   }));
 }
