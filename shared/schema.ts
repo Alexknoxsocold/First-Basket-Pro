@@ -93,7 +93,10 @@ export const fbTracking = pgTable("fb_tracking", {
   season: text("season").notNull().default("2025/26"),
   lastUpdated: text("last_updated"),
 }, (table) => ({
-  playerTeamIdx: uniqueIndex("fb_tracking_player_team_idx").on(table.playerName, table.team),
+  // Non-unique on purpose: the existing production database already contains
+  // duplicate player/team rows. A unique index made every Render deployment
+  // fail during drizzle-kit push before the app could start.
+  playerTeamIdx: index("fb_tracking_player_team_idx").on(table.playerName, table.team),
   seasonIdx: index("fb_tracking_season_idx").on(table.season),
 }));
 
