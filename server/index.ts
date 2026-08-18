@@ -17,6 +17,7 @@ import { registerCalibrationSourceRoute } from "./mlbCalibrationSources";
 import { getMlbIntegritySummary } from "./mlbIntegrity";
 import { startMlbAutoGradeScheduler } from "./mlbAutoGrade";
 import { captureMlbClosingLines, getMlbClosingLineSummary } from "./mlbClosingLine";
+import { registerMlbHistoryRoutes } from "./mlbHistory";
 
 const app = express();
 app.set('trust proxy', 1);
@@ -104,6 +105,7 @@ app.get("/api/mlb/integrity", async (req, res) => {
   } catch (error) { console.error("[MLB Integrity] Error:", error); return res.status(500).json({ error: "Unable to run MLB integrity audit" }); }
 });
 
+registerMlbHistoryRoutes(app);
 registerCalibrationSourceRoute(app);
 
 function isNbaSeason(): boolean { const month = new Date().getUTCMonth() + 1; return month >= 10 || month <= 6; }
