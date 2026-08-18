@@ -9,12 +9,21 @@ export default function GamesTableExample() {
       awayTipCount: 13,
       awayTipPercent: 46,
       awayScorePercent: 31,
+      awayStarters: ["J. Jackson Jr.", "C. Aldama", "J. Morant", "D. Bane", "Z. Edey"],
       homeTeam: "CLE",
       homePlayer: "J. Allen",
       homeTipCount: 11,
       homeTipPercent: 64,
       homeScorePercent: 77,
-      h2h: "N/A"
+      homeStarters: ["J. Allen", "E. Mobley", "D. Mitchell", "M. Strus", "D. Garland"],
+      h2h: "N/A",
+      gameDate: "2025-01-01",
+      gameTime: null,
+      status: "scheduled",
+      awayScore: null,
+      homeScore: null,
+      espnGameId: null,
+      lastSynced: null,
     },
     {
       id: "2",
@@ -23,13 +32,22 @@ export default function GamesTableExample() {
       awayTipCount: 12,
       awayTipPercent: 58,
       awayScorePercent: 62,
+      awayStarters: ["D. Ayton", "L. James", "A. Reaves", "R. Hachimura", "M. Smart"],
       homeTeam: "MIL",
       homePlayer: "M. Turner",
       homeTipCount: 13,
       homeTipPercent: 31,
       homeScorePercent: 54,
-      h2h: "N/A"
-    }
+      homeStarters: ["M. Turner", "G. Antetokounmpo", "D. Lillard", "K. Middleton", "T. Trent Jr."],
+      h2h: "N/A",
+      gameDate: "2025-01-02",
+      gameTime: null,
+      status: "scheduled",
+      awayScore: null,
+      homeScore: null,
+      espnGameId: null,
+      lastSynced: null,
+    },
   ]
 
   return <GamesTable games={mockGames} />
