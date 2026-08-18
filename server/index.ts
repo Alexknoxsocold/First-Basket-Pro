@@ -12,14 +12,9 @@ import { createDailySyncService } from "./dailySync";
 import { storage } from "./storage";
 
 const app = express();
-
-// Trust first proxy for proper HTTPS detection when behind reverse proxy
 app.set('trust proxy', 1);
-
-// Configure Neon to use WebSocket for serverless environments
 neonConfig.webSocketConstructor = ws;
 
-// Set up session store — PostgreSQL in production, in-memory locally
 const sessionStore = process.env.DATABASE_URL
   ? (() => {
       const PgSession = connectPgSimple(session);
@@ -42,14 +37,11 @@ const sessionMiddleware = session({
 });
 
 declare module 'http' {
-  interface IncomingMessage {
-    rawBody: unknown
-  }
+  interface IncomingMessage { rawBody: unknown }
 }
+
 app.use(express.json({
-  verify: (req, _res, buf) => {
-    req.rawBody = buf;
-  }
+  verify: (req, _res, buf) => { req.rawBody = buf; }
 }));
 app.use(express.urlencoded({ extended: false }));
 app.use(sessionMiddleware);
@@ -59,36 +51,23 @@ app.use((req, res, next) => {
   const start = Date.now();
   const path = req.path;
   let capturedJsonResponse: Record<string, any> | undefined = undefined;
-
   const originalResJson = res.json;
   res.json = function (bodyJson, ...args) {
     capturedJsonResponse = bodyJson;
     return originalResJson.apply(res, [bodyJson, ...args]);
   };
-
   res.on("finish", () => {
     const duration = Date.now() - start;
     if (path.startsWith("/api")) {
       let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
-      if (capturedJsonResponse) {
-        logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
-      }
-
-      if (logLine.length > 80) {
-        logLine = logLine.slice(0, 79) + "…";
-      }
-
+      if (capturedJsonResponse) logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
+      if (logLine.length > 80) logLine = logLine.slice(0, 79) + "…";
       log(logLine);
     }
   });
-
   next();
 });
 
-// NBA is seasonal. Render's free tier can wake the process outside the season,
-// so don't spend a cold-start on NBA/lineup/injury requests when there cannot
-// be any NBA games. The normal API auto-sync still repopulates the schedule
-// as soon as the season is active.
 function isNbaSeason(): boolean {
   const month = new Date().getUTCMonth() + 1;
   return month >= 10 || month <= 6;
@@ -100,7 +79,6 @@ function isNbaSeason(): boolean {
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";
-
     res.status(status).json({ message });
     throw err;
   });
@@ -119,25 +97,21 @@ function isNbaSeason(): boolean {
   }, async () => {
     log(`serving on port ${port}`);
 
-    // Warm MLB independently of the NBA season. The HTTP server is already
-    // accepting traffic, so this never blocks a Render cold start.
+    // MLB cache warming happens after the HTTP server is listening and only
+    // warms today's slate. It does not block startup or the first request.
     try {
       const { warmMlbCache } = await import('./mlbNrfi.js');
-      warmMlbCache(3);
+      warmMlbCache();
       log('[Startup] MLB NRFI cache warming started in background.');
     } catch (error) {
       log('[Startup] MLB cache warm skipped:', error);
     }
 
-    // Keep cold starts cheap outside the NBA season. MLB NRFI has its own
-    // background cache warmup and does not depend on NBA startup sync.
     if (!isNbaSeason()) {
       log('[Startup] NBA offseason detected — skipping heavy NBA startup sync.');
       return;
     }
 
-    // Run NBA sync in the background after the server is already accepting traffic.
-    // This prevents a Render cold start from waiting on ESPN/API-Sports calls.
     void (async () => {
       try {
         log('[Startup] Running initial NBA data sync in background...');
