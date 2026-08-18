@@ -119,8 +119,18 @@ function isNbaSeason(): boolean {
   }, async () => {
     log(`serving on port ${port}`);
 
-    // Keep cold starts cheap outside the NBA season. MLB NRFI is request-driven
-    // and has its own cache, so it does not need a startup data crawl.
+    // Warm MLB independently of the NBA season. The HTTP server is already
+    // accepting traffic, so this never blocks a Render cold start.
+    try {
+      const { warmMlbCache } = await import('./mlbNrfi.js');
+      warmMlbCache(3);
+      log('[Startup] MLB NRFI cache warming started in background.');
+    } catch (error) {
+      log('[Startup] MLB cache warm skipped:', error);
+    }
+
+    // Keep cold starts cheap outside the NBA season. MLB NRFI has its own
+    // background cache warmup and does not depend on NBA startup sync.
     if (!isNbaSeason()) {
       log('[Startup] NBA offseason detected — skipping heavy NBA startup sync.');
       return;
