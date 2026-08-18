@@ -18,6 +18,7 @@ import Login from "@/pages/Login";
 import Signup from "@/pages/Signup";
 import Invite from "@/pages/Invite";
 import NRFIPro from "@/pages/NRFIPro";
+import NRFICalibration from "@/pages/NRFICalibration";
 import Legal from "@/pages/Legal";
 import NotFound from "@/pages/not-found";
 
@@ -32,6 +33,7 @@ function Router() {
       <Route path="/player-stats" component={PlayerStats} />
       <Route path="/team-stats" component={TeamStats} />
       <Route path="/mlb" component={NRFIPro} />
+      <Route path="/mlb/calibration" component={NRFICalibration} />
       <Route path="/legal" component={Legal} />
       <Route path="/admin" component={Admin} />
       <Route component={NotFound} />
