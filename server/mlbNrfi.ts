@@ -206,8 +206,6 @@ async function getPitcher(competitor: EspnCompetitor): Promise<NrfiPitcher> {
   let whip = parsePitcherStat(probable, "WHIP");
   let source: NrfiPitcher["source"] = era !== null || whip !== null ? "ESPN" : "pending";
 
-  // ESPN is primary. MLB Stats API is the authoritative fallback when ESPN's
-  // probable-pitcher payload omits season ERA/WHIP.
   if (name && (era === null || whip === null)) {
     const fallback = await fetchMlbPitcherStats(name);
     if (era === null) era = fallback.era;
@@ -379,7 +377,7 @@ async function fetchTeamForm(teamId: string, beforeDate: string, sharedHistory: 
   const cached = teamFormCache.get(cacheKey);
   if (cached && cached.expiresAt > Date.now()) return cached.value;
   const value = calculateTeamForm(teamId, sharedHistory);
-  teamFormCache.set(cacheKey, { value, expiresAt: HISTORY_CACHE_TTL });
+  teamFormCache.set(cacheKey, { value, expiresAt: Date.now() + HISTORY_CACHE_TTL });
   return value;
 }
 
@@ -433,7 +431,6 @@ async function buildPrediction(
   if (playStatus === "BEST_PLAY") factors.push(`Best model separation: ${recommendation} at ${recommendation === "NRFI" ? nrfiProbability : 100 - nrfiProbability}%`);
   else if (playStatus === "PLAY") factors.push(`Qualifying model edge: ${recommendation} at ${recommendation === "NRFI" ? nrfiProbability : 100 - nrfiProbability}%`);
   else if (playStatus === "LEAN") factors.push(`Model lean: ${recommendation} at ${recommendation === "NRFI" ? nrfiProbability : 100 - nrfiProbability}% with ${modelEdge}% separation from 50/50`);
-  else factors.push("No meaningful model edge; pass rather than force a play");
 
   if (awayPitcher.era !== null || homePitcher.era !== null) factors.push(`Probable starter ERAs included (${awayPitcher.era !== null ? awayPitcher.era.toFixed(2) : "pending"} and ${homePitcher.era !== null ? homePitcher.era.toFixed(2) : "pending"})`);
   else factors.push("Probable starter ERAs are unconfirmed");
@@ -452,108 +449,49 @@ async function buildNrfiData(date: string): Promise<NrfiResponse> {
   const rawGames = (scoreboard.events ?? [])
     .map(event => ({ event, competition: event.competitions?.[0] }))
     .filter((item): item is { event: EspnEvent; competition: EspnCompetition } => Boolean(item.competition?.competitors?.length === 2));
-  const teamIds = Array.from(new Set(rawGames.flatMap(({ competition }) => competition.competitors?.map(c => c.team?.id).filter((id): id is string => Boolean(id)) ?? [])));
+  const teamIds = Array.from(new Set(rawGames.flatMap(({ competition }) => competition.competitors?.map(c => c.team?.id).filter(Boolean) ?? []))) as string[];
   const sharedHistory = await fetchRecentHistory(date);
-  const leagueBaseline = calculateLeagueBaseline(sharedHistory);
-  const forms = await withConcurrency(teamIds, async teamId => [teamId, await fetchTeamForm(teamId, date, sharedHistory)] as const, 12);
-  const formMap = new Map(forms);
-  const fallback: TeamForm = { games: 0, scorelessPct: leagueBaseline.scorelessPct, runsPerFirstInning: leagueBaseline.runsPerInning, allowedPerFirstInning: leagueBaseline.runsPerInning, allowedScorelessPct: leagueBaseline.scorelessPct };
-
-  const games = await withConcurrency(rawGames, async ({ event, competition }) => {
-    const away = competition.competitors!.find(c => c.homeAway === "away")!;
-    const home = competition.competitors!.find(c => c.homeAway === "home")!;
-    const [awayPitcher, homePitcher] = await Promise.all([getPitcher(away), getPitcher(home)]);
-    const prediction = await buildPrediction(
-      formMap.get(away.team?.id ?? "") ?? fallback,
-      formMap.get(home.team?.id ?? "") ?? fallback,
-      awayPitcher,
-      homePitcher,
-      competition.venue?.indoor === true,
-      leagueBaseline.gameNrfiPct,
-    );
+  const league = calculateLeagueBaseline(sharedHistory);
+  const leagueNrfiProbability = league.gameNrfiPct;
+  const predictions = await withConcurrency(rawGames, async ({ event, competition }) => {
+    const competitors = competition.competitors ?? [];
+    const away = competitors.find(c => c.homeAway === "away");
+    const home = competitors.find(c => c.homeAway === "home");
+    if (!away || !home) return null;
+    const awayTeamId = away.team?.id;
+    const homeTeamId = home.team?.id;
+    if (!awayTeamId || !homeTeamId) return null;
+    const [awayForm, homeForm, awayPitcher, homePitcher] = await Promise.all([
+      fetchTeamForm(awayTeamId, date, sharedHistory),
+      fetchTeamForm(homeTeamId, date, sharedHistory),
+      getPitcher(away),
+      getPitcher(home),
+    ]);
+    const prediction = await buildPrediction(awayForm, homeForm, awayPitcher, homePitcher, competition.venue?.indoor === true, leagueNrfiProbability);
+    const outcome = getOutcome(prediction.recommendation, competition);
     return {
       id: event.id,
       date: event.date ?? `${date}T00:00:00Z`,
-      shortName: event.shortName ?? `${away.team?.abbreviation ?? "Away"} @ ${home.team?.abbreviation ?? "Home"}`,
-      away: { abbreviation: away.team?.abbreviation ?? "AWAY", name: away.team?.displayName ?? away.team?.shortDisplayName ?? "Away", logo: away.team?.logos?.[0]?.href ?? null, pitcher: awayPitcher },
-      home: { abbreviation: home.team?.abbreviation ?? "HOME", name: home.team?.displayName ?? home.team?.shortDisplayName ?? "Home", logo: home.team?.logos?.[0]?.href ?? null, pitcher: homePitcher },
+      shortName: event.shortName ?? `${away.team?.abbreviation ?? "AWAY"} @ ${home.team?.abbreviation ?? "HOME"}`,
+      away: { abbreviation: away.team?.abbreviation ?? "AWAY", name: away.team?.displayName ?? "Away", logo: away.team?.logos?.[0]?.href ?? null, pitcher: awayPitcher },
+      home: { abbreviation: home.team?.abbreviation ?? "HOME", name: home.team?.displayName ?? "Home", logo: home.team?.logos?.[0]?.href ?? null, pitcher: homePitcher },
       venue: competition.venue?.fullName ?? null,
-      status: competition.status?.type?.detail ?? competition.status?.type?.state ?? "scheduled",
+      status: competition.status?.type?.detail ?? "Scheduled",
       ...prediction,
-      ...getOutcome(prediction.recommendation, competition),
+      ...outcome,
     } satisfies NrfiGame;
-  }, 8);
+  }, 6);
 
-  const promoted = games.filter(game => game.playStatus === "BEST_PLAY" || game.playStatus === "PLAY");
-  const ranked = [...promoted].sort((a, b) => b.modelEdge - a.modelEdge || (b.confidence === "High" ? 1 : 0) - (a.confidence === "High" ? 1 : 0));
-  const averageNrfiProbability = games.length ? Math.round(games.reduce((sum, g) => sum + g.nrfiProbability, 0) / games.length * 10) / 10 : null;
-
+  const games = predictions.filter((game): game is NrfiGame => game !== null);
+  const topPick = games.filter(game => game.playStatus === "BEST_PLAY" || game.playStatus === "PLAY" || game.playStatus === "LEAN").sort((a, b) => b.modelEdge - a.modelEdge)[0] ?? null;
+  const averageNrfiProbability = games.length ? Math.round((games.reduce((sum, game) => sum + game.nrfiProbability, 0) / games.length) * 10) / 10 : null;
   return {
     date,
     games,
     averageNrfiProbability,
-    topPick: ranked[0] ?? null,
+    topPick,
     updatedAt: new Date().toISOString(),
-    source: "ESPN MLB scoreboard + MLB Stats API pitcher fallback + verified recent game summaries",
-    methodology: "Model v3: recency-weighted first-inning offense/prevention, Bayesian shrinkage, symmetric matchup scoring, league calibration, probable-starter ERA/WHIP from ESPN with MLB Stats API fallback, Poisson no-run probability, and conservative walk-forward calibration. Pregame predictions refresh every 5 minutes so probable-starter changes can be reflected quickly.",
+    source: "ESPN + MLB Stats API",
+    methodology: "Recency-weighted first-inning team form, Bayesian league shrinkage, probable starter ERA/WHIP, Poisson run model, and walk-forward calibration.",
   };
-}
-
-export async function fetchNrfiData(date = getTodayET()): Promise<NrfiResponse> {
-  const now = Date.now();
-  if (cachedResponse && cachedDate === date && now - cachedAt < CACHE_TTL) return cachedResponse;
-  const existing = refreshInFlight.get(date);
-  if (existing) return existing;
-  const refresh = (async () => {
-    try {
-      const data = await buildNrfiData(date);
-      cachedResponse = data;
-      cachedDate = date;
-      cachedAt = Date.now();
-      return data;
-    } catch (error) {
-      if (cachedResponse && cachedDate === date && now - cachedAt < STALE_TTL) return cachedResponse;
-      throw error;
-    } finally {
-      refreshInFlight.delete(date);
-    }
-  })();
-  refreshInFlight.set(date, refresh);
-  return refresh;
-}
-
-export async function fetchUpcomingNrfiData(days = 3, startDate = getTodayET()): Promise<NrfiWindowResponse> {
-  const safeDays = Math.min(Math.max(days, 1), 3);
-  if (cachedWindow && cachedWindowStart === startDate && cachedWindowDays === safeDays && Date.now() - cachedWindowAt < WINDOW_CACHE_TTL) return cachedWindow;
-  if (windowRefreshInFlight) return windowRefreshInFlight;
-  windowRefreshInFlight = (async () => {
-    const dates = Array.from({ length: safeDays }, (_, i) => addDays(startDate, i));
-    const responses = await withConcurrency(dates, date => fetchNrfiData(date), 3);
-    const games = responses.flatMap(r => r.games);
-    const promoted = games.filter(g => g.playStatus === "BEST_PLAY" || g.playStatus === "PLAY");
-    const topPick = [...promoted].sort((a, b) => b.modelEdge - a.modelEdge)[0] ?? null;
-    const result: NrfiWindowResponse = {
-      startDate,
-      endDate: dates[dates.length - 1],
-      days: responses,
-      games,
-      averageNrfiProbability: games.length ? Math.round(games.reduce((sum, g) => sum + g.nrfiProbability, 0) / games.length * 10) / 10 : null,
-      topPick,
-      updatedAt: new Date().toISOString(),
-    };
-    cachedWindow = result;
-    cachedWindowStart = startDate;
-    cachedWindowDays = safeDays;
-    cachedWindowAt = Date.now();
-    return result;
-  })();
-  try {
-    return await windowRefreshInFlight;
-  } finally {
-    windowRefreshInFlight = null;
-  }
-}
-
-export async function warmMlbCache(): Promise<NrfiResponse> {
-  return fetchNrfiData();
 }
