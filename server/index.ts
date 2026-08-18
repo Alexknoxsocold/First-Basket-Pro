@@ -10,7 +10,7 @@ import { setupVite, serveStatic, log } from "./vite";
 import { authMiddleware } from "./auth";
 import { createDailySyncService } from "./dailySync";
 import { storage } from "./storage";
-import { fetchMlbRfiMarkets, valueFromMarketForTeams } from "./mlbOdds";
+import { fetchMlbRfiMarkets, getCachedMlbRfiMarkets, valueFromMarketForTeams } from "./mlbOdds";
 
 const app = express();
 app.set('trust proxy', 1);
@@ -51,29 +51,66 @@ app.use((req, res, next) => {
   next();
 });
 
-// Adds live sportsbook pricing to the already-calibrated MLB prediction.
-// Odds affect Value/Play classification only; they never alter the model probability.
+// Add live sportsbook pricing to the calibrated prediction when the odds cache
+// is warm. The first request never waits on the sportsbook API; startup warms it
+// in the background so normal page loads stay fast.
 app.use("/api/mlb/nrfi", (req, res, next) => {
   if (req.method !== "GET" || req.path !== "/") return next();
   const originalJson = res.json.bind(res);
   res.json = ((body: any) => {
-    void fetchMlbRfiMarkets().then(markets => {
-      if (!markets.size || !body?.games) return originalJson(body);
-      const games = body.games.map((game: any) => {
-        const side = game.recommendation === "NRFI" ? "NRFI" : "YRFI";
-        const modelProbability = side === "NRFI" ? game.nrfiProbability / 100 : (100 - game.nrfiProbability) / 100;
-        const market = valueFromMarketForTeams(markets, game.away?.name ?? "", game.home?.name ?? "", side, modelProbability);
-        if (!market) return { ...game, marketValue: null };
-        const edge = market.edge ?? 0;
-        const ev = market.ev ?? 0;
-        const marketStatus = ev >= 0.06 && edge >= 0.04 ? "BEST_PLAY" : ev >= 0.03 && edge >= 0.02 ? "PLAY" : ev >= 0.01 && edge >= 0.01 ? "LEAN" : "NO_PLAY";
-        const probability = side === "NRFI" ? game.nrfiProbability : 100 - game.nrfiProbability;
-        const marketFactor = `${side} market: ${probability.toFixed(1)}% model vs ${market.noVigProbability === null ? "—" : (market.noVigProbability * 100).toFixed(1) + "%"} no-vig, ${edge >= 0 ? "+" : ""}${(edge * 100).toFixed(1)}pp edge, ${ev >= 0 ? "+" : ""}${(ev * 100).toFixed(1)}% EV at ${market.book ?? "market"} ${market.price ?? "—"}`;
-        return { ...game, playStatus: marketStatus, marketValue: { available: true, book: market.book, selection: market.selection, price: market.price, impliedProbability: market.impliedProbability === null ? null : Math.round(market.impliedProbability * 1000) / 10, noVigProbability: market.noVigProbability === null ? null : Math.round(market.noVigProbability * 1000) / 10, edge: Math.round(edge * 1000) / 10, ev: Math.round(ev * 1000) / 10, updatedAt: market.updatedAt }, factors: [...(game.factors ?? []), marketFactor] };
-      });
-      return originalJson({ ...body, games, topPick: games.filter((g: any) => g.playStatus === "BEST_PLAY" || g.playStatus === "PLAY").sort((a: any, b: any) => (b.marketValue?.ev ?? -Infinity) - (a.marketValue?.ev ?? -Infinity))[0] ?? null });
-    }).catch(error => { log('[MLB Odds] Market enrichment skipped:', error); return originalJson(body); });
-    return res;
+    const markets = getCachedMlbRfiMarkets();
+    if (!markets.size || !body?.games) {
+      void fetchMlbRfiMarkets().catch(error => log('[MLB Odds] Background refresh failed:', error));
+      return originalJson({ ...body, marketStatus: "unavailable" });
+    }
+
+    const games = body.games.map((game: any) => {
+      const side = game.recommendation === "NRFI" ? "NRFI" : "YRFI";
+      const modelProbability = side === "NRFI" ? game.nrfiProbability / 100 : (100 - game.nrfiProbability) / 100;
+      const market = valueFromMarketForTeams(markets, game.away?.name ?? "", game.home?.name ?? "", side, modelProbability);
+      if (!market) return { ...game, marketValue: null };
+
+      const edge = market.edge ?? 0;
+      const ev = market.ev ?? 0;
+      const sampleReady = (game.sampleSize ?? 0) >= 4;
+      const qualityReady = game.confidence !== "Low";
+      const marketStatus = !sampleReady || !qualityReady
+        ? "NO_PLAY"
+        : ev >= 0.08 && edge >= 0.05
+          ? "BEST_PLAY"
+          : ev >= 0.04 && edge >= 0.03
+            ? "PLAY"
+            : ev >= 0.02 && edge >= 0.015
+              ? "LEAN"
+              : "NO_PLAY";
+      const probability = side === "NRFI" ? game.nrfiProbability : 100 - game.nrfiProbability;
+      const marketFactor = `${side} market: ${probability.toFixed(1)}% model vs ${market.noVigProbability === null ? "—" : (market.noVigProbability * 100).toFixed(1) + "%"} no-vig, ${edge >= 0 ? "+" : ""}${(edge * 100).toFixed(1)}pp edge, ${ev >= 0 ? "+" : ""}${(ev * 100).toFixed(1)}% EV at ${market.book ?? "market"} ${market.price ?? "—"}`;
+      return {
+        ...game,
+        modelPlayStatus: game.playStatus,
+        playStatus: marketStatus,
+        marketValue: {
+          available: true,
+          book: market.book,
+          selection: market.selection,
+          price: market.price,
+          impliedProbability: market.impliedProbability === null ? null : Math.round(market.impliedProbability * 1000) / 10,
+          noVigProbability: market.noVigProbability === null ? null : Math.round(market.noVigProbability * 1000) / 10,
+          edge: Math.round(edge * 1000) / 10,
+          ev: Math.round(ev * 1000) / 10,
+          updatedAt: market.updatedAt,
+        },
+        factors: [...(game.factors ?? []), marketFactor],
+      };
+    });
+
+    const valueGames = games.filter((g: any) => g.marketValue?.available && (g.playStatus === "BEST_PLAY" || g.playStatus === "PLAY"));
+    return originalJson({
+      ...body,
+      games,
+      topPick: valueGames.sort((a: any, b: any) => (b.marketValue?.ev ?? -Infinity) - (a.marketValue?.ev ?? -Infinity))[0] ?? null,
+      marketStatus: "live",
+    });
   }) as typeof res.json;
   next();
 });
@@ -92,6 +129,7 @@ function isNbaSeason(): boolean { const month = new Date().getUTCMonth() + 1; re
       void fetchNrfiData().then(() => log('[Startup] MLB NRFI cache warmed for today.')).catch((error) => log('[Startup] MLB NRFI cache warm failed:', error));
       log('[Startup] MLB NRFI cache warming started in background.');
     } catch (error) { log('[Startup] MLB cache warm skipped:', error); }
+    void fetchMlbRfiMarkets().then(markets => log(`[Startup] MLB RFI odds warm: ${markets.size / 2} games priced.`)).catch(error => log('[Startup] MLB RFI odds warm failed:', error));
     if (!isNbaSeason()) { log('[Startup] NBA offseason detected — skipping heavy NBA startup sync.'); return; }
     void (async () => {
       try { log('[Startup] Running initial NBA data sync in background...'); const startupSyncService = createDailySyncService(storage); await startupSyncService.runDailySync(); log('[Startup] Initial NBA sync complete'); } catch (error) { log('[Startup] Initial NBA sync failed:', error); }
