@@ -57,12 +57,23 @@ export function calculateV4Uncertainty(data: V4DataQuality): V4Uncertainty {
 }
 
 export function calculatePitcherQualityAdjustment(metrics: V4PitcherMetrics[]): number {
-  const usable = metrics.filter(m => m.strikeoutPct !== null || m.walkPct !== null);
+  if (!metrics.length) return 0;
+  const usable = metrics.filter(m => m.strikeoutPct !== null || m.walkPct !== null || m.era !== null || m.whip !== null);
   if (!usable.length) return 0;
   const averageK = usable.reduce((sum, m) => sum + (m.strikeoutPct ?? 0.22), 0) / usable.length;
   const averageBB = usable.reduce((sum, m) => sum + (m.walkPct ?? 0.08), 0) / usable.length;
-  // Better strikeout rates slightly support NRFI; higher walk rates slightly support YRFI.
-  return clamp((averageK - 0.22) * 0.08 - (averageBB - 0.08) * 0.12, -0.025, 0.025);
+  const kbbSignal = (averageK - 0.22) * 0.08 - (averageBB - 0.08) * 0.12;
+
+  const eraValues = usable.filter(m => m.era !== null).map(m => m.era as number);
+  const whipValues = usable.filter(m => m.whip !== null).map(m => m.whip as number);
+  const eraSignal = eraValues.length ? (4.25 - eraValues.reduce((a, b) => a + b, 0) / eraValues.length) * 0.0025 : 0;
+  const whipSignal = whipValues.length ? (1.30 - whipValues.reduce((a, b) => a + b, 0) / whipValues.length) * 0.012 : 0;
+  const firstInningValues = usable.filter(m => m.firstInningRunsAllowedRate !== null).map(m => m.firstInningRunsAllowedRate as number);
+  const firstInningSignal = firstInningValues.length ? (0.50 - firstInningValues.reduce((a, b) => a + b, 0) / firstInningValues.length) * 0.04 : 0;
+
+  // Keep this deliberately small: V4 is a shadow model and should not let one
+  // pitching statistic overwhelm the league/team prior.
+  return clamp(kbbSignal + eraSignal + whipSignal + firstInningSignal, -0.025, 0.025);
 }
 
 export function predictNrfiV4(input: V4PredictionInput): V4Prediction {
