@@ -27,30 +27,46 @@ export type NormalizedMlbMarketQuote = MlbMarketQuote & {
 };
 
 const VALID_SIDES: MlbMarketSide[] = ["NRFI", "YRFI"];
+const MAX_ODDS = 10000;
+const MAX_FUTURE_SKEW_MS = 2 * 60 * 1000;
 
 function normalizeSide(side: string): MlbMarketSide | null {
   const normalized = side.trim().toUpperCase().replace(/[^A-Z]/g, "");
   return VALID_SIDES.includes(normalized as MlbMarketSide) ? normalized as MlbMarketSide : null;
 }
 
+function isRfiMarket(market: string): boolean {
+  const normalized = market.trim().toUpperCase();
+  return /\b(NRFI|YRFI|NO RUN FIRST INNING|YES RUN FIRST INNING)\b/.test(normalized)
+    || normalized.includes("FIRST INNING")
+    || normalized.includes("1ST INNING");
+}
+
 export function normalizeMlbMarketQuote(raw: RawMlbMarketQuote): NormalizedMlbMarketQuote | null {
-  if (!raw.gameId || !raw.sportsbook || !raw.market) return null;
+  const gameId = raw.gameId?.trim();
+  const sportsbook = raw.sportsbook?.trim();
+  const market = raw.market?.trim();
+  if (!gameId || !sportsbook || !market || !isRfiMarket(market)) return null;
+
   const side = normalizeSide(raw.side);
   const odds = Number(raw.americanOdds);
-  if (!side || !Number.isFinite(odds) || odds === 0 || Math.abs(odds) > 10000) return null;
+  if (!side || !Number.isFinite(odds) || odds === 0 || Math.abs(odds) > MAX_ODDS) return null;
 
-  const capturedAt = raw.capturedAt ?? new Date().toISOString();
-  const timestamp = new Date(capturedAt).getTime();
+  // A market quote without an upstream capture timestamp is not trustworthy
+  // enough for EV. Never silently replace it with the server's current time.
+  if (!raw.capturedAt) return null;
+  const timestamp = new Date(raw.capturedAt).getTime();
   if (!Number.isFinite(timestamp)) return null;
+  if (timestamp > Date.now() + MAX_FUTURE_SKEW_MS) return null;
 
   return {
-    gameId: raw.gameId,
+    gameId,
     awayTeam: raw.awayTeam?.trim() || null,
     homeTeam: raw.homeTeam?.trim() || null,
     side,
     americanOdds: odds,
-    sportsbook: raw.sportsbook.trim(),
-    market: raw.market.trim(),
+    sportsbook,
+    market,
     capturedAt: new Date(timestamp).toISOString(),
     sourceUrl: raw.sourceUrl ?? null,
   };
@@ -97,6 +113,7 @@ export async function fetchMlbMarketQuotesFromEndpoint(url: string, timeoutMs = 
     if (!response.ok) throw new Error(`Market source returned ${response.status}`);
     const payload = await response.json() as RawMlbMarketQuote[] | { quotes?: RawMlbMarketQuote[] };
     const rawQuotes = Array.isArray(payload) ? payload : payload.quotes ?? [];
+    if (!Array.isArray(rawQuotes)) throw new Error("Market source payload is not a quote array");
     return normalizeMlbMarketQuotes(rawQuotes);
   } finally {
     clearTimeout(timer);
