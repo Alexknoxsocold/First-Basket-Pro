@@ -3,11 +3,10 @@ import { snapshotPrediction } from "./mlbPredictionSnapshots.js";
 /**
  * Leakage-safe historical replay for MLB NRFI/YRFI.
  *
- * This intentionally does NOT reuse today's production state. For each target
- * date it only reads ESPN games from dates strictly before the target date,
- * builds expanding-window team/league first-inning rates, and then snapshots
- * the replay prediction. Replay rows have no real historical lock timestamp,
- * so the calibration layer must not count them as verified live performance.
+ * For each target date this reads only games strictly before the target date
+ * to build the features. The target day's completed games are then graded.
+ * Replay rows intentionally have no real historical lock timestamp, so the
+ * calibration layer must not count them as verified live performance.
  */
 
 type EspnEvent = {
@@ -137,10 +136,12 @@ function buildForms(games: EspnEvent[]): { leagueNrfi: number; teams: Map<string
 export async function replayHistoricalDate(date: string): Promise<WalkForwardReplay[]> {
   const prior = await fetchPriorGames(date);
   const form = buildForms(prior);
-  const slate = (await fetchDay(date)).filter(game => !completed(game));
+  // The target date itself is never used to build the features. We only use it
+  // after feature construction to grade the frozen replay prediction.
+  const targetGames = await fetchDay(date);
   const replay: WalkForwardReplay[] = [];
 
-  for (const game of slate) {
+  for (const game of targetGames) {
     const competitors = game.competitions?.[0]?.competitors ?? [];
     const away = competitors.find(x => x.homeAway === "away");
     const home = competitors.find(x => x.homeAway === "home");
@@ -155,24 +156,17 @@ export async function replayHistoricalDate(date: string): Promise<WalkForwardRep
     const actual = outcome(game);
     const awayName = away.team.displayName ?? away.team.abbreviation ?? "Away";
     const homeName = home.team.displayName ?? home.team.abbreviation ?? "Home";
+    const matchup = `${awayName} @ ${homeName}`;
+    const modelProbability = recommendation === "NRFI" ? probability : 1 - probability;
 
-    replay.push({
-      date,
-      gameId: String(game.id),
-      matchup: `${awayName} @ ${homeName}`,
-      recommendation,
-      probability: recommendation === "NRFI" ? probability : 1 - probability,
-      actualOutcome: actual.result,
-      firstInningScore: actual.score,
-      trainingGames: form.games,
-    });
+    replay.push({ date, gameId: String(game.id), matchup, recommendation, probability: modelProbability, actualOutcome: actual.result, firstInningScore: actual.score, trainingGames: form.games });
 
     await snapshotPrediction({
       date,
       gameId: String(game.id),
-      matchup: `${awayName} @ ${homeName}`,
+      matchup,
       recommendation,
-      probability: recommendation === "NRFI" ? probability : 1 - probability,
+      probability: modelProbability,
       modelVersion: MODEL_VERSION,
       lockedAt: null,
       outcome: actual.result,
@@ -189,7 +183,7 @@ export async function runWalkForwardReplay(days = 30): Promise<{ datesProcessed:
   let predictions = 0;
   let graded = 0;
   let datesProcessed = 0;
-  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York" }).format(new Date());
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
 
   for (let i = safeDays; i >= 1; i--) {
     const date = addDays(today, -i);
