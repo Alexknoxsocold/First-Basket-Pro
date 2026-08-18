@@ -112,7 +112,6 @@ function GameCard({ game }: { game: NrfiGame }) {
           <div className="text-right"><p className="text-[10px] uppercase tracking-wide text-muted-foreground">Confidence</p><p className="text-sm font-semibold">{game.confidence}</p><p className="text-[10px] text-muted-foreground">{game.sampleSize || "Limited"} recent games</p></div>
         </div>
         <div className="h-2 rounded-full bg-muted overflow-hidden mt-2"><div className={`h-full rounded-full ${sideProbability >= 60 ? "bg-emerald-500" : sideProbability >= 55 ? "bg-yellow-500" : noPlay ? "bg-red-500/60" : lean ? "bg-yellow-500/70" : "bg-muted-foreground/40"}`} style={{ width: `${sideProbability}%` }} /></div>
-        {lean && <div className="mt-3 rounded-md px-3 py-2 text-xs bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border border-yellow-500/25">LEAN · The model sees an edge, but not enough separation or data quality for a stronger play.</div>}
         {game.outcome === "won" && <div className="mt-3 rounded-md px-3 py-2 text-xs bg-emerald-500/10 text-emerald-500">Pick won · First inning score: {game.firstInningScore ?? "—"}</div>}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-5 pt-4 border-t"><Pitcher label={`${game.away.abbreviation} pitcher`} pitcher={game.away.pitcher} /><Pitcher label={`${game.home.abbreviation} pitcher`} pitcher={game.home.pitcher} /></div>
         <div className="mt-4 space-y-1">{visibleFactors.map(factor => <p key={factor} className="text-[10px] text-muted-foreground">• {factor}</p>)}</div>
