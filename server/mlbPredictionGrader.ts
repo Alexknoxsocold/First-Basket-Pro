@@ -34,18 +34,20 @@ function parseFirstInningScore(value: string | null): { away: number; home: numb
 /**
  * Persists predictions and grades completed games without changing the
  * original recommendation or probability. Repeated calls are idempotent.
- * A game is graded only from a valid first-inning score; the upstream
- * won/lost flag is deliberately not trusted as the source of truth.
+ * A valid first-inning score is the grading authority; upstream won/lost/
+ * pending labels are presentation state and can lag the scoreboard.
  */
 export async function persistAndGradeNrfiGames(games: GraderGame[], modelVersion = "v3"): Promise<void> {
   const quotes = getCachedMlbRfiQuotes();
   for (const game of games) {
     const parsedScore = parseFirstInningScore(game.firstInningScore);
-    const completed = game.outcome !== "pending" && parsedScore !== null;
+    const completed = parsedScore !== null;
     const actualOutcome = parsedScore
       ? parsedScore.away === 0 && parsedScore.home === 0 ? "NRFI" : "YRFI"
       : null;
-    const modelProbability = (game.recommendation === "NRFI" ? game.nrfiProbability : 100 - game.nrfiProbability) / 100;
+
+    const rawProbability = game.recommendation === "NRFI" ? game.nrfiProbability : 100 - game.nrfiProbability;
+    const modelProbability = Number.isFinite(rawProbability) ? Math.min(1, Math.max(0, rawProbability / 100)) : 0.5;
     const away = game.away?.name ?? game.away?.abbreviation ?? "";
     const home = game.home?.name ?? game.home?.abbreviation ?? "";
     const marketValue = !completed && quotes.length
