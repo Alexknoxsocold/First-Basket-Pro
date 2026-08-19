@@ -30,11 +30,24 @@ jobs:
           node-version: 22
           cache: npm
 
-      - name: Install dependencies
-        run: npm ci
+      - name: Verify install, typecheck, and production build
+        shell: bash
+        run: |
+          set -o pipefail
+          {
+            echo "== npm ci =="
+            npm ci
+            echo "== npm run check =="
+            npm run check
+            echo "== npm run build =="
+            npm run build
+          } 2>&1 | tee ci-verification.log
 
-      - name: Typecheck
-        run: npm run check
-
-      - name: Production build
-        run: npm run build
+      - name: Upload CI verification log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-verification-log
+          path: ci-verification.log
+          if-no-files-found: warn
+          retention-days: 3
