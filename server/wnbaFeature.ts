@@ -3,13 +3,11 @@ import cron from 'node-cron';
 import { requireAdmin } from './auth';
 import { ensureWnbaSchema, getWnbaDiagnostics, getWnbaSlate, lockWnbaPredictions, runWnbaTracker } from './wnbaFirstBasket';
 import { backfillWnbaHistory } from './wnbaBackfill';
+import { getWnbaHistory } from './wnbaHistory';
 
 let started = false;
 
 export function registerWnbaFeature(app: Express): void {
-  // Route registration must be synchronous so the API exists before the
-  // production static-site fallback is attached. Schema creation warms in the
-  // background and every data function also calls ensureWnbaSchema itself.
   void ensureWnbaSchema().catch(error => console.error('[WNBA] Schema initialization failed:', error));
 
   app.get('/api/wnba/first-basket', async (_req, res) => {
@@ -19,6 +17,16 @@ export function registerWnbaFeature(app: Express): void {
     } catch (error) {
       console.error('[WNBA] Slate error:', error);
       res.status(502).json({ error: 'Unable to load WNBA First Basket data' });
+    }
+  });
+
+  app.get('/api/wnba/history', async (_req, res) => {
+    try {
+      res.setHeader('Cache-Control', 'public, max-age=120, stale-while-revalidate=600');
+      res.json(await getWnbaHistory());
+    } catch (error) {
+      console.error('[WNBA] History error:', error);
+      res.status(500).json({ error: 'Unable to load WNBA First Basket history' });
     }
   });
 
@@ -56,8 +64,6 @@ export function registerWnbaFeature(app: Express): void {
   if (started) return;
   started = true;
 
-  // Refresh/lock throughout the WNBA day. The lock function refuses to write
-  // unless ESPN exposes a confirmed 5+5 starting lineup inside two hours.
   cron.schedule('*/15 10-23 * * *', async () => {
     try {
       const result = await lockWnbaPredictions();
@@ -65,7 +71,6 @@ export function registerWnbaFeature(app: Express): void {
     } catch (error) { console.warn('[WNBA] Lock pass failed:', error); }
   }, { timezone: 'America/New_York' });
 
-  // Grade games and grow verified current-season First Basket history.
   cron.schedule('*/30 12-23 * * *', async () => {
     try {
       const result = await runWnbaTracker();
@@ -79,9 +84,6 @@ export function registerWnbaFeature(app: Express): void {
     } catch (error) { console.warn('[WNBA] Late tracker failed:', error); }
   }, { timezone: 'America/New_York' });
 
-  // Walk backward through the current season in small verified chunks. This
-  // seeds player First Basket history only; historical model predictions are
-  // never manufactured after the fact.
   cron.schedule('17 */6 * * *', async () => {
     try {
       const result = await backfillWnbaHistory(7, 24);
@@ -89,8 +91,6 @@ export function registerWnbaFeature(app: Express): void {
     } catch (error) { console.warn('[WNBA] History backfill failed:', error); }
   }, { timezone: 'America/New_York' });
 
-  // Warm today and begin one conservative backfill chunk in the background;
-  // failures never block the web service.
   void getWnbaSlate(true).then(slate => console.log(`[WNBA] Warmed ${slate.games.length} games across ${slate.teams.length} teams.`)).catch(error => console.warn('[WNBA] Warm failed:', error));
   void runWnbaTracker().catch(error => console.warn('[WNBA] Startup tracker failed:', error));
   void backfillWnbaHistory(5, 18).then(result => console.log(`[WNBA] Startup history backfill added ${result.gamesAdded} games.`)).catch(error => console.warn('[WNBA] Startup backfill failed:', error));
