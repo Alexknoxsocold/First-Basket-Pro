@@ -90,11 +90,45 @@ export async function getCalibrationSummary(days = 30): Promise<CalibrationSumma
   const result = await db.query<CalibrationRow>(`SELECT prediction_date AS "predictionDate", game_id AS "gameId", recommendation, probability, outcome, value_play AS "valuePlay", market_available AS "marketAvailable", market_odds AS "marketOdds", market_edge AS "marketEdge", market_expected_value AS "marketExpectedValue", locked_at AS "lockedAt", created_at AS "createdAt", graded_at AS "gradedAt" FROM mlb_prediction_snapshots WHERE prediction_date >= to_char(current_date - ($1::int - 1), 'YYYY-MM-DD') ORDER BY prediction_date DESC, locked_at DESC NULLS LAST, created_at DESC`, [safeDays]);
   return calculateSummary(result.rows);
 }
-export async function calibrateRecommendedProbability(rawProbability: number): Promise<number> {
-  const db = getPool(); if (!db || !Number.isFinite(rawProbability)) return rawProbability; await ensureTable(); const raw = Math.min(0.999, Math.max(0.001, rawProbability)); if (raw < 0.50 || raw > 0.95) return raw;
-  const total = await db.query<{ count: string }>(`SELECT COUNT(*)::text AS count FROM mlb_prediction_snapshots WHERE locked_at IS NOT NULL AND recommendation IN ('NRFI','YRFI') AND outcome IN ('NRFI','YRFI')`); if (Number(total.rows[0]?.count ?? 0) < 50) return raw;
-  const bucket = bucketFor(raw); const result = await db.query<{ n: string; wins: string }>(`SELECT COUNT(*)::text AS n, COUNT(*) FILTER (WHERE outcome = recommendation)::text AS wins FROM mlb_prediction_snapshots WHERE locked_at IS NOT NULL AND recommendation IN ('NRFI','YRFI') AND outcome IN ('NRFI','YRFI') AND probability >= $1 AND probability < $2`, [bucket.min, bucket.max]);
-  const n = Number(result.rows[0]?.n ?? 0); if (n < 10) return raw; const wins = Number(result.rows[0]?.wins ?? 0); const empirical = wins / n; const calibrated = (wins + raw * 20) / (n + 20); const bounded = Math.min(Math.max(raw, empirical), Math.max(raw, calibrated)); return Math.round(bounded * 1000) / 1000;
+
+/**
+ * Calibrate the side the model is actually recommending. Historical snapshots
+ * store recommendation-side probability (NRFI probability for NRFI calls and
+ * YRFI probability for YRFI calls), so a raw NRFI value below 50% must be
+ * converted to YRFI confidence before looking up calibration performance.
+ * Corrections are capped at 3 percentage points to prevent small samples from
+ * swinging live probabilities too aggressively.
+ */
+export async function calibrateRecommendedProbability(rawNrfiProbability: number): Promise<number> {
+  const db = getPool();
+  if (!db || !Number.isFinite(rawNrfiProbability)) return rawNrfiProbability;
+  await ensureTable();
+
+  const rawNrfi = safeProbability(rawNrfiProbability);
+  const side: "NRFI" | "YRFI" = rawNrfi >= 0.50 ? "NRFI" : "YRFI";
+  const sideProbability = side === "NRFI" ? rawNrfi : 1 - rawNrfi;
+  if (sideProbability > 0.95) return rawNrfi;
+
+  const total = await db.query<{ count: string }>(
+    `SELECT COUNT(*)::text AS count FROM mlb_prediction_snapshots WHERE locked_at IS NOT NULL AND recommendation = $1 AND outcome IN ('NRFI','YRFI')`,
+    [side],
+  );
+  if (Number(total.rows[0]?.count ?? 0) < 30) return rawNrfi;
+
+  const bucket = bucketFor(sideProbability);
+  const result = await db.query<{ n: string; wins: string }>(
+    `SELECT COUNT(*)::text AS n, COUNT(*) FILTER (WHERE outcome = recommendation)::text AS wins FROM mlb_prediction_snapshots WHERE locked_at IS NOT NULL AND recommendation = $3 AND outcome IN ('NRFI','YRFI') AND probability >= $1 AND probability < $2`,
+    [bucket.min, bucket.max, side],
+  );
+  const n = Number(result.rows[0]?.n ?? 0);
+  if (n < 10) return rawNrfi;
+
+  const wins = Number(result.rows[0]?.wins ?? 0);
+  const posteriorSide = (wins + sideProbability * 20) / (n + 20);
+  const correction = Math.min(0.03, Math.max(-0.03, posteriorSide - sideProbability));
+  const calibratedSide = Math.min(0.95, Math.max(0.50, sideProbability + correction));
+  const calibratedNrfi = side === "NRFI" ? calibratedSide : 1 - calibratedSide;
+  return Math.round(calibratedNrfi * 1000) / 1000;
 }
 
 type LedgerGame = {
