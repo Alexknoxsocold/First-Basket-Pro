@@ -1,9 +1,9 @@
 import 'dotenv/config';
 import express, { type Request, Response, NextFunction } from "express";
-import cookieParser from "cookie-parser";
 import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
 import { Pool, neonConfig } from "@neondatabase/serverless";
+import { randomBytes } from "crypto";
 import ws from "ws";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
@@ -23,6 +23,15 @@ const app = express();
 app.set('trust proxy', 1);
 neonConfig.webSocketConstructor = ws;
 
+const production = process.env.NODE_ENV === 'production';
+const configuredSessionSecret = process.env.SESSION_SECRET?.trim();
+// Never ship with a known fallback secret. If production configuration is
+// incomplete, use an ephemeral cryptographic secret so cookies cannot be forged
+// while surfacing the configuration problem through logs/health checks.
+const sessionSecret = configuredSessionSecret || (production ? randomBytes(32).toString('hex') : 'development-only-session-secret');
+if (production && !configuredSessionSecret) console.error('[Startup] SESSION_SECRET is missing. Using an ephemeral secret; sessions will reset on restart and multi-instance auth is not safe.');
+if (production && !process.env.DATABASE_URL) console.error('[Startup] DATABASE_URL is missing. Persistent sessions and MLB verification ledgers are unavailable.');
+
 const sessionStore = process.env.DATABASE_URL ? (() => {
   const PgSession = connectPgSimple(session);
   const pool = new Pool({ connectionString: process.env.DATABASE_URL });
@@ -31,9 +40,9 @@ const sessionStore = process.env.DATABASE_URL ? (() => {
 
 const sessionMiddleware = session({
   ...(sessionStore ? { store: sessionStore } : {}),
-  secret: process.env.SESSION_SECRET || 'firstbasket-secret-key-change-in-production',
+  secret: sessionSecret,
   resave: false, saveUninitialized: false,
-  cookie: { secure: process.env.NODE_ENV === 'production', httpOnly: true, maxAge: 30 * 24 * 60 * 60 * 1000, sameSite: 'lax' }
+  cookie: { secure: production, httpOnly: true, maxAge: 30 * 24 * 60 * 60 * 1000, sameSite: 'lax' }
 });
 
 declare module 'http' { interface IncomingMessage { rawBody: unknown } }
@@ -56,6 +65,19 @@ app.use((req, res, next) => {
     }
   });
   next();
+});
+
+app.get('/api/health', (_req, res) => {
+  const config = {
+    database: Boolean(process.env.DATABASE_URL),
+    sessionSecret: Boolean(configuredSessionSecret),
+    inviteCode: Boolean(process.env.INVITE_CODE?.trim()),
+    adminPassword: Boolean(process.env.ADMIN_PASSWORD?.trim()),
+    oddsApiKey: Boolean(process.env.THE_ODDS_API_KEY?.trim()),
+  };
+  const criticalReady = config.database && (!production || config.sessionSecret);
+  res.setHeader('Cache-Control', 'no-store');
+  return res.status(criticalReady ? 200 : 503).json({ status: criticalReady ? 'ok' : 'degraded', environment: production ? 'production' : 'development', config, generatedAt: new Date().toISOString() });
 });
 
 app.use("/api/mlb/nrfi", (req, res, next) => {
@@ -112,12 +134,21 @@ function isNbaSeason(): boolean { const month = new Date().getUTCMonth() + 1; re
 
 (async () => {
   const server = await registerRoutes(app);
-  app.use((err: any, _req: Request, res: Response, _next: NextFunction) => { const status = err.status || err.statusCode || 500; const message = err.message || "Internal Server Error"; res.status(status).json({ message }); throw err; });
+  app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
+    const status = err.status || err.statusCode || 500;
+    const message = status >= 500 ? "Internal Server Error" : err.message || "Request failed";
+    console.error('[Server] Unhandled request error:', err);
+    if (!res.headersSent) res.status(status).json({ message });
+  });
   if (app.get("env") === "development") await setupVite(app, server); else serveStatic(app);
   const port = parseInt(process.env.PORT || '5000', 10);
   server.listen({ port, host: "0.0.0.0", ...(process.platform !== 'darwin' && { reusePort: true }) }, async () => {
     log(`serving on port ${port}`);
-    try { const { fetchNrfiData } = await import('./mlbNrfi.js'); void fetchNrfiData().then(() => log('[Startup] MLB NRFI cache warmed for today.')).catch((error) => log('[Startup] MLB NRFI cache warm failed:', error)); log('[Startup] MLB NRFI cache warming started in background.'); } catch (error) { log('[Startup] MLB cache warm skipped:', error); }
+    try {
+      const { fetchNrfiDataV4Live } = await import('./mlbNrfiLiveV4.js');
+      void fetchNrfiDataV4Live().then(() => log('[Startup] MLB V4-live NRFI cache warmed for today.')).catch(error => log('[Startup] MLB V4-live cache warm failed:', error));
+      log('[Startup] MLB V4-live cache warming started in background.');
+    } catch (error) { log('[Startup] MLB cache warm skipped:', error); }
     void fetchMlbRfiMarkets().then(markets => log(`[Startup] MLB RFI odds warm: ${markets.size / 2} games priced.`)).catch(error => log('[Startup] MLB RFI odds warm failed:', error));
     startMlbAutoGradeScheduler();
     const closingRun = () => void captureMlbClosingLines(20).then(result => { if (result.captured > 0) log(`[MLB Closing] Captured ${result.captured}/${result.checked} closing lines.`); }).catch(error => log('[MLB Closing] Capture failed:', error));
