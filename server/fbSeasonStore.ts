@@ -14,6 +14,8 @@ export type FirstBasketSeasonRow = {
   lastUpdated: string | null;
 };
 
+export type FirstBasketStarter = { playerName: string; team: string };
+
 const pool = process.env.DATABASE_URL ? new Pool({ connectionString: process.env.DATABASE_URL }) : null;
 
 function mapRow(row: any): FirstBasketSeasonRow {
@@ -28,12 +30,17 @@ function mapRow(row: any): FirstBasketSeasonRow {
   };
 }
 
+function normalizeName(name: string): string {
+  return name.toLowerCase().replace(/[.'’\-]/g, '').replace(/\s+/g, ' ').trim();
+}
+
 export async function getFirstBasketSeasonRows(season: string): Promise<FirstBasketSeasonRow[]> {
   if (!pool) return [];
   const result = await pool.query(
     `SELECT id, player_name, team, fb_scored, games_tracked, season, last_updated
        FROM fb_tracking
       WHERE season = $1
+        AND trim(team) <> ''
       ORDER BY player_name, team`,
     [season],
   );
@@ -66,7 +73,7 @@ export async function upsertFirstBasketPlayerSeason(
   gamesTracked: number,
   season: string,
 ): Promise<void> {
-  if (!pool) return;
+  if (!pool || !team.trim()) return;
   const now = new Date().toISOString();
   const existing = await getFirstBasketPlayerSeason(playerName, team, season);
   if (existing) {
@@ -83,30 +90,55 @@ export async function upsertFirstBasketPlayerSeason(
   await pool.query(
     `INSERT INTO fb_tracking (player_name, team, fb_scored, games_tracked, season, last_updated)
      VALUES ($1, $2, $3, $4, $5, $6)`,
-    [playerName, team, fbScored, gamesTracked, season, now],
+    [playerName.trim(), team.trim().toUpperCase(), fbScored, gamesTracked, season, now],
   );
 }
 
-export async function incrementCurrentSeasonFirstBasket(
-  playerName: string,
-  team: string,
+/**
+ * Records one completed game atomically enough for a single production worker:
+ * every verified starter gets one denominator game, while only the first-field-
+ * goal scorer gets the numerator. This fixes the old inflated-rate bug where
+ * gamesTracked only moved for the scorer.
+ */
+export async function recordCurrentSeasonFirstBasketGame(
+  starters: FirstBasketStarter[],
+  scorer: FirstBasketStarter,
   date = new Date(),
 ): Promise<void> {
   if (!pool) return;
   const season = nbaSeasonForDate(date).label;
-  const existing = await getFirstBasketPlayerSeason(playerName, team, season);
-  if (existing) {
-    await pool.query(
-      `UPDATE fb_tracking
-          SET fb_scored = fb_scored + 1,
-              games_tracked = games_tracked + 1,
-              last_updated = $1
-        WHERE id = $2`,
-      [new Date().toISOString(), existing.id],
-    );
-    return;
+  const uniqueStarters = [...new Map(
+    starters
+      .filter(s => s.playerName.trim() && s.team.trim())
+      .map(s => [`${normalizeName(s.playerName)}|${s.team.toUpperCase()}`, { playerName: s.playerName.trim(), team: s.team.trim().toUpperCase() }]),
+  ).values()];
+
+  if (uniqueStarters.length < 10) {
+    throw new Error(`Expected 10 verified NBA starters, received ${uniqueStarters.length}`);
   }
-  await upsertFirstBasketPlayerSeason(playerName, team, 1, 1, season);
+
+  const now = new Date().toISOString();
+  for (const starter of uniqueStarters) {
+    const existing = await getFirstBasketPlayerSeason(starter.playerName, starter.team, season);
+    const scored = normalizeName(starter.playerName) === normalizeName(scorer.playerName)
+      && starter.team.toUpperCase() === scorer.team.toUpperCase();
+    if (existing) {
+      await pool.query(
+        `UPDATE fb_tracking
+            SET fb_scored = fb_scored + $1,
+                games_tracked = games_tracked + 1,
+                last_updated = $2
+          WHERE id = $3`,
+        [scored ? 1 : 0, now, existing.id],
+      );
+    } else {
+      await pool.query(
+        `INSERT INTO fb_tracking (player_name, team, fb_scored, games_tracked, season, last_updated)
+         VALUES ($1, $2, $3, 1, $4, $5)`,
+        [starter.playerName, starter.team, scored ? 1 : 0, season, now],
+      );
+    }
+  }
 }
 
 export async function isVerifiedFirstBasketGameProcessed(espnGameId: string): Promise<boolean> {
@@ -116,7 +148,9 @@ export async function isVerifiedFirstBasketGameProcessed(espnGameId: string): Pr
        FROM fb_processed_games
       WHERE espn_game_id = $1
         AND first_scorer IS NOT NULL
+        AND trim(first_scorer) <> ''
         AND first_scorer_team IS NOT NULL
+        AND trim(first_scorer_team) <> ''
       LIMIT 1`,
     [espnGameId],
   );
@@ -136,7 +170,7 @@ export async function markVerifiedFirstBasketGame(
      DO UPDATE SET first_scorer = EXCLUDED.first_scorer,
                    first_scorer_team = EXCLUDED.first_scorer_team,
                    processed_at = EXCLUDED.processed_at`,
-    [espnGameId, playerName, team, new Date().toISOString()],
+    [espnGameId, playerName.trim(), team.trim().toUpperCase(), new Date().toISOString()],
   );
 }
 
