@@ -44,7 +44,7 @@ function classifyLivePlay(
     return edge >= policy.defaultLeanThreshold ? "LEAN" : "NO_PLAY";
   }
   if (edge >= 0.10 && confidence === "High" && sampleSize >= 10 && agreement === "strong") return "BEST_PLAY";
-  if (edge >= 0.06 && confidence !== "Low" && sampleSize >= 5 && agreement === "strong") return "PLAY";
+  if (edge >= 0.06 && sampleSize >= 5 && agreement === "strong") return "PLAY";
   if (edge >= learnedLeanThreshold) return "LEAN";
   return "NO_PLAY";
 }
