@@ -19,6 +19,7 @@ type Row = {
   marketAvailable: boolean;
   valuePlay: boolean;
   modelVersion: string;
+  context: Record<string, any> | null;
 };
 
 export type AttributionSlice = {
@@ -30,16 +31,22 @@ export type AttributionSlice = {
   averageProbability: number | null;
 };
 
+export type PenaltySummary = { penalty: string; appearances: number; wins: number; hitRate: number | null };
+
 export type MlbPostgameAttribution = {
   generatedAt: string;
   windowDays: number;
   graded: number;
+  contextCoverage: { eligibleV4: number; withContext: number; coverage: number | null };
   overall: AttributionSlice;
   bySide: AttributionSlice[];
   byConfidence: AttributionSlice[];
   byProbabilityBand: AttributionSlice[];
+  byPlayStatus: AttributionSlice[];
+  byV4DataQuality: AttributionSlice[];
   byMarketContext: AttributionSlice[];
   byModelVersion: AttributionSlice[];
+  uncertaintyPenalties: PenaltySummary[];
   firstInningResults: { nrfi: number; yrfi: number; totalRuns: number; averageRuns: number | null };
   notes: string[];
 };
@@ -66,19 +73,36 @@ function firstInningRuns(score: string | null): number | null {
   return Number.isSafeInteger(away) && Number.isSafeInteger(home) ? away + home : null;
 }
 
+function contextString(row: Row, key: string): string | null {
+  const value = row.context?.[key];
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function v4Quality(row: Row): string | null {
+  const value = row.context?.v4?.uncertainty?.label;
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function v4Penalties(row: Row): string[] {
+  const values = row.context?.v4?.uncertainty?.penalties;
+  return Array.isArray(values) ? values.filter((value): value is string => typeof value === "string" && value.trim().length > 0) : [];
+}
+
 export async function getMlbPostgameAttribution(days = 30): Promise<MlbPostgameAttribution> {
   const safeDays = Math.min(Math.max(Math.round(days), 1), 365);
   const connection = db();
   const rows: Row[] = connection ? (await connection.query<Row>(`
-    SELECT recommendation, probability, confidence, outcome,
-           first_inning_score AS "firstInningScore", market_available AS "marketAvailable",
-           value_play AS "valuePlay", model_version AS "modelVersion"
-      FROM mlb_prediction_snapshots
-     WHERE prediction_date >= to_char(current_date - ($1::int - 1), 'YYYY-MM-DD')
-       AND locked_at IS NOT NULL
-       AND recommendation IN ('NRFI','YRFI')
-       AND outcome IN ('NRFI','YRFI')
-     ORDER BY prediction_date DESC
+    SELECT s.recommendation, s.probability, s.confidence, s.outcome,
+           s.first_inning_score AS "firstInningScore", s.market_available AS "marketAvailable",
+           s.value_play AS "valuePlay", s.model_version AS "modelVersion", c.context
+      FROM mlb_prediction_snapshots s
+      LEFT JOIN mlb_prediction_context c
+        ON c.prediction_date=s.prediction_date AND c.game_id=s.game_id AND c.model_version=s.model_version
+     WHERE s.prediction_date >= to_char(current_date - ($1::int - 1), 'YYYY-MM-DD')
+       AND s.locked_at IS NOT NULL
+       AND s.recommendation IN ('NRFI','YRFI')
+       AND s.outcome IN ('NRFI','YRFI')
+     ORDER BY s.prediction_date DESC
   `, [safeDays])).rows : [];
 
   const bands: Array<[string, number, number]> = [
@@ -89,21 +113,40 @@ export async function getMlbPostgameAttribution(days = 30): Promise<MlbPostgameA
   ];
   const runValues = rows.map(row => firstInningRuns(row.firstInningScore)).filter((value): value is number => value !== null);
   const nrfiResults = rows.filter(row => row.outcome === "NRFI").length;
+  const v4Rows = rows.filter(row => row.modelVersion === "v4-live");
+  const contextRows = v4Rows.filter(row => row.context !== null);
+
+  const penaltyMap = new Map<string, { appearances: number; wins: number }>();
+  for (const row of contextRows) {
+    for (const penalty of new Set(v4Penalties(row))) {
+      const current = penaltyMap.get(penalty) ?? { appearances: 0, wins: 0 };
+      current.appearances++;
+      if (row.recommendation === row.outcome) current.wins++;
+      penaltyMap.set(penalty, current);
+    }
+  }
+  const uncertaintyPenalties = [...penaltyMap.entries()]
+    .map(([penalty, value]) => ({ penalty, appearances: value.appearances, wins: value.wins, hitRate: value.appearances ? value.wins / value.appearances : null }))
+    .sort((a, b) => b.appearances - a.appearances || a.penalty.localeCompare(b.penalty));
 
   return {
     generatedAt: new Date().toISOString(),
     windowDays: safeDays,
     graded: rows.length,
+    contextCoverage: { eligibleV4: v4Rows.length, withContext: contextRows.length, coverage: v4Rows.length ? contextRows.length / v4Rows.length : null },
     overall: summarize("All verified predictions", rows),
     bySide: [summarize("NRFI", rows.filter(row => row.recommendation === "NRFI")), summarize("YRFI", rows.filter(row => row.recommendation === "YRFI"))],
     byConfidence: ["High", "Medium", "Low"].map(level => summarize(level, rows.filter(row => row.confidence === level))),
     byProbabilityBand: bands.map(([label, min, max]) => summarize(label, rows.filter(row => Number(row.probability) >= min && Number(row.probability) < max))),
+    byPlayStatus: ["BEST_PLAY", "PLAY", "LEAN", "NO_PLAY"].map(status => summarize(status.replace("_", " "), contextRows.filter(row => contextString(row, "playStatus") === status))),
+    byV4DataQuality: ["High", "Medium", "Low"].map(level => summarize(`${level} V4 data quality`, contextRows.filter(row => v4Quality(row) === level))),
     byMarketContext: [
       summarize("Verified value plays", rows.filter(row => row.marketAvailable && row.valuePlay)),
       summarize("Market priced, no qualifying value", rows.filter(row => row.marketAvailable && !row.valuePlay)),
       summarize("Model only / no verified price", rows.filter(row => !row.marketAvailable)),
     ],
     byModelVersion: Array.from(new Set(rows.map(row => row.modelVersion))).sort().map(version => summarize(version, rows.filter(row => row.modelVersion === version))),
+    uncertaintyPenalties,
     firstInningResults: {
       nrfi: nrfiResults,
       yrfi: rows.length - nrfiResults,
@@ -112,8 +155,9 @@ export async function getMlbPostgameAttribution(days = 30): Promise<MlbPostgameA
     },
     notes: [
       "Attribution uses only locked, graded predictions; retrospective rows are excluded.",
+      "Play-status and V4-quality slices use the immutable pregame decision context captured for new V4-live predictions.",
       "This report diagnoses where the model is strong or conservative. It does not change thresholds automatically.",
-      "Pitcher, lineup and weather factor-level attribution requires those factor values to be persisted at lock time; current historical rows do not contain that full feature vector.",
+      "Older predictions without an immutable context are kept in overall performance but excluded from context-dependent slices rather than reconstructed with hindsight.",
     ],
   };
 }
