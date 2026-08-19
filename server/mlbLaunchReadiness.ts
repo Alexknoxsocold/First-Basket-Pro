@@ -35,6 +35,22 @@ export async function getMlbLaunchReadiness(days = 30): Promise<MlbLaunchReadine
 
   const gates: LaunchGate[] = [];
   const add = (key: string, label: string, status: LaunchGate["status"], detail: string) => gates.push({ key, label, status, detail });
+  const production = process.env.NODE_ENV === "production";
+  const databaseConfigured = Boolean(process.env.DATABASE_URL);
+  const sessionConfigured = Boolean(process.env.SESSION_SECRET?.trim());
+  const oddsConfigured = Boolean(process.env.THE_ODDS_API_KEY?.trim());
+
+  add("config-db", "Persistent production database",
+    databaseConfigured ? "PASS" : production ? "FAIL" : "WATCH",
+    databaseConfigured ? "DATABASE_URL is configured for persistent sessions and verification ledgers." : "DATABASE_URL is not configured; verified history cannot be durable.");
+
+  add("config-session", "Stable session signing secret",
+    sessionConfigured ? "PASS" : production ? "FAIL" : "WATCH",
+    sessionConfigured ? "SESSION_SECRET is configured." : "SESSION_SECRET is missing; production sessions would use an ephemeral secret and reset on restart.");
+
+  add("config-odds", "Sportsbook data provider",
+    oddsConfigured ? "PASS" : "WATCH",
+    oddsConfigured ? "Odds API credentials are configured; market availability still depends on RFI market access." : "No odds API key is configured. Model-only predictions can run, but verified EV/CLV cannot be produced.");
 
   add("integrity", "Prediction ledger integrity",
     integrity.status === "PASS" ? "PASS" : integrity.status === "WARN" || integrity.status === "NO_DATA" ? "WATCH" : "FAIL",
@@ -65,7 +81,7 @@ export async function getMlbLaunchReadiness(days = 30): Promise<MlbLaunchReadine
 
   add("context", "Immutable decision-context coverage",
     contextCoverage.coverage === null ? "WATCH" : contextCoverage.coverage >= 0.80 ? "PASS" : contextCoverage.coverage >= 0.50 ? "WATCH" : "FAIL",
-    contextCoverage.coverage === null ? "No context-capable V4 snapshots yet." : `${contextCoverage.contexts}/${contextCoverage.snapshots} locked snapshots have immutable pregame decision context (${(contextCoverage.coverage * 100).toFixed(0)}%).`);
+    contextCoverage.coverage === null ? "No context-capable V4 snapshots yet." : `${contextCoverage.contexts}/${contextCoverage.snapshots} V4-live locked snapshots have immutable pregame decision context (${(contextCoverage.coverage * 100).toFixed(0)}%).`);
 
   add("v4", "V4 validation",
     v4.winner === "v4" ? "PASS" : v4.winner === "insufficient_data" || v4.winner === "tie" ? "WATCH" : "FAIL",
@@ -79,7 +95,7 @@ export async function getMlbLaunchReadiness(days = 30): Promise<MlbLaunchReadine
   const watches = gates.filter(gate => gate.status === "WATCH");
   const score = Math.max(0, Math.round(100 - failures.length * 20 - watches.length * 7));
   const blockers = failures.map(gate => `${gate.label}: ${gate.detail}`);
-  const status: MlbLaunchReadiness["status"] = failures.length ? "NOT_READY" : graded >= 30 && integrity.status !== "FAIL" ? (watches.length <= 3 ? "READY" : "EARLY") : "EARLY";
+  const status: MlbLaunchReadiness["status"] = failures.length ? "NOT_READY" : graded >= 30 && integrity.status !== "FAIL" ? (watches.length <= 4 ? "READY" : "EARLY") : "EARLY";
 
   return {
     generatedAt: new Date().toISOString(),
@@ -89,10 +105,11 @@ export async function getMlbLaunchReadiness(days = 30): Promise<MlbLaunchReadine
     gates,
     blockers,
     notes: [
-      "READY means the technical and evidence gates are acceptable for a public beta; it does not guarantee profitability.",
+      "READY means technical and evidence gates are acceptable for a public beta; it does not guarantee profitability.",
       "Performance claims should remain explicitly sample-sized and should never include unlocked retrospective rows.",
       "Missing sportsbook prices are excluded from ROI and CLV rather than estimated.",
       "Decision-context coverage starts with new V4-live captures; older snapshots are intentionally not backfilled with reconstructed factors.",
+      "The legacy historical replay endpoint is disabled until calibration can enforce an as-of-date cutoff and eliminate future-data leakage.",
     ],
   };
 }
