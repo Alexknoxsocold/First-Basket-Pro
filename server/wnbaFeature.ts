@@ -2,6 +2,7 @@ import type { Express } from 'express';
 import cron from 'node-cron';
 import { requireAdmin } from './auth';
 import { ensureWnbaSchema, getWnbaDiagnostics, getWnbaSlate, lockWnbaPredictions, runWnbaTracker } from './wnbaFirstBasket';
+import { backfillWnbaHistory } from './wnbaBackfill';
 
 let started = false;
 
@@ -28,6 +29,17 @@ export function registerWnbaFeature(app: Express): void {
     } catch (error) {
       console.error('[WNBA] Manual run failed:', error);
       res.status(500).json({ error: 'WNBA tracker failed' });
+    }
+  });
+
+  app.post('/api/admin/wnba/backfill', requireAdmin, async (req, res) => {
+    try {
+      const days = Math.max(1, Math.min(14, Number(req.body?.days ?? 7)));
+      const maxGames = Math.max(1, Math.min(40, Number(req.body?.maxGames ?? 24)));
+      res.json(await backfillWnbaHistory(days, maxGames));
+    } catch (error) {
+      console.error('[WNBA] Backfill failed:', error);
+      res.status(500).json({ error: 'WNBA history backfill failed' });
     }
   });
 
@@ -67,9 +79,21 @@ export function registerWnbaFeature(app: Express): void {
     } catch (error) { console.warn('[WNBA] Late tracker failed:', error); }
   }, { timezone: 'America/New_York' });
 
-  // Warm today in the background; failures never block the web service.
+  // Walk backward through the current season in small verified chunks. This
+  // seeds player First Basket history only; historical model predictions are
+  // never manufactured after the fact.
+  cron.schedule('17 */6 * * *', async () => {
+    try {
+      const result = await backfillWnbaHistory(7, 24);
+      console.log(`[WNBA] History backfill: ${result.gamesAdded} games added across ${result.datesChecked} dates${result.done ? ' (season complete)' : ''}.`);
+    } catch (error) { console.warn('[WNBA] History backfill failed:', error); }
+  }, { timezone: 'America/New_York' });
+
+  // Warm today and begin one conservative backfill chunk in the background;
+  // failures never block the web service.
   void getWnbaSlate(true).then(slate => console.log(`[WNBA] Warmed ${slate.games.length} games across ${slate.teams.length} teams.`)).catch(error => console.warn('[WNBA] Warm failed:', error));
   void runWnbaTracker().catch(error => console.warn('[WNBA] Startup tracker failed:', error));
+  void backfillWnbaHistory(5, 18).then(result => console.log(`[WNBA] Startup history backfill added ${result.gamesAdded} games.`)).catch(error => console.warn('[WNBA] Startup backfill failed:', error));
 
-  console.log('[WNBA] First Basket feature initialized (15-minute lock checks; 30-minute grading).');
+  console.log('[WNBA] First Basket feature initialized (15-minute lock checks; 30-minute grading; 6-hour history backfill).');
 }
