@@ -1,5 +1,6 @@
 /** Automatically records verified first made field goals from completed NBA games. */
 import { storage } from './storage';
+import { incrementCurrentSeasonFirstBasket } from './fbSeasonStore';
 
 function etDate(offsetDays = 0): string {
   const d = new Date(Date.now() + offsetDays * 86400000);
@@ -54,12 +55,10 @@ export async function runFirstBasketTracker(): Promise<{processed:number;skipped
       if (await storage.isGameProcessed(game.id)) { result.skipped++; continue; }
       const scorer = await getFirstScorer(game.id);
       if (!scorer) {
-        // Do NOT mark unresolved games processed. ESPN/stat corrections or a
-        // temporary feed failure can then be retried on the next tracker run.
         result.errors.push(`Game ${game.id}: first made field goal unresolved; will retry`);
         continue;
       }
-      await storage.incrementFbScored(scorer.playerName, scorer.team);
+      await incrementCurrentSeasonFirstBasket(scorer.playerName, scorer.team);
       await storage.markGameProcessed(game.id, scorer.playerName, scorer.team);
       result.processed++;
     }
