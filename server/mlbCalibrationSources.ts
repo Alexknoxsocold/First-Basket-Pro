@@ -3,6 +3,8 @@ import type { Express } from "express";
 import { getMlbPassedDiagnostics } from "./mlbPassedDiagnostics";
 import { fetchNrfiDataV4Live, fetchUpcomingNrfiDataV4Live } from "./mlbNrfiLiveV4.js";
 import { recordPredictionSnapshot } from "./mlbCalibration.js";
+import { getMlbPostgameAttribution } from "./mlbPostgameAttribution.js";
+import { getMlbLaunchReadiness } from "./mlbLaunchReadiness.js";
 
 let pool: Pool | null = null;
 function getPool(): Pool | null {
@@ -113,6 +115,11 @@ function v4LedgerDay<T extends { games: any[] }>(day: T): T {
   return { ...day, games: day.games.map(game => ({ ...game, modelVersion: "v4-live" })) };
 }
 
+function validDays(value: unknown, fallback: number, max = 365): number | null {
+  const days = typeof value === "string" ? Number(value) : fallback;
+  return Number.isFinite(days) && days >= 1 && days <= max ? days : null;
+}
+
 export function registerCalibrationSourceRoute(app: Express): void {
   // These handlers are registered before the legacy routes module. That makes
   // V4-live the single public prediction path while keeping the older route as
@@ -133,8 +140,8 @@ export function registerCalibrationSourceRoute(app: Express): void {
 
   app.get("/api/mlb/nrfi/upcoming", async (req, res) => {
     try {
-      const requestedDays = typeof req.query.days === "string" ? Number(req.query.days) : 3;
-      if (!Number.isFinite(requestedDays) || requestedDays < 1 || requestedDays > 3) return res.status(400).json({ error: "days must be a number from 1 to 3" });
+      const requestedDays = validDays(req.query.days, 3, 3);
+      if (requestedDays === null) return res.status(400).json({ error: "days must be a number from 1 to 3" });
       const data = await fetchUpcomingNrfiDataV4Live(requestedDays);
       void Promise.all(data.days.map(day => recordPredictionSnapshot(v4LedgerDay(day))))
         .catch(error => console.warn("[MLB V4] Upcoming ledger write failed:", error));
@@ -148,8 +155,8 @@ export function registerCalibrationSourceRoute(app: Express): void {
 
   app.get("/api/mlb/nrfi/calibration/sources", async (req, res) => {
     try {
-      const days = typeof req.query.days === "string" ? Number(req.query.days) : 30;
-      if (!Number.isFinite(days) || days < 1 || days > 365) return res.status(400).json({ error: "days must be between 1 and 365" });
+      const days = validDays(req.query.days, 30);
+      if (days === null) return res.status(400).json({ error: "days must be between 1 and 365" });
       res.setHeader("Cache-Control", "public, max-age=300, stale-while-revalidate=900");
       res.json(await getCalibrationSources(days));
     } catch (error) {
@@ -160,13 +167,37 @@ export function registerCalibrationSourceRoute(app: Express): void {
 
   app.get("/api/mlb/nrfi/passed-diagnostics", async (req, res) => {
     try {
-      const days = typeof req.query.days === "string" ? Number(req.query.days) : 30;
-      if (!Number.isFinite(days) || days < 1 || days > 365) return res.status(400).json({ error: "days must be between 1 and 365" });
+      const days = validDays(req.query.days, 30);
+      if (days === null) return res.status(400).json({ error: "days must be between 1 and 365" });
       res.setHeader("Cache-Control", "public, max-age=300, stale-while-revalidate=900");
       res.json(await getMlbPassedDiagnostics(days));
     } catch (error) {
       console.error("[MLB Diagnostics] Passed-play analysis error:", error);
       res.status(500).json({ error: "Unable to load passed-play diagnostics" });
+    }
+  });
+
+  app.get("/api/mlb/nrfi/postgame-attribution", async (req, res) => {
+    try {
+      const days = validDays(req.query.days, 30);
+      if (days === null) return res.status(400).json({ error: "days must be between 1 and 365" });
+      res.setHeader("Cache-Control", "public, max-age=300, stale-while-revalidate=900");
+      return res.json(await getMlbPostgameAttribution(days));
+    } catch (error) {
+      console.error("[MLB Diagnostics] Postgame attribution error:", error);
+      return res.status(500).json({ error: "Unable to load postgame attribution" });
+    }
+  });
+
+  app.get("/api/mlb/nrfi/launch-readiness", async (req, res) => {
+    try {
+      const days = validDays(req.query.days, 30, 90);
+      if (days === null) return res.status(400).json({ error: "days must be between 1 and 90" });
+      res.setHeader("Cache-Control", "public, max-age=120, stale-while-revalidate=600");
+      return res.json(await getMlbLaunchReadiness(days));
+    } catch (error) {
+      console.error("[MLB Launch] Readiness check failed:", error);
+      return res.status(500).json({ error: "Unable to evaluate MLB launch readiness" });
     }
   });
 }
