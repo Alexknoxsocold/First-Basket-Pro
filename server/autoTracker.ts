@@ -5,6 +5,10 @@ import {
   recordCurrentSeasonFirstBasketGame,
   type FirstBasketStarter,
 } from './fbSeasonStore';
+import {
+  gradeFirstBasketPredictionGame,
+  lockUpcomingFirstBasketPredictions,
+} from './fbPredictionLedger';
 
 function etDate(offsetDays = 0): string {
   const d = new Date(Date.now() + offsetDays * 86400000);
@@ -91,6 +95,12 @@ async function getGameEvidence(gameId: string): Promise<{ scorer: FirstBasketSta
 export async function runFirstBasketTracker(): Promise<{processed:number;skipped:number;errors:string[]}> {
   const result = { processed: 0, skipped: 0, errors: [] as string[] };
   try {
+    // The same cron loop that grades completed games also owns the pregame lock.
+    // This keeps official predictions independent from user page refreshes.
+    await lockUpcomingFirstBasketPredictions().catch(error => {
+      console.warn('[FB Ledger] Pregame lock pass failed:', error);
+    });
+
     const games = [...await completedGames(etDate()), ...await completedGames(etDate(-1))];
     const unique = [...new Map(games.map(g => [g.id, g])).values()];
     for (const game of unique) {
@@ -102,6 +112,9 @@ export async function runFirstBasketTracker(): Promise<{processed:number;skipped
       }
       await recordCurrentSeasonFirstBasketGame(evidence.starters, evidence.scorer);
       await markVerifiedFirstBasketGame(game.id, evidence.scorer.playerName, evidence.scorer.team);
+      await gradeFirstBasketPredictionGame(game.id, evidence.scorer.playerName, evidence.scorer.team).catch(error => {
+        console.warn(`[FB Ledger] Grading failed for ${game.id}:`, error);
+      });
       result.processed++;
     }
   } catch (err:any) {
