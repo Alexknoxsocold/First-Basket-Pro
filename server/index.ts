@@ -15,8 +15,9 @@ import { getCalibrationSummary } from "./mlbCalibration";
 import { evaluateMlbModelHealth } from "./mlbModelHealth";
 import { registerCalibrationSourceRoute } from "./mlbCalibrationSources";
 import { getMlbIntegritySummary } from "./mlbIntegrity";
-import { startMlbAutoGradeScheduler } from "./mlbAutoGrade";
+import { getMlbAutoGradeStatus, startMlbAutoGradeScheduler } from "./mlbAutoGrade";
 import { captureMlbClosingLines, getMlbClosingLineSummary } from "./mlbClosingLine";
+import { getPredictionHistory } from "./mlbPredictionSnapshots";
 import { registerMlbHistoryRoutes } from "./mlbHistory";
 
 const app = express();
@@ -25,9 +26,6 @@ neonConfig.webSocketConstructor = ws;
 
 const production = process.env.NODE_ENV === 'production';
 const configuredSessionSecret = process.env.SESSION_SECRET?.trim();
-// Never ship with a known fallback secret. If production configuration is
-// incomplete, use an ephemeral cryptographic secret so cookies cannot be forged
-// while surfacing the configuration problem through logs/health checks.
 const sessionSecret = configuredSessionSecret || (production ? randomBytes(32).toString('hex') : 'development-only-session-secret');
 if (production && !configuredSessionSecret) console.error('[Startup] SESSION_SECRET is missing. Using an ephemeral secret; sessions will reset on restart and multi-instance auth is not safe.');
 if (production && !process.env.DATABASE_URL) console.error('[Startup] DATABASE_URL is missing. Persistent sessions and MLB verification ledgers are unavailable.');
@@ -78,6 +76,60 @@ app.get('/api/health', (_req, res) => {
   const criticalReady = config.database && (!production || config.sessionSecret);
   res.setHeader('Cache-Control', 'no-store');
   return res.status(criticalReady ? 200 : 503).json({ status: criticalReady ? 'ok' : 'degraded', environment: production ? 'production' : 'development', config, generatedAt: new Date().toISOString() });
+});
+
+app.get('/api/admin/mlb/diagnostics', async (_req, res) => {
+  try {
+    const quotes = getCachedMlbRfiQuotes();
+    const quoteTimes = quotes
+      .map((quote: any) => quote.updatedAt ? new Date(quote.updatedAt).getTime() : Number.NaN)
+      .filter((value: number) => Number.isFinite(value));
+    const newestQuoteAt = quoteTimes.length ? new Date(Math.max(...quoteTimes)).toISOString() : null;
+    const [history, performance, closingLine, integrity] = await Promise.all([
+      getPredictionHistory(30),
+      getCalibrationSummary(30),
+      getMlbClosingLineSummary(30),
+      getMlbIntegritySummary(30),
+    ]);
+    const locked = history.filter(row => row.lockedAt).length;
+    const graded = history.filter(row => row.lockedAt && row.outcome).length;
+    res.setHeader('Cache-Control', 'no-store');
+    return res.json({
+      generatedAt: new Date().toISOString(),
+      modelVersion: 'v4-live',
+      environment: production ? 'production' : 'development',
+      configuration: {
+        database: Boolean(process.env.DATABASE_URL),
+        sessionSecret: Boolean(configuredSessionSecret),
+        adminPassword: Boolean(process.env.ADMIN_PASSWORD?.trim()),
+        oddsApiKey: Boolean(process.env.THE_ODDS_API_KEY?.trim()),
+      },
+      autoGrade: getMlbAutoGradeStatus(),
+      market: {
+        quoteCount: quotes.length,
+        newestQuoteAt,
+        status: quotes.length ? 'live' : 'unavailable',
+      },
+      ledger: {
+        windowDays: 30,
+        snapshots: history.length,
+        locked,
+        graded,
+      },
+      performance: {
+        sampleSize: performance.sampleSize,
+        gradedPredictions: performance.gradedPredictions,
+        brierScore: performance.brierScore,
+        logLoss: performance.logLoss,
+        expectedCalibrationError: performance.expectedCalibrationError,
+      },
+      closingLine,
+      integrity,
+    });
+  } catch (error) {
+    console.error('[MLB Diagnostics] Error:', error);
+    return res.status(500).json({ error: 'Unable to load MLB diagnostics' });
+  }
 });
 
 app.use("/api/mlb/nrfi", (req, res, next) => {
