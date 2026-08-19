@@ -2,131 +2,15 @@ import { Pool, neonConfig } from '@neondatabase/serverless';
 import ws from 'ws';
 import { storage } from './storage';
 import { nbaSeasonForDate } from './nbaSeason';
-
 neonConfig.webSocketConstructor = ws;
 const pool = process.env.DATABASE_URL ? new Pool({ connectionString: process.env.DATABASE_URL }) : null;
-
-const MODEL_VERSION = 'FB-SEASONAL-V1';
-const LOCK_WINDOW_MS = 2 * 60 * 60 * 1000;
-const MAX_CONFIRMED_LINEUP_AGE_MS = 3 * 60 * 60 * 1000;
-
-function normalizeName(name: string): string {
-  return name.toLowerCase().replace(/[.'’\-]/g, '').replace(/\s+/g, ' ').trim();
-}
-function normalizeTeam(team: string): string {
-  const v = team.toUpperCase().trim();
-  const map: Record<string,string> = { GSW:'GS', NOP:'NO', NYK:'NY', SAS:'SA', PHO:'PHX', UTA:'UTAH', WSH:'WAS' };
-  return map[v] || v;
-}
-
-async function ledgerExists(): Promise<boolean> {
-  if (!pool) return false;
-  const result = await pool.query(`SELECT to_regclass('public.fb_prediction_ledger') AS name`);
-  return Boolean(result.rows[0]?.name);
-}
-
-export async function lockUpcomingFirstBasketPredictions(): Promise<{ eligible: number; locked: number; skipped: number }> {
-  const result = { eligible: 0, locked: 0, skipped: 0 };
-  if (!pool || !(await ledgerExists())) return result;
-
-  const now = Date.now();
-  const games = await storage.getGames();
-  const eligibleGames = games.filter(game => {
-    if (!game.espnGameId || !game.gameTime) return false;
-    const startsAt = new Date(game.gameTime).getTime();
-    return Number.isFinite(startsAt) && startsAt > now && startsAt - now <= LOCK_WINDOW_MS;
-  });
-  result.eligible = eligibleGames.length;
-
-  for (const game of eligibleGames) {
-    const gameTime = game.gameTime;
-    const espnGameId = game.espnGameId;
-    if (!gameTime || !espnGameId) { result.skipped++; continue; }
-
-    const existing = await pool.query(`SELECT 1 FROM fb_prediction_ledger WHERE espn_game_id = $1 LIMIT 1`, [espnGameId]);
-    if (existing.rows.length) { result.skipped++; continue; }
-
-    const awayStarters = game.awayStarters ?? [];
-    const homeStarters = game.homeStarters ?? [];
-    const lineupUpdated = game.lineupUpdatedAt ? new Date(game.lineupUpdatedAt).getTime() : NaN;
-    const lineupFresh = Number.isFinite(lineupUpdated) && now - lineupUpdated <= MAX_CONFIRMED_LINEUP_AGE_MS;
-    if (game.lineupStatus !== 'confirmed' || !game.lineupSource || !lineupFresh || awayStarters.length !== 5 || homeStarters.length !== 5) {
-      console.log(`[FB Ledger] ${game.awayTeam} @ ${game.homeTeam}: waiting for a fresh confirmed 5+5 lineup.`);
-      result.skipped++;
-      continue;
-    }
-
-    try {
-      const { fetchEspnTeamStats } = await import('./espnPlayerStats.js');
-      const starterMap: Record<string, string[]> = { [game.awayTeam]: awayStarters, [game.homeTeam]: homeStarters };
-      const stats = await fetchEspnTeamStats([game.awayTeam, game.homeTeam], starterMap, {});
-      const expected = new Set([
-        ...awayStarters.map(name => `${normalizeName(name)}|${normalizeTeam(game.awayTeam)}`),
-        ...homeStarters.map(name => `${normalizeName(name)}|${normalizeTeam(game.homeTeam)}`),
-      ]);
-      const candidates = stats
-        .filter(player => expected.has(`${normalizeName(player.player)}|${normalizeTeam(player.team)}`))
-        .sort((a, b) => b.firstBasketPct - a.firstBasketPct);
-
-      if (candidates.length !== 10) {
-        console.warn(`[FB Ledger] ${game.awayTeam} @ ${game.homeTeam}: confirmed 10 starters but modeled ${candidates.length}; not locking.`);
-        result.skipped++;
-        continue;
-      }
-
-      const lockedAt = new Date().toISOString();
-      const season = nbaSeasonForDate(new Date(gameTime)).label;
-      for (let index = 0; index < candidates.length; index++) {
-        const player = candidates[index];
-        await pool.query(
-          `INSERT INTO fb_prediction_ledger (
-             espn_game_id, season, game_start_at, locked_at, model_version,
-             player_name, team, model_probability, model_rank, is_top_pick,
-             current_season_fb, current_season_games, previous_season_fb, previous_season_games
-           ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
-           ON CONFLICT (espn_game_id, player_name, team) DO NOTHING`,
-          [espnGameId, season, gameTime, lockedAt, MODEL_VERSION, player.player, player.team,
-           player.firstBasketPct, index + 1, index === 0,
-           player.currentSeasonFirstBaskets ?? 0, player.currentSeasonGamesTracked ?? 0,
-           player.previousSeasonFirstBaskets ?? 0, player.previousSeasonGamesTracked ?? 0],
-        );
-      }
-      result.locked++;
-      console.log(`[FB Ledger] Locked ${game.awayTeam} @ ${game.homeTeam} from ${game.lineupSource} confirmed starters (${MODEL_VERSION}).`);
-    } catch (error) {
-      console.warn(`[FB Ledger] Could not lock ${game.awayTeam} @ ${game.homeTeam}:`, error);
-      result.skipped++;
-    }
-  }
-  return result;
-}
-
-export async function gradeFirstBasketPredictionGame(espnGameId: string, scorerName: string, scorerTeam: string): Promise<number> {
-  if (!pool || !(await ledgerExists())) return 0;
-  const now = new Date().toISOString();
-  const result = await pool.query(
-    `UPDATE fb_prediction_ledger SET actual_first_scorer = $2, actual_first_scorer_team = $3,
-       won = (lower(player_name) = lower($2) AND upper(team) = upper($3)), graded_at = $4
-     WHERE espn_game_id = $1 AND graded_at IS NULL RETURNING id`,
-    [espnGameId, scorerName, scorerTeam, now],
-  );
-  if (result.rows.length) console.log(`[FB Ledger] Graded ${result.rows.length} rows for game ${espnGameId}: ${scorerName} (${scorerTeam}).`);
-  return result.rows.length;
-}
-
-export async function getFirstBasketLedgerSummary(days = 30): Promise<{ modelVersion: string; lockedGames: number; gradedGames: number; topPickWins: number; topPickAccuracy: number | null; candidateBrier: number | null }> {
-  if (!pool || !(await ledgerExists())) return { modelVersion: MODEL_VERSION, lockedGames: 0, gradedGames: 0, topPickWins: 0, topPickAccuracy: null, candidateBrier: null };
-  const result = await pool.query(
-    `WITH recent AS (SELECT * FROM fb_prediction_ledger WHERE locked_at::timestamptz >= now() - ($1::text || ' days')::interval),
-     game_counts AS (SELECT count(DISTINCT espn_game_id) AS locked_games, count(DISTINCT espn_game_id) FILTER (WHERE graded_at IS NOT NULL) AS graded_games FROM recent),
-     top_picks AS (SELECT count(*) FILTER (WHERE won = true) AS wins, count(*) FILTER (WHERE graded_at IS NOT NULL) AS graded FROM recent WHERE is_top_pick = true),
-     candidate_score AS (SELECT avg(power(model_probability / 100.0 - CASE WHEN won THEN 1 ELSE 0 END, 2)) AS brier FROM recent WHERE graded_at IS NOT NULL)
-     SELECT game_counts.locked_games, game_counts.graded_games, top_picks.wins, top_picks.graded, candidate_score.brier FROM game_counts, top_picks, candidate_score`,
-    [Math.max(1, Math.min(days, 365))],
-  );
-  const row = result.rows[0] ?? {};
-  const gradedTop = Number(row.graded ?? 0); const wins = Number(row.wins ?? 0);
-  return { modelVersion: MODEL_VERSION, lockedGames: Number(row.locked_games ?? 0), gradedGames: Number(row.graded_games ?? 0), topPickWins: wins,
-    topPickAccuracy: gradedTop > 0 ? Math.round((wins / gradedTop) * 1000) / 10 : null,
-    candidateBrier: row.brier == null ? null : Math.round(Number(row.brier) * 10000) / 10000 };
-}
+const MODEL_VERSION='FB-SEASONAL-V1', LOCK_WINDOW_MS=2*60*60*1000, MAX_LINEUP_AGE_MS=3*60*60*1000;
+function normalizeName(n:string){return n.toLowerCase().replace(/[.'’\-]/g,'').replace(/\s+/g,' ').trim();}
+function normalizeTeam(t:string){const v=t.toUpperCase().trim(),m:Record<string,string>={GSW:'GS',NOP:'NO',NYK:'NY',SAS:'SA',PHO:'PHX',UTA:'UTAH',WSH:'WAS'};return m[v]||v;}
+async function ledgerExists(){if(!pool)return false;const r=await pool.query(`SELECT to_regclass('public.fb_prediction_ledger') AS name`);return Boolean(r.rows[0]?.name);}
+async function confirmedLineup(gameId:string):Promise<{away:string[];home:string[];source:string}|null>{if(!pool)return null;try{const r=await pool.query(`SELECT away_starters,home_starters,source,updated_at FROM nba_lineup_state WHERE espn_game_id=$1 AND status='confirmed' LIMIT 1`,[gameId]);const row=r.rows[0];if(!row)return null;const age=Date.now()-new Date(row.updated_at).getTime();if(!Number.isFinite(age)||age<0||age>MAX_LINEUP_AGE_MS)return null;const away=Array.isArray(row.away_starters)?row.away_starters:[],home=Array.isArray(row.home_starters)?row.home_starters:[];return away.length===5&&home.length===5?{away,home,source:String(row.source||'unknown')}:null;}catch{return null;}}
+export async function lockUpcomingFirstBasketPredictions():Promise<{eligible:number;locked:number;skipped:number}>{const result={eligible:0,locked:0,skipped:0};if(!pool||!(await ledgerExists()))return result;const now=Date.now(),games=await storage.getGames(),eligible=games.filter(g=>{if(!g.espnGameId||!g.gameTime)return false;const t=new Date(g.gameTime).getTime();return Number.isFinite(t)&&t>now&&t-now<=LOCK_WINDOW_MS;});result.eligible=eligible.length;
+for(const game of eligible){const gameTime=game.gameTime,gameId=game.espnGameId;if(!gameTime||!gameId){result.skipped++;continue;}const existing=await pool.query(`SELECT 1 FROM fb_prediction_ledger WHERE espn_game_id=$1 LIMIT 1`,[gameId]);if(existing.rows.length){result.skipped++;continue;}const lineup=await confirmedLineup(gameId);if(!lineup){console.log(`[FB Ledger] ${game.awayTeam} @ ${game.homeTeam}: waiting for fresh confirmed starters.`);result.skipped++;continue;}try{const {fetchEspnTeamStats}=await import('./espnPlayerStats.js');const starterMap:Record<string,string[]>={[game.awayTeam]:lineup.away,[game.homeTeam]:lineup.home};const stats=await fetchEspnTeamStats([game.awayTeam,game.homeTeam],starterMap,{});const expected=new Set([...lineup.away.map(n=>`${normalizeName(n)}|${normalizeTeam(game.awayTeam)}`),...lineup.home.map(n=>`${normalizeName(n)}|${normalizeTeam(game.homeTeam)}`)]);const candidates=stats.filter(p=>expected.has(`${normalizeName(p.player)}|${normalizeTeam(p.team)}`)).sort((a,b)=>b.firstBasketPct-a.firstBasketPct);if(candidates.length!==10){console.warn(`[FB Ledger] ${game.awayTeam} @ ${game.homeTeam}: confirmed 10 starters but modeled ${candidates.length}; not locking.`);result.skipped++;continue;}const lockedAt=new Date().toISOString(),season=nbaSeasonForDate(new Date(gameTime)).label;for(let i=0;i<candidates.length;i++){const p=candidates[i];await pool.query(`INSERT INTO fb_prediction_ledger (espn_game_id,season,game_start_at,locked_at,model_version,player_name,team,model_probability,model_rank,is_top_pick,current_season_fb,current_season_games,previous_season_fb,previous_season_games) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) ON CONFLICT (espn_game_id,player_name,team) DO NOTHING`,[gameId,season,gameTime,lockedAt,MODEL_VERSION,p.player,p.team,p.firstBasketPct,i+1,i===0,p.currentSeasonFirstBaskets??0,p.currentSeasonGamesTracked??0,p.previousSeasonFirstBaskets??0,p.previousSeasonGamesTracked??0]);}result.locked++;console.log(`[FB Ledger] Locked ${game.awayTeam} @ ${game.homeTeam} from ${lineup.source} confirmed starters (${MODEL_VERSION}).`);}catch(e){console.warn(`[FB Ledger] Could not lock ${game.awayTeam} @ ${game.homeTeam}:`,e);result.skipped++;}}
+return result;}
+export async function gradeFirstBasketPredictionGame(gameId:string,scorer:string,team:string):Promise<number>{if(!pool||!(await ledgerExists()))return 0;const r=await pool.query(`UPDATE fb_prediction_ledger SET actual_first_scorer=$2,actual_first_scorer_team=$3,won=(lower(player_name)=lower($2) AND upper(team)=upper($3)),graded_at=$4 WHERE espn_game_id=$1 AND graded_at IS NULL RETURNING id`,[gameId,scorer,team,new Date().toISOString()]);if(r.rows.length)console.log(`[FB Ledger] Graded ${r.rows.length} rows for game ${gameId}: ${scorer} (${team}).`);return r.rows.length;}
+export async function getFirstBasketLedgerSummary(days=30):Promise<{modelVersion:string;lockedGames:number;gradedGames:number;topPickWins:number;topPickAccuracy:number|null;candidateBrier:number|null}>{if(!pool||!(await ledgerExists()))return{modelVersion:MODEL_VERSION,lockedGames:0,gradedGames:0,topPickWins:0,topPickAccuracy:null,candidateBrier:null};const r=await pool.query(`WITH recent AS (SELECT * FROM fb_prediction_ledger WHERE locked_at::timestamptz>=now()-($1::text||' days')::interval),gc AS (SELECT count(DISTINCT espn_game_id) locked_games,count(DISTINCT espn_game_id) FILTER(WHERE graded_at IS NOT NULL) graded_games FROM recent),tp AS (SELECT count(*) FILTER(WHERE won=true) wins,count(*) FILTER(WHERE graded_at IS NOT NULL) graded FROM recent WHERE is_top_pick=true),cs AS (SELECT avg(power(model_probability/100.0-CASE WHEN won THEN 1 ELSE 0 END,2)) brier FROM recent WHERE graded_at IS NOT NULL) SELECT gc.locked_games,gc.graded_games,tp.wins,tp.graded,cs.brier FROM gc,tp,cs`,[Math.max(1,Math.min(days,365))]);const row=r.rows[0]??{},g=Number(row.graded??0),w=Number(row.wins??0);return{modelVersion:MODEL_VERSION,lockedGames:Number(row.locked_games??0),gradedGames:Number(row.graded_games??0),topPickWins:w,topPickAccuracy:g>0?Math.round(w/g*1000)/10:null,candidateBrier:row.brier==null?null:Math.round(Number(row.brier)*10000)/10000};}
