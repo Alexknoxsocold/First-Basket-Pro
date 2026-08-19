@@ -25,6 +25,9 @@ export const games = pgTable("games", {
   homeScore: integer("home_score"),
   espnGameId: text("espn_game_id"),
   lastSynced: text("last_synced"),
+  lineupStatus: text("lineup_status").notNull().default('projected'),
+  lineupSource: text("lineup_source"),
+  lineupUpdatedAt: text("lineup_updated_at"),
 }, (table) => ({
   gameDateIdx: index("games_game_date_idx").on(table.gameDate),
   gameTimeIdx: index("games_game_time_idx").on(table.gameTime),
@@ -62,9 +65,7 @@ export const teamStats = pgTable("team_stats", {
   firstToScore: integer("first_to_score").notNull(),
   percentage: real("percentage").notNull(),
   avgPoints: real("avg_points").notNull(),
-}, (table) => ({
-  teamIdx: uniqueIndex("team_stats_team_idx").on(table.team),
-}));
+}, (table) => ({ teamIdx: uniqueIndex("team_stats_team_idx").on(table.team) }));
 
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -79,10 +80,7 @@ export const sessions = pgTable("sessions", {
   userId: varchar("user_id").notNull().references(() => users.id),
   sessionToken: text("session_token").notNull().unique(),
   expiresAt: timestamp("expires_at").notNull(),
-}, (table) => ({
-  userIdIdx: index("sessions_user_id_idx").on(table.userId),
-  expiresAtIdx: index("sessions_expires_at_idx").on(table.expiresAt),
-}));
+}, (table) => ({ userIdIdx: index("sessions_user_id_idx").on(table.userId), expiresAtIdx: index("sessions_expires_at_idx").on(table.expiresAt) }));
 
 export const fbTracking = pgTable("fb_tracking", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -95,11 +93,7 @@ export const fbTracking = pgTable("fb_tracking", {
 }, (table) => ({
   playerTeamIdx: index("fb_tracking_player_team_idx").on(table.playerName, table.team),
   seasonIdx: index("fb_tracking_season_idx").on(table.season),
-  playerTeamSeasonUnique: uniqueIndex("fb_tracking_player_team_season_unique").on(
-    sql`lower(${table.playerName})`,
-    sql`upper(${table.team})`,
-    table.season,
-  ),
+  playerTeamSeasonUnique: uniqueIndex("fb_tracking_player_team_season_unique").on(sql`lower(${table.playerName})`, sql`upper(${table.team})`, table.season),
 }));
 
 export const fbProcessedGames = pgTable("fb_processed_games", {
@@ -108,9 +102,7 @@ export const fbProcessedGames = pgTable("fb_processed_games", {
   firstScorer: text("first_scorer"),
   firstScorerTeam: text("first_scorer_team"),
   processedAt: text("processed_at").notNull(),
-}, (table) => ({
-  processedAtIdx: index("fb_processed_games_processed_at_idx").on(table.processedAt),
-}));
+}, (table) => ({ processedAtIdx: index("fb_processed_games_processed_at_idx").on(table.processedAt) }));
 
 export const mlbPredictionHistory = pgTable("mlb_prediction_history", {
   id: varchar("id", { length: 64 }).primaryKey(),
