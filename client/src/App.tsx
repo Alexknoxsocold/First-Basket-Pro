@@ -18,6 +18,7 @@ const PlayerStats = lazy(() => import("@/pages/PlayerStats"));
 const TeamStats = lazy(() => import("@/pages/TeamStats"));
 const Admin = lazy(() => import("@/pages/Admin"));
 const AdminMlbDiagnostics = lazy(() => import("@/pages/AdminMlbDiagnostics"));
+const AdminFbDiagnostics = lazy(() => import("@/pages/AdminFbDiagnostics"));
 const Login = lazy(() => import("@/pages/Login"));
 const Signup = lazy(() => import("@/pages/Signup"));
 const Invite = lazy(() => import("@/pages/Invite"));
@@ -52,6 +53,7 @@ function Router() {
         <Route path="/mlb/calibration" component={NRFICalibration} />
         <Route path="/legal" component={Legal} />
         <Route path="/admin/mlb-diagnostics" component={AdminMlbDiagnostics} />
+        <Route path="/admin/fb-diagnostics" component={AdminFbDiagnostics} />
         <Route path="/admin" component={Admin} />
         <Route component={NotFound} />
       </Switch>
