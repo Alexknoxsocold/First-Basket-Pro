@@ -11,8 +11,8 @@ async function json(url:string):Promise<any|null>{try{const r=await fetch(url,{h
 function ymd(d:Date){return d.toISOString().slice(0,10)} function compact(d:Date){return ymd(d).replace(/-/g,'')}
 function extractStarters(data:any):WnbaStarter[]{const out:WnbaStarter[]=[];for(const block of data?.boxscore?.players||[]){const team=normTeam(String(block?.team?.abbreviation||''));for(const group of block?.statistics||[])for(const row of group?.athletes||[]){if(row?.starter!==true||row?.didNotPlay===true)continue;const name=String(row?.athlete?.displayName||'').trim();if(name&&team)out.push({name,team})}}return[...new Map(out.map(s=>[`${normName(s.name)}|${s.team}`,s])).values()]}
 
+async function ensureRebuildState(){if(!pool)return;await pool.query(`CREATE TABLE IF NOT EXISTS wnba_history_rebuild_state(season integer PRIMARY KEY,next_date date,done boolean NOT NULL DEFAULT false,updated_at timestamptz NOT NULL DEFAULT now());`)}
 async function recordVerified(gameId:string,date:string,starters:WnbaStarter[],first:{name:string;team:string},season:number){if(!pool||starters.length!==10)return false;const c=await pool.connect();try{await c.query('BEGIN');const ex=await c.query('SELECT 1 FROM wnba_processed_games WHERE espn_game_id=$1',[gameId]);if(ex.rows.length){await c.query('ROLLBACK');return false}for(const s of starters){const won=normName(s.name)===normName(first.name)&&normTeam(s.team)===normTeam(first.team);await c.query(`INSERT INTO wnba_fb_tracking(player_name,team,season,fb_scored,games_tracked,last_updated) VALUES($1,$2,$3,$4,1,now()) ON CONFLICT(lower(player_name),upper(team),season) DO UPDATE SET fb_scored=wnba_fb_tracking.fb_scored+EXCLUDED.fb_scored,games_tracked=wnba_fb_tracking.games_tracked+1,last_updated=now()`,[s.name,s.team,season,won?1:0])}await c.query('INSERT INTO wnba_processed_games(espn_game_id,game_date,first_scorer,first_scorer_team) VALUES($1,$2,$3,$4)',[gameId,date,first.name,first.team]);await c.query('COMMIT');return true}catch(e){await c.query('ROLLBACK');throw e}finally{c.release()}}
-
 async function strictEvidence(gameId:string,date:string,summary:any,starters:WnbaStarter[]){const base=verifyOpeningEvidence(gameId,date,summary,starters);if(!base)return null;return enrichTipFromOfficialWnba(base,starters)}
 
 export async function refreshRecentWnbaEvidence(days=10):Promise<{checked:number;updated:number;rejected:number}>{
@@ -24,7 +24,30 @@ export async function refreshRecentWnbaEvidence(days=10):Promise<{checked:number
 }
 
 export async function backfillWnbaHistory(daysPerRun=5,maxGames=16):Promise<{datesChecked:number;gamesAdded:number;unresolved:number;done:boolean}>{
-  if(!pool)return{datesChecked:0,gamesAdded:0,unresolved:0,done:true};await ensureWnbaSchema();await ensureWnbaEvidenceSchema();const season=new Date().getUTCFullYear();
-  const min=await pool.query('SELECT min(game_date) AS min_date FROM wnba_processed_games WHERE extract(year from game_date)=$1',[season]);let cursor=min.rows[0]?.min_date?new Date(min.rows[0].min_date):new Date();cursor=new Date(cursor.getTime()-86400000);const seasonFloor=new Date(Date.UTC(season,4,1));let datesChecked=0,gamesAdded=0,unresolved=0;
-  while(datesChecked<daysPerRun&&gamesAdded<maxGames&&cursor>=seasonFloor){const date=ymd(cursor),board=await json(`https://site.api.espn.com/apis/site/v2/sports/basketball/wnba/scoreboard?dates=${compact(cursor)}`);for(const event of(board?.events||[]).filter((e:any)=>e?.status?.type?.completed===true)){const id=String(event.id),ex=await pool.query('SELECT 1 FROM wnba_processed_games WHERE espn_game_id=$1',[id]);if(ex.rows.length)continue;const summary=await json(`https://site.api.espn.com/apis/site/v2/sports/basketball/wnba/summary?event=${id}`),starters=extractStarters(summary),e=await strictEvidence(id,date,summary,starters);if(!e){unresolved++;continue}await saveOpeningEvidence(e);if(await recordVerified(id,date,starters,{name:e.firstMadePlayer,team:e.firstMadeTeam},season))gamesAdded++;if(gamesAdded>=maxGames)break}datesChecked++;cursor=new Date(cursor.getTime()-86400000)}return{datesChecked,gamesAdded,unresolved,done:cursor<seasonFloor};
+  if(!pool)return{datesChecked:0,gamesAdded:0,unresolved:0,done:true};
+  await ensureWnbaSchema();await ensureWnbaEvidenceSchema();await ensureRebuildState();
+  const season=new Date().getUTCFullYear(),seasonFloor=new Date(Date.UTC(season,4,1));
+  const state=await pool.query('SELECT next_date,done FROM wnba_history_rebuild_state WHERE season=$1',[season]);
+  if(state.rows[0]?.done===true)return{datesChecked:0,gamesAdded:0,unresolved:0,done:true};
+  let cursor:Date;
+  if(state.rows[0]?.next_date){cursor=new Date(state.rows[0].next_date)}else{
+    const min=await pool.query('SELECT min(game_date) AS min_date FROM wnba_processed_games WHERE extract(year from game_date)=$1',[season]);
+    cursor=min.rows[0]?.min_date?new Date(min.rows[0].min_date):new Date();cursor=new Date(cursor.getTime()-86400000);
+    await pool.query(`INSERT INTO wnba_history_rebuild_state(season,next_date,done,updated_at) VALUES($1,$2,false,now()) ON CONFLICT(season) DO UPDATE SET next_date=EXCLUDED.next_date,done=false,updated_at=now()`,[season,ymd(cursor)]);
+  }
+  let datesChecked=0,gamesAdded=0,unresolved=0;
+  while(datesChecked<daysPerRun&&gamesAdded<maxGames&&cursor>=seasonFloor){
+    const date=ymd(cursor),board=await json(`https://site.api.espn.com/apis/site/v2/sports/basketball/wnba/scoreboard?dates=${compact(cursor)}`);
+    for(const event of(board?.events||[]).filter((e:any)=>e?.status?.type?.completed===true)){
+      const id=String(event.id),ex=await pool.query('SELECT 1 FROM wnba_processed_games WHERE espn_game_id=$1',[id]);if(ex.rows.length)continue;
+      const summary=await json(`https://site.api.espn.com/apis/site/v2/sports/basketball/wnba/summary?event=${id}`),starters=extractStarters(summary),e=await strictEvidence(id,date,summary,starters);
+      if(!e){unresolved++;continue}
+      await saveOpeningEvidence(e);if(await recordVerified(id,date,starters,{name:e.firstMadePlayer,team:e.firstMadeTeam},season))gamesAdded++;
+      if(gamesAdded>=maxGames)break;
+    }
+    datesChecked++;cursor=new Date(cursor.getTime()-86400000);
+  }
+  const done=cursor<seasonFloor;
+  await pool.query(`INSERT INTO wnba_history_rebuild_state(season,next_date,done,updated_at) VALUES($1,$2,$3,now()) ON CONFLICT(season) DO UPDATE SET next_date=EXCLUDED.next_date,done=EXCLUDED.done,updated_at=now()`,[season,ymd(cursor),done]);
+  return{datesChecked,gamesAdded,unresolved,done};
 }
