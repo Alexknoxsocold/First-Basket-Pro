@@ -20,6 +20,7 @@ import { getPredictionHistory } from "./mlbPredictionSnapshots";
 import { registerMlbHistoryRoutes } from "./mlbHistory";
 import { getMlbLockFunnel } from "./mlbLockFunnel";
 import { registerMlbV4PublicRoutes } from "./mlbPublicV4Routes";
+import { registerProductionCleanupRoutes } from "./productionCleanupRoutes";
 
 const app = express();
 app.set('trust proxy', 1);
@@ -231,6 +232,8 @@ app.use('/api/mlb/nrfi', (req, res, next) => {
   }) as typeof res.json;
   next();
 });
+
+registerProductionCleanupRoutes(app);
 
 // Register the authoritative V4-live public routes before the legacy route
 // definitions in registerRoutes(). The market middleware above still enriches
