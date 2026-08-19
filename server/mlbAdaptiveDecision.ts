@@ -29,11 +29,33 @@ const CACHE_MS = 15 * 60 * 1000;
 
 let pool: Pool | null = null;
 let cache: { expiresAt: number; value: MlbAdaptiveDecisionPolicy } | null = null;
+let schemaReady: Promise<void> | null = null;
 
 function db(): Pool | null {
   if (!process.env.DATABASE_URL) return null;
   if (!pool) pool = new Pool({ connectionString: process.env.DATABASE_URL });
   return pool;
+}
+
+async function ensureAdaptiveSchema(connection: Pool): Promise<void> {
+  if (schemaReady) return schemaReady;
+  schemaReady = connection.query(`
+    CREATE TABLE IF NOT EXISTS mlb_prediction_context (
+      id varchar(180) PRIMARY KEY,
+      prediction_date text NOT NULL,
+      game_id text NOT NULL,
+      model_version text NOT NULL,
+      game_start_at timestamp NOT NULL,
+      captured_at timestamp NOT NULL DEFAULT now(),
+      context jsonb NOT NULL,
+      UNIQUE(prediction_date, game_id, model_version)
+    );
+    CREATE INDEX IF NOT EXISTS mlb_prediction_context_date_idx ON mlb_prediction_context(prediction_date DESC);
+  `).then(() => undefined).catch(error => {
+    schemaReady = null;
+    throw error;
+  });
+  return schemaReady;
 }
 
 function emptyPolicy(): MlbAdaptiveDecisionPolicy {
@@ -69,6 +91,7 @@ export async function getMlbAdaptiveDecisionPolicy(days = 90): Promise<MlbAdapti
 
   const safeDays = Math.min(Math.max(Math.round(days), 30), 180);
   try {
+    await ensureAdaptiveSchema(connection);
     const result = await connection.query<{
       side: "NRFI" | "YRFI";
       sampleSize: string;
