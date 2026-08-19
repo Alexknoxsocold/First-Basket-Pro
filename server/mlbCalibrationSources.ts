@@ -1,5 +1,6 @@
 import { Pool } from "@neondatabase/serverless";
 import type { Express } from "express";
+import { getMlbPassedDiagnostics } from "./mlbPassedDiagnostics";
 
 let pool: Pool | null = null;
 function getPool(): Pool | null {
@@ -85,7 +86,6 @@ export async function getCalibrationSources(days = 30): Promise<{ days: number; 
     }
 
     if (row.marketEdge !== null && Number.isFinite(row.marketEdge)) {
-      // Average only captured market observations, not missing/estimated prices.
       source.avgEdge = source.avgEdge === null ? row.marketEdge : source.avgEdge + row.marketEdge;
     }
     if (row.marketExpectedValue !== null && Number.isFinite(row.marketExpectedValue)) {
@@ -117,6 +117,18 @@ export function registerCalibrationSourceRoute(app: Express): void {
     } catch (error) {
       console.error("[MLB Calibration] Source breakdown error:", error);
       res.status(500).json({ error: "Unable to load calibration source breakdown" });
+    }
+  });
+
+  app.get("/api/mlb/nrfi/passed-diagnostics", async (req, res) => {
+    try {
+      const days = typeof req.query.days === "string" ? Number(req.query.days) : 30;
+      if (!Number.isFinite(days) || days < 1 || days > 365) return res.status(400).json({ error: "days must be between 1 and 365" });
+      res.setHeader("Cache-Control", "public, max-age=300, stale-while-revalidate=900");
+      res.json(await getMlbPassedDiagnostics(days));
+    } catch (error) {
+      console.error("[MLB Diagnostics] Passed-play analysis error:", error);
+      res.status(500).json({ error: "Unable to load passed-play diagnostics" });
     }
   });
 }
