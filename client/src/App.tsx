@@ -6,6 +6,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/context/AuthContext";
+import AppErrorBoundary from "@/components/AppErrorBoundary";
 import Header from "@/components/Header";
 import Navigation from "@/components/Navigation";
 import SplashScreen from "@/components/SplashScreen";
@@ -47,36 +48,38 @@ function App() {
   const [splashDone, setSplashDone] = useState(false);
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <TooltipProvider>
-          {!splashDone && <SplashScreen onDone={() => setSplashDone(true)} />}
-          <div className="min-h-screen bg-background flex flex-col">
-            <Header />
-            <Navigation />
-            <main id="main-content" className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-4 md:px-6 lg:px-8 py-4 sm:py-6 lg:py-8">
-              <Router />
-            </main>
-            <footer className="border-t bg-card mt-6 sm:mt-8">
-              <div className="max-w-7xl mx-auto px-4 md:px-6 lg:px-8 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                <span className="text-xs text-muted-foreground">
-                  © {new Date().getFullYear()} PreziBaskets. For entertainment purposes only.
-                </span>
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-                  <Link href="/legal?tab=terms" className="text-xs text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm transition-colors">
-                    Terms of Service
-                  </Link>
-                  <Link href="/legal?tab=privacy" className="text-xs text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm transition-colors">
-                    Privacy Policy
-                  </Link>
+    <AppErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <TooltipProvider>
+            {!splashDone && <SplashScreen onDone={() => setSplashDone(true)} />}
+            <div className="min-h-screen bg-background flex flex-col">
+              <Header />
+              <Navigation />
+              <main id="main-content" className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-4 md:px-6 lg:px-8 py-4 sm:py-6 lg:py-8">
+                <Router />
+              </main>
+              <footer className="border-t bg-card mt-6 sm:mt-8">
+                <div className="max-w-7xl mx-auto px-4 md:px-6 lg:px-8 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                  <span className="text-xs text-muted-foreground">
+                    © {new Date().getFullYear()} PreziBaskets. For entertainment purposes only.
+                  </span>
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                    <Link href="/legal?tab=terms" className="text-xs text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm transition-colors">
+                      Terms of Service
+                    </Link>
+                    <Link href="/legal?tab=privacy" className="text-xs text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm transition-colors">
+                      Privacy Policy
+                    </Link>
+                  </div>
                 </div>
-              </div>
-            </footer>
-          </div>
-          <Toaster />
-        </TooltipProvider>
-      </AuthProvider>
-    </QueryClientProvider>
+              </footer>
+            </div>
+            <Toaster />
+          </TooltipProvider>
+        </AuthProvider>
+      </QueryClientProvider>
+    </AppErrorBoundary>
   );
 }
 
