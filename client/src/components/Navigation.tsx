@@ -5,8 +5,8 @@ import { LayoutGrid, CircleDot, Trophy, Goal } from "lucide-react";
 const navItems = [
   { label: "NBA", path: "/", icon: LayoutGrid },
   { label: "WNBA", path: "/wnba", icon: Trophy },
-  { label: "NFL", path: "/nfl", icon: Goal },
   { label: "MLB", path: "/mlb", icon: CircleDot },
+  { label: "NFL", path: "/nfl", icon: Goal },
 ];
 
 export default function Navigation() {
