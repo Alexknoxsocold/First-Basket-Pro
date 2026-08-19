@@ -68,10 +68,16 @@ function App() {
         <AuthProvider>
           <TooltipProvider>
             {!splashDone && <SplashScreen onDone={() => setSplashDone(true)} />}
+            <a
+              href="#main-content"
+              className="fixed left-3 top-3 z-[100] -translate-y-20 rounded-md bg-background px-3 py-2 text-sm font-semibold shadow-lg ring-2 ring-ring transition-transform focus:translate-y-0"
+            >
+              Skip to main content
+            </a>
             <div className="min-h-screen bg-background flex flex-col">
               <Header />
               <Navigation />
-              <main id="main-content" className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-4 md:px-6 lg:px-8 py-4 sm:py-6 lg:py-8">
+              <main id="main-content" tabIndex={-1} className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-4 md:px-6 lg:px-8 py-4 sm:py-6 lg:py-8 focus:outline-none">
                 <Router />
               </main>
               <footer className="border-t bg-card mt-6 sm:mt-8">
