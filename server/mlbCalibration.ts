@@ -155,22 +155,9 @@ export async function recordPredictionSnapshot(response: LedgerResponse): Promis
 }
 
 type BackfillGame = LedgerGame;
-function normalizeBackfillOutcome(game: BackfillGame): "NRFI" | "YRFI" | null { return normalizeOutcome(game); }
-export async function backfillWalkForward(days: number, fetchForDate: (date: string) => Promise<{ date: string; games: Array<BackfillGame> }>): Promise<{ datesProcessed: number; predictionsWritten: number; gamesGraded: number; retrospectiveSnapshots: number }> {
-  const safeDays = Math.min(Math.max(Math.round(days), 1), 30); const dates: string[] = []; const today = getTodayET(); for (let i = safeDays; i >= 1; i--) dates.push(addDays(today, -i));
-  let predictionsWritten = 0; let gamesGraded = 0; let retrospectiveSnapshots = 0;
-  for (const date of dates) {
-    let response: { date: string; games: Array<BackfillGame> }; try { response = await fetchForDate(date); } catch (error) { console.warn(`[MLB Calibration] Backfill failed for ${date}:`, error); continue; }
-    for (const game of response.games ?? []) {
-      const gameId = String(game.gameId ?? game.id ?? "").trim(); const recommendation = game.recommendation; const rawProbability = game.probability ?? (typeof game.nrfiProbability === "number" ? (recommendation === "YRFI" ? 1 - game.nrfiProbability / 100 : game.nrfiProbability / 100) : NaN);
-      if (!gameId || (recommendation !== "NRFI" && recommendation !== "YRFI" && recommendation !== "NO_PLAY") || !Number.isFinite(rawProbability)) continue;
-      const outcome = normalizeBackfillOutcome(game); if (outcome) gamesGraded++; const lockedAt = validDate(game.lockedAt ?? null); const gameStartAt = validDate(game.gameStartAt ?? game.date ?? null); const market = game.marketValue ?? null; const snapshotModelVersion = game.modelVersion?.trim() || "mlb-nrfi-walk-forward-v1";
-      await snapshotPrediction({ date: response.date || date, gameId, matchup: game.matchup || game.shortName || gameId, recommendation, probability: safeProbability(rawProbability), confidence: game.confidence ?? null, modelVersion: snapshotModelVersion, gameStartAt, lockedAt, outcome, firstInningScore: game.firstInningScore ?? null, marketValue: market });
-      predictionsWritten++; if (!lockedAt) retrospectiveSnapshots++;
-    }
-  }
-  return { datesProcessed: dates.length, predictionsWritten, gamesGraded, retrospectiveSnapshots };
+export async function backfillWalkForward(_days: number, _fetchForDate: (date: string) => Promise<{ date: string; games: Array<BackfillGame> }>): Promise<{ datesProcessed: number; predictionsWritten: number; gamesGraded: number; retrospectiveSnapshots: number; disabledReason?: string }> {
+  const disabledReason = "Disabled: retrospective walk-forward predictions are not allowed to write into the verified V4 evidence system until date-cutoff calibration is implemented.";
+  console.warn(`[MLB Calibration] ${disabledReason}`);
+  return { datesProcessed: 0, predictionsWritten: 0, gamesGraded: 0, retrospectiveSnapshots: 0, disabledReason };
 }
 export type { MlbMarketValue };
-function getTodayET(): string { const parts = new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date()); return `${parts.find(p => p.type === "year")?.value}-${parts.find(p => p.type === "month")?.value}-${parts.find(p => p.type === "day")?.value}`; }
-function addDays(dateISO: string, days: number): string { const d = new Date(`${dateISO}T12:00:00Z`); d.setUTCDate(d.getUTCDate() + days); return d.toISOString().slice(0, 10); }
