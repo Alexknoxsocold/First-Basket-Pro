@@ -1,11 +1,11 @@
 import type { Request, Response, NextFunction } from "express";
 import bcrypt from "bcrypt";
+import { randomBytes } from "crypto";
 import { storage } from "./storage";
 import type { User } from "@shared/schema";
 
 const SALT_ROUNDS = 12;
 
-// Extend Express Request and Session types
 declare global {
   namespace Express {
     interface Request {
@@ -21,27 +21,24 @@ declare module 'express-session' {
   }
 }
 
-// Hash a password with bcrypt
 export async function hashPassword(password: string): Promise<string> {
   return bcrypt.hash(password, SALT_ROUNDS);
 }
 
-// Verify a password against a hash
 export async function verifyPassword(password: string, hash: string): Promise<boolean> {
   return bcrypt.compare(password, hash);
 }
 
-// Auth middleware - attaches user to request if valid session exists
-export async function authMiddleware(req: Request, res: Response, next: NextFunction) {
-  if (!req.session?.userId) {
-    return next();
-  }
+function normalizeEmail(value: unknown): string {
+  return typeof value === "string" ? value.trim().toLowerCase() : "";
+}
 
+export async function authMiddleware(req: Request, res: Response, next: NextFunction) {
+  if (!req.session?.userId) return next();
   try {
     const user = await storage.getUserById(req.session.userId);
-    if (user) {
-      req.user = user;
-    }
+    if (user) req.user = user;
+    else req.session.userId = undefined;
     next();
   } catch (error) {
     console.error('[Auth] Middleware error:', error);
@@ -49,66 +46,33 @@ export async function authMiddleware(req: Request, res: Response, next: NextFunc
   }
 }
 
-// Require auth middleware - returns 401 if not authenticated
 export function requireAuth(req: Request, res: Response, next: NextFunction) {
-  if (!req.user) {
-    return res.status(401).json({ error: "Authentication required" });
-  }
+  if (!req.user) return res.status(401).json({ error: "Authentication required" });
   next();
 }
 
-// Require admin middleware - returns 403 if not admin-verified via password
 export function requireAdmin(req: Request, res: Response, next: NextFunction) {
-  if (!req.session?.isAdminVerified) {
-    return res.status(403).json({ error: "Admin access required" });
-  }
+  if (!req.session?.isAdminVerified) return res.status(403).json({ error: "Admin access required" });
   next();
 }
 
-// Auth route handlers
 export async function signup(req: Request, res: Response) {
   try {
-    const { email, password } = req.body;
-
-    // Validate input
-    if (!email || !password) {
-      return res.status(400).json({ error: "Email and password are required" });
-    }
-
-    // Validate email format
+    const email = normalizeEmail(req.body?.email);
+    const password = typeof req.body?.password === "string" ? req.body.password : "";
+    if (!email || !password) return res.status(400).json({ error: "Email and password are required" });
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      return res.status(400).json({ error: "Invalid email format" });
-    }
+    if (!emailRegex.test(email)) return res.status(400).json({ error: "Invalid email format" });
+    if (password.length < 8) return res.status(400).json({ error: "Password must be at least 8 characters" });
+    if (password.length > 256) return res.status(400).json({ error: "Password is too long" });
 
-    if (password.length < 8) {
-      return res.status(400).json({ error: "Password must be at least 8 characters" });
-    }
-
-    // Check if user already exists
     const existingUser = await storage.getUserByEmail(email);
-    if (existingUser) {
-      return res.status(409).json({ error: "Email already registered" });
-    }
+    if (existingUser) return res.status(409).json({ error: "Email already registered" });
 
-    // Hash password and create user
     const passwordHash = await hashPassword(password);
-    const user = await storage.createUser({
-      email,
-      passwordHash,
-      role: 'user'
-    });
-
-    // Store user ID in session and save before responding
+    const user = await storage.createUser({ email, passwordHash, role: 'user' });
     req.session.userId = user.id;
-    await new Promise<void>((resolve, reject) => {
-      req.session.save((err) => {
-        if (err) reject(err);
-        else resolve();
-      });
-    });
-
-    // Return user without password hash
+    await new Promise<void>((resolve, reject) => req.session.save(err => err ? reject(err) : resolve()));
     const { passwordHash: _, ...userWithoutPassword } = user;
     res.json({ user: userWithoutPassword });
   } catch (error) {
@@ -119,41 +83,22 @@ export async function signup(req: Request, res: Response) {
 
 export async function login(req: Request, res: Response) {
   try {
-    const { email, password } = req.body;
-
-    // Validate input
-    if (!email || !password) {
-      return res.status(400).json({ error: "Email and password are required" });
-    }
-
-    // Validate email format
+    const email = normalizeEmail(req.body?.email);
+    const password = typeof req.body?.password === "string" ? req.body.password : "";
+    if (!email || !password) return res.status(400).json({ error: "Email and password are required" });
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      return res.status(400).json({ error: "Invalid email format" });
-    }
+    if (!emailRegex.test(email)) return res.status(400).json({ error: "Invalid email or password" });
+    if (password.length > 256) return res.status(401).json({ error: "Invalid email or password" });
 
-    // Find user
     const user = await storage.getUserByEmail(email);
-    if (!user) {
-      return res.status(401).json({ error: "Invalid email or password" });
-    }
-
-    // Verify password
+    if (!user) return res.status(401).json({ error: "Invalid email or password" });
     const isValid = await verifyPassword(password, user.passwordHash);
-    if (!isValid) {
-      return res.status(401).json({ error: "Invalid email or password" });
-    }
+    if (!isValid) return res.status(401).json({ error: "Invalid email or password" });
 
-    // Store user ID in session and save before responding
+    // Regenerate the session on authentication to prevent session fixation.
+    await new Promise<void>((resolve, reject) => req.session.regenerate(err => err ? reject(err) : resolve()));
     req.session.userId = user.id;
-    await new Promise<void>((resolve, reject) => {
-      req.session.save((err) => {
-        if (err) reject(err);
-        else resolve();
-      });
-    });
-
-    // Return user without password hash
+    await new Promise<void>((resolve, reject) => req.session.save(err => err ? reject(err) : resolve()));
     const { passwordHash: _, ...userWithoutPassword } = user;
     res.json({ user: userWithoutPassword });
   } catch (error) {
@@ -164,12 +109,12 @@ export async function login(req: Request, res: Response) {
 
 export async function logout(req: Request, res: Response) {
   try {
-    req.session.destroy((err) => {
+    req.session.destroy(err => {
       if (err) {
         console.error('[Auth] Logout error:', err);
         return res.status(500).json({ error: "Failed to log out" });
       }
-      res.clearCookie('connect.sid');
+      res.clearCookie('connect.sid', { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production' });
       res.json({ message: "Logged out successfully" });
     });
   } catch (error) {
@@ -179,57 +124,36 @@ export async function logout(req: Request, res: Response) {
 }
 
 export async function getSession(req: Request, res: Response) {
-  if (!req.user) {
-    return res.status(401).json({ user: null });
-  }
-
-  // Return user without password hash
+  if (!req.user) return res.status(401).json({ user: null });
   const { passwordHash: _, ...userWithoutPassword } = req.user;
   res.json({ user: userWithoutPassword });
 }
 
 export async function inviteAccess(req: Request, res: Response) {
   try {
-    const { code } = req.body;
+    const code = typeof req.body?.code === "string" ? req.body.code : "";
+    if (!code) return res.status(400).json({ error: "Invite code is required" });
 
-    // Validate input
-    if (!code) {
-      return res.status(400).json({ error: "Invite code is required" });
+    // Never fall back to a public/default invite code. A missing production
+    // secret disables invite access instead of silently opening the gate.
+    const validInviteCode = process.env.INVITE_CODE?.trim();
+    if (!validInviteCode) {
+      console.error('[Auth] INVITE_CODE is not configured; invite access disabled.');
+      return res.status(503).json({ error: "Invite access is temporarily unavailable" });
     }
+    if (code.length > 256 || code !== validInviteCode) return res.status(401).json({ error: "Invalid invite code" });
 
-    // Check invite code against environment variable
-    const validInviteCode = process.env.INVITE_CODE || "FIRSTBASKET2024";
-    
-    if (code !== validInviteCode) {
-      return res.status(401).json({ error: "Invalid invite code" });
-    }
-
-    // Create a guest user if one doesn't exist
     const guestEmail = "guest@firstbasket.pro";
     let user = await storage.getUserByEmail(guestEmail);
-    
     if (!user) {
-      // Create guest user with a secure random password (they won't use it)
-      const guestPassword = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+      const guestPassword = randomBytes(32).toString("base64url");
       const passwordHash = await hashPassword(guestPassword);
-      
-      user = await storage.createUser({
-        email: guestEmail,
-        passwordHash,
-        role: 'guest'
-      });
+      user = await storage.createUser({ email: guestEmail, passwordHash, role: 'guest' });
     }
 
-    // Store user ID in session and save before responding
+    await new Promise<void>((resolve, reject) => req.session.regenerate(err => err ? reject(err) : resolve()));
     req.session.userId = user.id;
-    await new Promise<void>((resolve, reject) => {
-      req.session.save((err) => {
-        if (err) reject(err);
-        else resolve();
-      });
-    });
-
-    // Return user without password hash
+    await new Promise<void>((resolve, reject) => req.session.save(err => err ? reject(err) : resolve()));
     const { passwordHash: _, ...userWithoutPassword } = user;
     res.json({ user: userWithoutPassword });
   } catch (error) {
