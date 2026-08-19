@@ -1,4 +1,5 @@
 import { calibrateRecommendedProbability } from "./mlbCalibration.js";
+import { getMlbAdaptiveDecisionPolicy, type MlbAdaptiveDecisionPolicy } from "./mlbAdaptiveDecision.js";
 import { fetchNrfiData, type NrfiGame, type NrfiResponse, type NrfiWindowResponse } from "./mlbNrfi.js";
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
@@ -21,21 +22,30 @@ function buildDecisionAudit(game: NrfiGame): DecisionAudit {
   return { v3Probability, v4Probability, agreement, separation: Math.abs(v3Probability - 0.5) };
 }
 
+function adaptiveLeanThreshold(probability: number, policy: MlbAdaptiveDecisionPolicy): number {
+  return probability >= 0.5 ? policy.nrfiLeanThreshold : policy.yrfiLeanThreshold;
+}
+
 function classifyLivePlay(
   probability: number,
   confidence: NrfiGame["confidence"],
   sampleSize: number,
   agreement: DecisionAudit["agreement"],
+  policy: MlbAdaptiveDecisionPolicy,
 ): PlayStatus {
   const edge = Math.abs(probability - 0.5);
+  const learnedLeanThreshold = adaptiveLeanThreshold(probability, policy);
+
+  // Low-quality inputs remain conservative. Correct NO_PLAY history is never
+  // allowed to override missing evidence or V3/V4 disagreement.
   if (sampleSize < 3 || confidence === "Low") return edge >= 0.04 && agreement === "strong" ? "LEAN" : "NO_PLAY";
   if (agreement === "mixed") {
     if (edge >= 0.07 && confidence === "High" && sampleSize >= 8) return "LEAN";
-    return edge >= 0.035 ? "LEAN" : "NO_PLAY";
+    return edge >= policy.defaultLeanThreshold ? "LEAN" : "NO_PLAY";
   }
   if (edge >= 0.10 && confidence === "High" && sampleSize >= 10 && agreement === "strong") return "BEST_PLAY";
   if (edge >= 0.06 && confidence !== "Low" && sampleSize >= 5 && agreement === "strong") return "PLAY";
-  if (edge >= 0.035) return "LEAN";
+  if (edge >= learnedLeanThreshold) return "LEAN";
   return "NO_PLAY";
 }
 
@@ -45,14 +55,19 @@ function decisionGate(
   confidence: NrfiGame["confidence"],
   sampleSize: number,
   agreement: DecisionAudit["agreement"],
+  policy: MlbAdaptiveDecisionPolicy,
 ): string {
   const separationPts = Math.abs(probability - 0.5) * 100;
   const sep = separationPts.toFixed(1);
+  const threshold = adaptiveLeanThreshold(probability, policy);
+  const adaptiveActive = threshold < policy.defaultLeanThreshold;
+  const thresholdPts = (threshold * 100).toFixed(1);
   if (status === "BEST_PLAY") return `Decision gate: BEST PLAY — ${sep}-point separation, High confidence, ${sampleSize}-game sample and strong V3/V4 agreement clear every promotion gate.`;
   if (status === "PLAY") return `Decision gate: PLAY — ${sep}-point separation with ${confidence} confidence, ${sampleSize}-game sample and strong V3/V4 agreement clears the 6-point play threshold.`;
   if (status === "LEAN") {
     if (confidence === "Low" || sampleSize < 3) return `Decision gate: LEAN — direction is meaningful (${sep} points), but ${confidence === "Low" ? "data confidence is Low" : `the sample is only ${sampleSize} games`}, so promotion to PLAY is blocked.`;
     if (agreement === "mixed") return `Decision gate: LEAN — ${sep}-point separation, but V3 and V4 signals are mixed, so promotion is intentionally capped.`;
+    if (adaptiveActive && separationPts < 3.5) return `Decision gate: LEAN — ${sep}-point separation clears the learned ${thresholdPts}-point lean gate. This small adjustment is backed by 30+ graded V4 NO PLAY examples for this side; PLAY thresholds are unchanged.`;
     if (separationPts < 6) return `Decision gate: LEAN — ${sep}-point separation clears the lean threshold but remains below the 6-point PLAY threshold.`;
     return `Decision gate: LEAN — probability is separated by ${sep} points, but evidence quality does not clear all PLAY requirements.`;
   }
@@ -60,10 +75,10 @@ function decisionGate(
   if (sampleSize < 3) return `Decision gate: NO PLAY — only ${sampleSize} verified recent games are available, below the minimum evidence requirement.`;
   if (agreement === "mixed" && separationPts < 3.5) return `Decision gate: NO PLAY — V3/V4 signals are mixed and ${sep}-point separation is below the 3.5-point lean threshold.`;
   if (agreement === "mixed") return `Decision gate: NO PLAY — V3/V4 disagreement prevents promotion at the current ${sep}-point separation.`;
-  return `Decision gate: NO PLAY — ${sep}-point separation is below the 3.5-point minimum needed even for a lean.`;
+  return `Decision gate: NO PLAY — ${sep}-point separation is below the ${thresholdPts}-point lean threshold${adaptiveActive ? " after conservative NO PLAY learning" : ""}.`;
 }
 
-function applyLiveV4(game: NrfiGame): NrfiGame {
+function applyLiveV4(game: NrfiGame, policy: MlbAdaptiveDecisionPolicy): NrfiGame {
   const v4 = game.v4Shadow;
   if (!v4) return game;
   const audit = buildDecisionAudit(game);
@@ -76,27 +91,28 @@ function applyLiveV4(game: NrfiGame): NrfiGame {
   const recommendation: NrfiGame["recommendation"] = nrfiProbability >= 50 ? "NRFI" : "YRFI";
   const modelEdge = Math.round(Math.abs(nrfiProbability - 50) * 10) / 10;
   const confidence: NrfiGame["confidence"] = v4.uncertainty.label === "Low" ? "Low" : game.confidence;
-  const playStatus = classifyLivePlay(nrfiProbability / 100, confidence, game.sampleSize, audit.agreement);
+  const playStatus = classifyLivePlay(nrfiProbability / 100, confidence, game.sampleSize, audit.agreement, policy);
   const factors = [
-    ...(game.factors ?? []).filter(f => !f.startsWith("Model v4 live") && !f.startsWith("Decision agreement:") && !f.startsWith("Decision gate:")),
+    ...(game.factors ?? []).filter(f => !f.startsWith("Model v4 live") && !f.startsWith("Decision agreement:") && !f.startsWith("Decision gate:") && !f.startsWith("NO PLAY learning:")),
     `Model v4 live: ${(v4Weight * 100).toFixed(0)}% V4 blend, ${(quality * 100).toFixed(0)}% data-quality score${v4.uncertainty.penalties.length ? ` (${v4.uncertainty.penalties.join(", ")})` : ""}`,
     `Decision agreement: ${audit.agreement === "strong" ? "V3 and V4 agree on direction" : audit.agreement === "mixed" ? "V3/V4 signals are mixed; promotion is capped" : "V4 comparison unavailable"}`,
-    decisionGate(playStatus, nrfiProbability / 100, confidence, game.sampleSize, audit.agreement),
+    `NO PLAY learning: NRFI lean gate ${(policy.nrfiLeanThreshold * 100).toFixed(1)} pts, YRFI lean gate ${(policy.yrfiLeanThreshold * 100).toFixed(1)} pts; PLAY remains 6.0 pts.`,
+    decisionGate(playStatus, nrfiProbability / 100, confidence, game.sampleSize, audit.agreement, policy),
   ];
   return { ...game, nrfiProbability, recommendation, modelEdge, confidence, playStatus, factors };
 }
 
-async function calibrateGame(game: NrfiGame): Promise<NrfiGame> {
-  const transformed = applyLiveV4(game);
+async function calibrateGame(game: NrfiGame, policy: MlbAdaptiveDecisionPolicy): Promise<NrfiGame> {
+  const transformed = applyLiveV4(game, policy);
   const calibrated = clamp(await calibrateRecommendedProbability(transformed.nrfiProbability / 100), 0.35, 0.65);
   const nrfiProbability = Math.round(calibrated * 1000) / 10;
   const recommendation: NrfiGame["recommendation"] = nrfiProbability >= 50 ? "NRFI" : "YRFI";
   const modelEdge = Math.round(Math.abs(nrfiProbability - 50) * 10) / 10;
   const agreement = buildDecisionAudit(game).agreement;
-  const playStatus = classifyLivePlay(nrfiProbability / 100, transformed.confidence, transformed.sampleSize, agreement);
+  const playStatus = classifyLivePlay(nrfiProbability / 100, transformed.confidence, transformed.sampleSize, agreement, policy);
   const factors = [
     ...(transformed.factors ?? []).filter(f => !f.startsWith("Decision gate:")),
-    decisionGate(playStatus, nrfiProbability / 100, transformed.confidence, transformed.sampleSize, agreement),
+    decisionGate(playStatus, nrfiProbability / 100, transformed.confidence, transformed.sampleSize, agreement, policy),
   ];
   return { ...transformed, nrfiProbability, recommendation, modelEdge, playStatus, factors };
 }
@@ -106,9 +122,15 @@ function rankTopPick(games: NrfiGame[]): NrfiGame | null {
 }
 
 export async function fetchNrfiDataV4Live(date?: string): Promise<NrfiResponse> {
-  const base = await fetchNrfiData(date);
-  const games = await Promise.all(base.games.map(calibrateGame));
-  return { ...base, games, averageNrfiProbability: games.length ? Math.round(games.reduce((sum, game) => sum + game.nrfiProbability, 0) / games.length * 10) / 10 : null, topPick: rankTopPick(games), methodology: "V4 live blend: calibrated V3 baseline + uncertainty-adjusted V4 first-inning signal. V4 influence scales with data quality, weak inputs shrink toward neutral, model disagreement caps promotion, and historical calibration is the final probability guardrail." };
+  const [base, policy] = await Promise.all([fetchNrfiData(date), getMlbAdaptiveDecisionPolicy(90)]);
+  const games = await Promise.all(base.games.map(game => calibrateGame(game, policy)));
+  return {
+    ...base,
+    games,
+    averageNrfiProbability: games.length ? Math.round(games.reduce((sum, game) => sum + game.nrfiProbability, 0) / games.length * 10) / 10 : null,
+    topPick: rankTopPick(games),
+    methodology: "V4 live blend: calibrated V3 baseline + uncertainty-adjusted V4 first-inning signal. V4 influence scales with data quality, weak inputs shrink toward neutral, and model disagreement caps promotion. Correct historical V4 NO PLAY calls may lower the matching side's LEAN gate from 3.5 to 3.0 probability points only after 30+ graded examples with a 55%+ hit rate and a 2-point positive calibration gap. PLAY and BEST PLAY gates never auto-relax.",
+  };
 }
 
 export async function fetchUpcomingNrfiDataV4Live(days = 3): Promise<NrfiWindowResponse> {
