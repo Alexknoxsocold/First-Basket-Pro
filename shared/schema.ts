@@ -95,6 +95,11 @@ export const fbTracking = pgTable("fb_tracking", {
 }, (table) => ({
   playerTeamIdx: index("fb_tracking_player_team_idx").on(table.playerName, table.team),
   seasonIdx: index("fb_tracking_season_idx").on(table.season),
+  playerTeamSeasonUnique: uniqueIndex("fb_tracking_player_team_season_unique").on(
+    sql`lower(${table.playerName})`,
+    sql`upper(${table.team})`,
+    table.season,
+  ),
 }));
 
 export const fbProcessedGames = pgTable("fb_processed_games", {
