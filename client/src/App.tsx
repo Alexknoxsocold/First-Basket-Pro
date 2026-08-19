@@ -14,6 +14,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 const NBA = lazy(() => import("@/pages/NBA"));
 const WNBA = lazy(() => import("@/pages/WNBA"));
+const NFL = lazy(() => import("@/pages/NFL"));
 const OpeningTips = lazy(() => import("@/pages/OpeningTips"));
 const PlayerStats = lazy(() => import("@/pages/PlayerStats"));
 const TeamStats = lazy(() => import("@/pages/TeamStats"));
@@ -48,6 +49,7 @@ function Router() {
         <Route path="/invite" component={Invite} />
         <Route path="/" component={NBA} />
         <Route path="/wnba" component={WNBA} />
+        <Route path="/nfl" component={NFL} />
         <Route path="/opening-tips" component={OpeningTips} />
         <Route path="/player-stats" component={PlayerStats} />
         <Route path="/team-stats" component={TeamStats} />
@@ -72,33 +74,12 @@ function App() {
         <AuthProvider>
           <TooltipProvider>
             {!splashDone && <SplashScreen onDone={() => setSplashDone(true)} />}
-            <a
-              href="#main-content"
-              className="fixed left-3 top-3 z-[100] -translate-y-20 rounded-md bg-background px-3 py-2 text-sm font-semibold shadow-lg ring-2 ring-ring transition-transform focus:translate-y-0"
-            >
-              Skip to main content
-            </a>
+            <a href="#main-content" className="fixed left-3 top-3 z-[100] -translate-y-20 rounded-md bg-background px-3 py-2 text-sm font-semibold shadow-lg ring-2 ring-ring transition-transform focus:translate-y-0">Skip to main content</a>
             <div className="min-h-screen bg-background flex flex-col">
               <Header />
               <Navigation />
-              <main id="main-content" tabIndex={-1} className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-4 md:px-6 lg:px-8 py-4 sm:py-6 lg:py-8 focus:outline-none">
-                <Router />
-              </main>
-              <footer className="border-t bg-card mt-6 sm:mt-8">
-                <div className="max-w-7xl mx-auto px-4 md:px-6 lg:px-8 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                  <span className="text-xs text-muted-foreground">
-                    © {new Date().getFullYear()} PreziBaskets. For entertainment purposes only.
-                  </span>
-                  <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-                    <Link href="/legal?tab=terms" className="text-xs text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm transition-colors">
-                      Terms of Service
-                    </Link>
-                    <Link href="/legal?tab=privacy" className="text-xs text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm transition-colors">
-                      Privacy Policy
-                    </Link>
-                  </div>
-                </div>
-              </footer>
+              <main id="main-content" tabIndex={-1} className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-4 md:px-6 lg:px-8 py-4 sm:py-6 lg:py-8 focus:outline-none"><Router /></main>
+              <footer className="border-t bg-card mt-6 sm:mt-8"><div className="max-w-7xl mx-auto px-4 md:px-6 lg:px-8 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"><span className="text-xs text-muted-foreground">© {new Date().getFullYear()} PreziBaskets. For entertainment purposes only.</span><div className="flex flex-wrap items-center gap-x-4 gap-y-2"><Link href="/legal?tab=terms" className="text-xs text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm transition-colors">Terms of Service</Link><Link href="/legal?tab=privacy" className="text-xs text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm transition-colors">Privacy Policy</Link></div></div></footer>
             </div>
             <Toaster />
           </TooltipProvider>
