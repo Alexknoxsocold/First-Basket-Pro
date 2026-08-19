@@ -1,5 +1,5 @@
 import { Switch, Route, Link } from "wouter";
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { queryClient } from "./lib/queryClient";
 import "./nrfi-premium.css";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -10,37 +10,52 @@ import AppErrorBoundary from "@/components/AppErrorBoundary";
 import Header from "@/components/Header";
 import Navigation from "@/components/Navigation";
 import SplashScreen from "@/components/SplashScreen";
-import NBA from "@/pages/NBA";
-import OpeningTips from "@/pages/OpeningTips";
-import PlayerStats from "@/pages/PlayerStats";
-import TeamStats from "@/pages/TeamStats";
-import Admin from "@/pages/Admin";
-import AdminMlbDiagnostics from "@/pages/AdminMlbDiagnostics";
-import Login from "@/pages/Login";
-import Signup from "@/pages/Signup";
-import Invite from "@/pages/Invite";
-import NRFIPro from "@/pages/NRFIPro";
-import NRFICalibration from "@/pages/NRFICalibration";
-import Legal from "@/pages/Legal";
-import NotFound from "@/pages/not-found";
+import { Skeleton } from "@/components/ui/skeleton";
+
+const NBA = lazy(() => import("@/pages/NBA"));
+const OpeningTips = lazy(() => import("@/pages/OpeningTips"));
+const PlayerStats = lazy(() => import("@/pages/PlayerStats"));
+const TeamStats = lazy(() => import("@/pages/TeamStats"));
+const Admin = lazy(() => import("@/pages/Admin"));
+const AdminMlbDiagnostics = lazy(() => import("@/pages/AdminMlbDiagnostics"));
+const Login = lazy(() => import("@/pages/Login"));
+const Signup = lazy(() => import("@/pages/Signup"));
+const Invite = lazy(() => import("@/pages/Invite"));
+const NRFIPro = lazy(() => import("@/pages/NRFIPro"));
+const NRFICalibration = lazy(() => import("@/pages/NRFICalibration"));
+const Legal = lazy(() => import("@/pages/Legal"));
+const NotFound = lazy(() => import("@/pages/not-found"));
+
+function RouteFallback() {
+  return (
+    <div className="space-y-4" role="status" aria-live="polite" aria-label="Loading page">
+      <Skeleton className="h-8 w-56" />
+      <Skeleton className="h-24 w-full" />
+      <Skeleton className="h-64 w-full" />
+      <span className="sr-only">Loading page…</span>
+    </div>
+  );
+}
 
 function Router() {
   return (
-    <Switch>
-      <Route path="/signup" component={Signup} />
-      <Route path="/login" component={Login} />
-      <Route path="/invite" component={Invite} />
-      <Route path="/" component={NBA} />
-      <Route path="/opening-tips" component={OpeningTips} />
-      <Route path="/player-stats" component={PlayerStats} />
-      <Route path="/team-stats" component={TeamStats} />
-      <Route path="/mlb" component={NRFIPro} />
-      <Route path="/mlb/calibration" component={NRFICalibration} />
-      <Route path="/legal" component={Legal} />
-      <Route path="/admin/mlb-diagnostics" component={AdminMlbDiagnostics} />
-      <Route path="/admin" component={Admin} />
-      <Route component={NotFound} />
-    </Switch>
+    <Suspense fallback={<RouteFallback />}>
+      <Switch>
+        <Route path="/signup" component={Signup} />
+        <Route path="/login" component={Login} />
+        <Route path="/invite" component={Invite} />
+        <Route path="/" component={NBA} />
+        <Route path="/opening-tips" component={OpeningTips} />
+        <Route path="/player-stats" component={PlayerStats} />
+        <Route path="/team-stats" component={TeamStats} />
+        <Route path="/mlb" component={NRFIPro} />
+        <Route path="/mlb/calibration" component={NRFICalibration} />
+        <Route path="/legal" component={Legal} />
+        <Route path="/admin/mlb-diagnostics" component={AdminMlbDiagnostics} />
+        <Route path="/admin" component={Admin} />
+        <Route component={NotFound} />
+      </Switch>
+    </Suspense>
   );
 }
 
