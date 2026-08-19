@@ -100,6 +100,7 @@ export async function getMlbDecisionContextCoverage(days = 30): Promise<{ snapsh
     LEFT JOIN mlb_prediction_context c
       ON c.prediction_date=s.prediction_date AND c.game_id=s.game_id AND c.model_version=s.model_version
     WHERE s.prediction_date >= to_char(current_date - ($1::int - 1), 'YYYY-MM-DD')
+      AND s.model_version = 'v4-live'
   `, [safeDays]);
   const snapshots = Number(result.rows[0]?.snapshots ?? 0);
   const contexts = Number(result.rows[0]?.contexts ?? 0);
