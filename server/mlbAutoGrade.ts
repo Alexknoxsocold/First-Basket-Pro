@@ -4,9 +4,29 @@ import { fetchMlbRfiMarkets } from "./mlbOdds.js";
 
 const inflight = new Map<string, Promise<{ date: string; games: number }>>();
 let timer: ReturnType<typeof setInterval> | null = null;
+let lastRunAt: string | null = null;
+let lastSuccessAt: string | null = null;
+let lastError: string | null = null;
+let lastResult: { date: string; games: number } | null = null;
 
 function requestKey(date?: string): string {
   return date ?? "today";
+}
+
+function addDays(dateISO: string, days: number): string {
+  const d = new Date(`${dateISO}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+function todayEt(): string {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  return `${parts.find(p => p.type === "year")?.value}-${parts.find(p => p.type === "month")?.value}-${parts.find(p => p.type === "day")?.value}`;
 }
 
 /**
@@ -18,26 +38,69 @@ export async function refreshAndGradeMlbPredictions(date?: string): Promise<void
   await runMlbAutoGrade(date);
 }
 
+export function getMlbAutoGradeStatus() {
+  return {
+    running: inflight.size > 0,
+    inFlightKeys: [...inflight.keys()],
+    lastRunAt,
+    lastSuccessAt,
+    lastError,
+    lastResult,
+    intervalMs: 5 * 60 * 1000,
+  };
+}
+
 export function runMlbAutoGrade(date?: string): Promise<{ date: string; games: number }> {
   const key = requestKey(date);
   const existing = inflight.get(key);
   if (existing) return existing;
 
   const request = (async () => {
-    const response = await fetchNrfiDataV4Live(date);
+    lastRunAt = new Date().toISOString();
     try {
-      await fetchMlbRfiMarkets();
+      const response = await fetchNrfiDataV4Live(date);
+      try {
+        await fetchMlbRfiMarkets();
+      } catch (error) {
+        console.warn("[MLB AutoGrade] Verified market warm failed; continuing model-only:", error);
+      }
+      await persistAndGradeNrfiGames(response.games, "v4-live");
+      const result = { date: response.date, games: response.games.length };
+      lastSuccessAt = new Date().toISOString();
+      lastError = null;
+      lastResult = result;
+      return result;
     } catch (error) {
-      console.warn("[MLB AutoGrade] Verified market warm failed; continuing model-only:", error);
+      lastError = error instanceof Error ? error.message : String(error);
+      throw error;
     }
-    await persistAndGradeNrfiGames(response.games, "v4-live");
-    return { date: response.date, games: response.games.length };
   })();
 
   inflight.set(key, request);
   return request.finally(() => {
     if (inflight.get(key) === request) inflight.delete(key);
   });
+}
+
+/**
+ * Reconcile recent completed scoreboards against predictions that were already
+ * captured before first pitch. This never retroactively creates a verified
+ * pregame lock: completed games without a real lock remain excluded from the
+ * verified historical record.
+ */
+export async function reconcileRecentMlbResults(daysBack = 2): Promise<Array<{ date: string; games: number }>> {
+  const safeDays = Math.min(Math.max(Math.round(daysBack), 0), 7);
+  const today = todayEt();
+  const dates = Array.from({ length: safeDays + 1 }, (_, index) => addDays(today, index - safeDays));
+  const results: Array<{ date: string; games: number }> = [];
+  for (const date of dates) {
+    try {
+      results.push(await runMlbAutoGrade(date));
+    } catch (error) {
+      console.error(`[MLB AutoGrade] Reconciliation failed for ${date}:`, error);
+    }
+  }
+  return results;
 }
 
 /**
@@ -56,6 +119,14 @@ export function startMlbAutoGradeScheduler(intervalMs = 5 * 60 * 1000): () => vo
 
   timer = setInterval(run, intervalMs);
   if (typeof timer.unref === "function") timer.unref();
+
+  // On startup, reconcile today plus the prior two days. This grades genuine
+  // pregame locks that may have missed a prior scheduler window after a restart,
+  // without fabricating historical locks for already-completed games.
+  void reconcileRecentMlbResults(2)
+    .then(results => console.log(`[MLB AutoGrade] Startup reconciliation checked ${results.length} day(s).`))
+    .catch(error => console.error("[MLB AutoGrade] Startup reconciliation failed:", error));
+
   run();
   console.log(`[MLB AutoGrade] V4-live scheduler started (${Math.round(intervalMs / 1000)}s interval).`);
   return () => stopMlbAutoGradeScheduler();
