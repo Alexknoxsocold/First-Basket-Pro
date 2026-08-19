@@ -153,6 +153,17 @@ export function registerCalibrationSourceRoute(app: Express): void {
     }
   });
 
+  // The legacy replay endpoint calibrated historical dates against the current
+  // ledger, which can leak post-date outcomes into a supposed walk-forward run.
+  // Disable it until calibration is explicitly cutoff-date aware. Existing
+  // replay rows remain research-only and are never mixed into live performance.
+  app.post("/api/admin/mlb/nrfi/backtest", (_req, res) => {
+    return res.status(409).json({
+      error: "Historical walk-forward backtest is temporarily disabled",
+      reason: "Calibration must be restricted to outcomes available before each target date before replay results are considered leakage-safe.",
+    });
+  });
+
   app.get("/api/mlb/nrfi/calibration/sources", async (req, res) => {
     try {
       const days = validDays(req.query.days, 30);
