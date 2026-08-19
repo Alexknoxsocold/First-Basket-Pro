@@ -109,6 +109,37 @@ export async function incrementCurrentSeasonFirstBasket(
   await upsertFirstBasketPlayerSeason(playerName, team, 1, 1, season);
 }
 
+export async function isVerifiedFirstBasketGameProcessed(espnGameId: string): Promise<boolean> {
+  if (!pool) return false;
+  const result = await pool.query(
+    `SELECT 1
+       FROM fb_processed_games
+      WHERE espn_game_id = $1
+        AND first_scorer IS NOT NULL
+        AND first_scorer_team IS NOT NULL
+      LIMIT 1`,
+    [espnGameId],
+  );
+  return result.rows.length > 0;
+}
+
+export async function markVerifiedFirstBasketGame(
+  espnGameId: string,
+  playerName: string,
+  team: string,
+): Promise<void> {
+  if (!pool) return;
+  await pool.query(
+    `INSERT INTO fb_processed_games (espn_game_id, first_scorer, first_scorer_team, processed_at)
+     VALUES ($1, $2, $3, $4)
+     ON CONFLICT (espn_game_id)
+     DO UPDATE SET first_scorer = EXCLUDED.first_scorer,
+                   first_scorer_team = EXCLUDED.first_scorer_team,
+                   processed_at = EXCLUDED.processed_at`,
+    [espnGameId, playerName, team, new Date().toISOString()],
+  );
+}
+
 export function currentAndPreviousSeasonLabels(date = new Date()): { current: string; previous: string } {
   return {
     current: nbaSeasonForDate(date).label,
