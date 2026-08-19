@@ -1,8 +1,7 @@
 import type { Express } from 'express';
 import cron from 'node-cron';
 import { requireAdmin } from './auth';
-import { ensureWnbaSchema, getWnbaDiagnostics, getWnbaSlate, lockWnbaPredictions, runWnbaTracker } from './wnbaFirstBasket';
-import { backfillWnbaHistory } from './wnbaBackfill';
+import { ensureWnbaSchema, getWnbaDiagnostics, getWnbaSlate, lockWnbaPredictions } from './wnbaFirstBasket';
 import { getWnbaHistory } from './wnbaHistory';
 
 let started = false;
@@ -22,7 +21,7 @@ export function registerWnbaFeature(app: Express): void {
 
   app.get('/api/wnba/history', async (_req, res) => {
     try {
-      res.setHeader('Cache-Control', 'public, max-age=120, stale-while-revalidate=600');
+      res.setHeader('Cache-Control', 'no-store');
       res.json(await getWnbaHistory());
     } catch (error) {
       console.error('[WNBA] History error:', error);
@@ -32,29 +31,26 @@ export function registerWnbaFeature(app: Express): void {
 
   app.post('/api/admin/wnba/run', requireAdmin, async (_req, res) => {
     try {
-      const [locks, tracking] = await Promise.all([lockWnbaPredictions(), runWnbaTracker()]);
-      res.json({ locks, tracking });
+      const locks = await lockWnbaPredictions();
+      res.json({ locks, tracking: { paused: true, reason: 'WNBA result grading is quarantined pending chronology verification.' } });
     } catch (error) {
-      console.error('[WNBA] Manual run failed:', error);
-      res.status(500).json({ error: 'WNBA tracker failed' });
+      console.error('[WNBA] Manual lock run failed:', error);
+      res.status(500).json({ error: 'WNBA lock pass failed' });
     }
   });
 
-  app.post('/api/admin/wnba/backfill', requireAdmin, async (req, res) => {
-    try {
-      const days = Math.max(1, Math.min(14, Number(req.body?.days ?? 7)));
-      const maxGames = Math.max(1, Math.min(40, Number(req.body?.maxGames ?? 24)));
-      res.json(await backfillWnbaHistory(days, maxGames));
-    } catch (error) {
-      console.error('[WNBA] Backfill failed:', error);
-      res.status(500).json({ error: 'WNBA history backfill failed' });
-    }
+  app.post('/api/admin/wnba/backfill', requireAdmin, (_req, res) => {
+    return res.status(423).json({
+      error: 'WNBA history backfill is temporarily paused',
+      detail: 'Historical rows are quarantined while first-made-field-goal chronology is revalidated.',
+    });
   });
 
   app.get('/api/admin/wnba/diagnostics', requireAdmin, async (req, res) => {
     try {
       const days = typeof req.query.days === 'string' ? Number(req.query.days) : 30;
-      res.json(await getWnbaDiagnostics(Number.isFinite(days) ? days : 30));
+      const diagnostics = await getWnbaDiagnostics(Number.isFinite(days) ? days : 30);
+      res.json({ ...diagnostics, historyStatus: 'quarantined', trackerStatus: 'paused' });
     } catch (error) {
       console.error('[WNBA] Diagnostics failed:', error);
       res.status(500).json({ error: 'Unable to load WNBA diagnostics' });
@@ -64,6 +60,8 @@ export function registerWnbaFeature(app: Express): void {
   if (started) return;
   started = true;
 
+  // Keep pregame lock checks running. Historical/result grading stays paused
+  // until the first-field-goal verifier has been independently validated.
   cron.schedule('*/15 10-23 * * *', async () => {
     try {
       const result = await lockWnbaPredictions();
@@ -71,29 +69,9 @@ export function registerWnbaFeature(app: Express): void {
     } catch (error) { console.warn('[WNBA] Lock pass failed:', error); }
   }, { timezone: 'America/New_York' });
 
-  cron.schedule('*/30 12-23 * * *', async () => {
-    try {
-      const result = await runWnbaTracker();
-      if (result.processed || result.unresolved) console.log(`[WNBA] Tracker: ${result.processed} processed, ${result.unresolved} unresolved.`);
-    } catch (error) { console.warn('[WNBA] Tracker failed:', error); }
-  }, { timezone: 'America/New_York' });
-  cron.schedule('*/30 0-3 * * *', async () => {
-    try {
-      const result = await runWnbaTracker();
-      if (result.processed || result.unresolved) console.log(`[WNBA] Late tracker: ${result.processed} processed, ${result.unresolved} unresolved.`);
-    } catch (error) { console.warn('[WNBA] Late tracker failed:', error); }
-  }, { timezone: 'America/New_York' });
+  void getWnbaSlate(true)
+    .then(slate => console.log(`[WNBA] Warmed ${slate.games.length} games across ${slate.teams.length} teams.`))
+    .catch(error => console.warn('[WNBA] Warm failed:', error));
 
-  cron.schedule('17 */6 * * *', async () => {
-    try {
-      const result = await backfillWnbaHistory(7, 24);
-      console.log(`[WNBA] History backfill: ${result.gamesAdded} games added across ${result.datesChecked} dates${result.done ? ' (season complete)' : ''}.`);
-    } catch (error) { console.warn('[WNBA] History backfill failed:', error); }
-  }, { timezone: 'America/New_York' });
-
-  void getWnbaSlate(true).then(slate => console.log(`[WNBA] Warmed ${slate.games.length} games across ${slate.teams.length} teams.`)).catch(error => console.warn('[WNBA] Warm failed:', error));
-  void runWnbaTracker().catch(error => console.warn('[WNBA] Startup tracker failed:', error));
-  void backfillWnbaHistory(5, 18).then(result => console.log(`[WNBA] Startup history backfill added ${result.gamesAdded} games.`)).catch(error => console.warn('[WNBA] Startup backfill failed:', error));
-
-  console.log('[WNBA] First Basket feature initialized (15-minute lock checks; 30-minute grading; 6-hour history backfill).');
+  console.log('[WNBA] First Basket feature initialized with result/history grading quarantined pending verifier audit.');
 }
