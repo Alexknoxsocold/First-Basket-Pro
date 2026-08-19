@@ -1,6 +1,9 @@
 import { fetchNrfiDataV4Live } from "./mlbNrfiLiveV4.js";
 import { persistAndGradeNrfiGames } from "./mlbPredictionGrader.js";
 import { fetchMlbRfiMarkets } from "./mlbOdds.js";
+import { getPredictionHistory } from "./mlbPredictionSnapshots.js";
+import { getMlbPassedDiagnostics } from "./mlbPassedDiagnostics.js";
+import { getMlbAdaptiveDecisionPolicy } from "./mlbAdaptiveDecision.js";
 
 const inflight = new Map<string, Promise<{ date: string; games: number }>>();
 let timer: ReturnType<typeof setInterval> | null = null;
@@ -27,6 +30,30 @@ function todayEt(): string {
     day: "2-digit",
   }).formatToParts(new Date());
   return `${parts.find(p => p.type === "year")?.value}-${parts.find(p => p.type === "month")?.value}-${parts.find(p => p.type === "day")?.value}`;
+}
+
+async function logProductionLearningAudit(): Promise<void> {
+  try {
+    const [history, passed, policy] = await Promise.all([
+      getPredictionHistory(30),
+      getMlbPassedDiagnostics(30),
+      getMlbAdaptiveDecisionPolicy(90),
+    ]);
+    const locked = history.filter(row => row.lockedAt);
+    const graded = locked.filter(row => row.outcome);
+    const wins = graded.filter(row => row.recommendation === row.outcome).length;
+    const losses = graded.filter(row => row.recommendation !== row.outcome).length;
+    const nrfi = policy.evidence.find(item => item.side === "NRFI");
+    const yrfi = policy.evidence.find(item => item.side === "YRFI");
+    console.log(
+      `[MLB Audit] 30d ledger snapshots=${history.length} locked=${locked.length} graded=${graded.length} wins=${wins} losses=${losses}; ` +
+      `passed50-53=${passed.borderlinePassed.correct}/${passed.borderlinePassed.sampleSize}; passed53-56=${passed.subPlayLeans.correct}/${passed.subPlayLeans.sampleSize}; ` +
+      `adaptiveNRFI=${nrfi?.correct ?? 0}/${nrfi?.sampleSize ?? 0}${nrfi?.activated ? " active" : ""}; ` +
+      `adaptiveYRFI=${yrfi?.correct ?? 0}/${yrfi?.sampleSize ?? 0}${yrfi?.activated ? " active" : ""}.`
+    );
+  } catch (error) {
+    console.warn("[MLB Audit] Production learning audit unavailable:", error);
+  }
 }
 
 /**
@@ -124,7 +151,10 @@ export function startMlbAutoGradeScheduler(intervalMs = 5 * 60 * 1000): () => vo
   // pregame locks that may have missed a prior scheduler window after a restart,
   // without fabricating historical locks for already-completed games.
   void reconcileRecentMlbResults(2)
-    .then(results => console.log(`[MLB AutoGrade] Startup reconciliation checked ${results.length} day(s).`))
+    .then(async results => {
+      console.log(`[MLB AutoGrade] Startup reconciliation checked ${results.length} day(s).`);
+      await logProductionLearningAudit();
+    })
     .catch(error => console.error("[MLB AutoGrade] Startup reconciliation failed:", error));
 
   run();
