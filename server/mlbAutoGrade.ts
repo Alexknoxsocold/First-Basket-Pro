@@ -2,8 +2,12 @@ import { fetchNrfiDataV4Live } from "./mlbNrfiLiveV4.js";
 import { persistAndGradeNrfiGames } from "./mlbPredictionGrader.js";
 import { fetchMlbRfiMarkets } from "./mlbOdds.js";
 
-let inflight: Promise<{ date: string; games: number }> | null = null;
+const inflight = new Map<string, Promise<{ date: string; games: number }>>();
 let timer: ReturnType<typeof setInterval> | null = null;
+
+function requestKey(date?: string): string {
+  return date ?? "today";
+}
 
 /**
  * Fetches the same V4-live response served to users and persists immutable
@@ -11,18 +15,15 @@ let timer: ReturnType<typeof setInterval> | null = null;
  * route and grader on the same model version prevents provenance drift.
  */
 export async function refreshAndGradeMlbPredictions(date?: string): Promise<void> {
-  const response = await fetchNrfiDataV4Live(date);
-  try {
-    await fetchMlbRfiMarkets();
-  } catch (error) {
-    console.warn("[MLB AutoGrade] Verified market warm failed; continuing model-only:", error);
-  }
-  await persistAndGradeNrfiGames(response.games, "v4-live");
+  await runMlbAutoGrade(date);
 }
 
 export function runMlbAutoGrade(date?: string): Promise<{ date: string; games: number }> {
-  if (inflight) return inflight;
-  inflight = (async () => {
+  const key = requestKey(date);
+  const existing = inflight.get(key);
+  if (existing) return existing;
+
+  const request = (async () => {
     const response = await fetchNrfiDataV4Live(date);
     try {
       await fetchMlbRfiMarkets();
@@ -33,15 +34,16 @@ export function runMlbAutoGrade(date?: string): Promise<{ date: string; games: n
     return { date: response.date, games: response.games.length };
   })();
 
-  return inflight.finally(() => {
-    inflight = null;
+  inflight.set(key, request);
+  return request.finally(() => {
+    if (inflight.get(key) === request) inflight.delete(key);
   });
 }
 
 /**
- * Production scheduler. Uses a conservative interval and single-flight guard
- * instead of overlapping cron jobs. The interval is intentionally unref'd so
- * it never prevents graceful process shutdown in serverless/dev environments.
+ * Production scheduler. Uses a conservative interval and date-scoped
+ * single-flight guard instead of overlapping jobs. A manual historical lookup
+ * can no longer accidentally share today's in-flight grading result.
  */
 export function startMlbAutoGradeScheduler(intervalMs = 5 * 60 * 1000): () => void {
   if (timer) return () => stopMlbAutoGradeScheduler();
