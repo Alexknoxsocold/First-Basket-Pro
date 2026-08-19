@@ -5,6 +5,11 @@ import { storage } from "./storage";
 import type { User } from "@shared/schema";
 
 const SALT_ROUNDS = 12;
+const AUTH_WINDOW_MS = 15 * 60 * 1000;
+type Attempt = { count: number; resetAt: number };
+const loginAttempts = new Map<string, Attempt>();
+const signupAttempts = new Map<string, Attempt>();
+const inviteAttempts = new Map<string, Attempt>();
 
 declare global {
   namespace Express {
@@ -33,6 +38,38 @@ function normalizeEmail(value: unknown): string {
   return typeof value === "string" ? value.trim().toLowerCase() : "";
 }
 
+function requestKey(req: Request): string {
+  return req.ip || req.socket.remoteAddress || "unknown";
+}
+
+function pruneAttempts(map: Map<string, Attempt>, now: number): void {
+  if (map.size < 2000) return;
+  for (const [key, value] of map) if (value.resetAt <= now) map.delete(key);
+}
+
+function consumeAttempt(req: Request, res: Response, map: Map<string, Attempt>, limit: number): boolean {
+  const now = Date.now();
+  pruneAttempts(map, now);
+  const key = requestKey(req);
+  const existing = map.get(key);
+  if (!existing || existing.resetAt <= now) {
+    map.set(key, { count: 1, resetAt: now + AUTH_WINDOW_MS });
+    return true;
+  }
+  if (existing.count >= limit) {
+    const retryAfter = Math.max(1, Math.ceil((existing.resetAt - now) / 1000));
+    res.setHeader("Retry-After", String(retryAfter));
+    res.status(429).json({ error: "Too many attempts. Please try again later." });
+    return false;
+  }
+  existing.count++;
+  return true;
+}
+
+function clearAttempts(req: Request, map: Map<string, Attempt>): void {
+  map.delete(requestKey(req));
+}
+
 export async function authMiddleware(req: Request, res: Response, next: NextFunction) {
   if (!req.session?.userId) return next();
   try {
@@ -57,6 +94,7 @@ export function requireAdmin(req: Request, res: Response, next: NextFunction) {
 }
 
 export async function signup(req: Request, res: Response) {
+  if (!consumeAttempt(req, res, signupAttempts, 6)) return;
   try {
     const email = normalizeEmail(req.body?.email);
     const password = typeof req.body?.password === "string" ? req.body.password : "";
@@ -71,8 +109,10 @@ export async function signup(req: Request, res: Response) {
 
     const passwordHash = await hashPassword(password);
     const user = await storage.createUser({ email, passwordHash, role: 'user' });
+    await new Promise<void>((resolve, reject) => req.session.regenerate(err => err ? reject(err) : resolve()));
     req.session.userId = user.id;
     await new Promise<void>((resolve, reject) => req.session.save(err => err ? reject(err) : resolve()));
+    clearAttempts(req, signupAttempts);
     const { passwordHash: _, ...userWithoutPassword } = user;
     res.json({ user: userWithoutPassword });
   } catch (error) {
@@ -82,12 +122,13 @@ export async function signup(req: Request, res: Response) {
 }
 
 export async function login(req: Request, res: Response) {
+  if (!consumeAttempt(req, res, loginAttempts, 10)) return;
   try {
     const email = normalizeEmail(req.body?.email);
     const password = typeof req.body?.password === "string" ? req.body.password : "";
     if (!email || !password) return res.status(400).json({ error: "Email and password are required" });
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) return res.status(400).json({ error: "Invalid email or password" });
+    if (!emailRegex.test(email)) return res.status(401).json({ error: "Invalid email or password" });
     if (password.length > 256) return res.status(401).json({ error: "Invalid email or password" });
 
     const user = await storage.getUserByEmail(email);
@@ -95,10 +136,10 @@ export async function login(req: Request, res: Response) {
     const isValid = await verifyPassword(password, user.passwordHash);
     if (!isValid) return res.status(401).json({ error: "Invalid email or password" });
 
-    // Regenerate the session on authentication to prevent session fixation.
     await new Promise<void>((resolve, reject) => req.session.regenerate(err => err ? reject(err) : resolve()));
     req.session.userId = user.id;
     await new Promise<void>((resolve, reject) => req.session.save(err => err ? reject(err) : resolve()));
+    clearAttempts(req, loginAttempts);
     const { passwordHash: _, ...userWithoutPassword } = user;
     res.json({ user: userWithoutPassword });
   } catch (error) {
@@ -130,12 +171,11 @@ export async function getSession(req: Request, res: Response) {
 }
 
 export async function inviteAccess(req: Request, res: Response) {
+  if (!consumeAttempt(req, res, inviteAttempts, 10)) return;
   try {
     const code = typeof req.body?.code === "string" ? req.body.code : "";
     if (!code) return res.status(400).json({ error: "Invite code is required" });
 
-    // Never fall back to a public/default invite code. A missing production
-    // secret disables invite access instead of silently opening the gate.
     const validInviteCode = process.env.INVITE_CODE?.trim();
     if (!validInviteCode) {
       console.error('[Auth] INVITE_CODE is not configured; invite access disabled.');
@@ -154,6 +194,7 @@ export async function inviteAccess(req: Request, res: Response) {
     await new Promise<void>((resolve, reject) => req.session.regenerate(err => err ? reject(err) : resolve()));
     req.session.userId = user.id;
     await new Promise<void>((resolve, reject) => req.session.save(err => err ? reject(err) : resolve()));
+    clearAttempts(req, inviteAttempts);
     const { passwordHash: _, ...userWithoutPassword } = user;
     res.json({ user: userWithoutPassword });
   } catch (error) {
