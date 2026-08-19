@@ -1,6 +1,16 @@
 import type { Express } from "express";
 import { getPredictionHistory } from "./mlbPredictionSnapshots.js";
 
+function outcomeFromScore(score: string | null | undefined): "NRFI" | "YRFI" | null {
+  if (!score) return null;
+  const match = score.trim().match(/^(\d+)\s*-\s*(\d+)$/);
+  if (!match) return null;
+  const away = Number(match[1]);
+  const home = Number(match[2]);
+  if (!Number.isSafeInteger(away) || !Number.isSafeInteger(home) || away < 0 || home < 0) return null;
+  return away === 0 && home === 0 ? "NRFI" : "YRFI";
+}
+
 export function registerMlbHistoryRoutes(app: Express): void {
   app.get("/api/mlb/history", async (req, res) => {
     try {
@@ -10,8 +20,15 @@ export function registerMlbHistoryRoutes(app: Express): void {
       }
 
       const rows = await getPredictionHistory(requestedDays);
+      let excludedIntegrityRows = 0;
       const verified = rows
         .filter(row => row.lockedAt && (row.outcome === "NRFI" || row.outcome === "YRFI") && (row.recommendation === "NRFI" || row.recommendation === "YRFI"))
+        .filter(row => {
+          const scoreOutcome = outcomeFromScore(row.firstInningScore);
+          const valid = scoreOutcome !== null && scoreOutcome === row.outcome;
+          if (!valid) excludedIntegrityRows++;
+          return valid;
+        })
         .map(row => ({
           date: row.date,
           gameId: row.gameId,
@@ -38,6 +55,12 @@ export function registerMlbHistoryRoutes(app: Express): void {
         wins,
         losses,
         winRate: verified.length ? wins / verified.length : null,
+        integrity: {
+          excludedRows: excludedIntegrityRows,
+          note: excludedIntegrityRows
+            ? "Rows whose saved outcome disagrees with the authoritative first-inning score are hidden from the public record."
+            : "All displayed results agree with the authoritative first-inning score.",
+        },
         predictions: verified,
       });
     } catch (error) {
