@@ -8,7 +8,7 @@ import { nanoid } from "nanoid";
 
 const viteLogger = createLogger();
 
-export function log(message: string, source = "express") {
+export function log(message: string, source: unknown = "express") {
   const formattedTime = new Date().toLocaleTimeString("en-US", {
     hour: "numeric",
     minute: "2-digit",
@@ -16,7 +16,9 @@ export function log(message: string, source = "express") {
     hour12: true,
   });
 
-  console.log(`${formattedTime} [${source}] ${message}`);
+  const label = typeof source === "string" ? source : "express";
+  const detail = typeof source === "string" ? "" : source instanceof Error ? ` ${source.message}` : ` ${String(source)}`;
+  console.log(`${formattedTime} [${label}] ${message}${detail}`);
 }
 
 export async function setupVite(app: Express, server: Server) {
