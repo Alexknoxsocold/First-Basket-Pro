@@ -1,0 +1,56 @@
+/* Production UX hardening for dense MLB cards and result navigation. */
+
+[data-testid^="card-nrfi-"] {
+  scroll-margin-top: 6rem;
+  overflow-wrap: anywhere;
+}
+
+[data-testid^="card-nrfi-"] img {
+  max-width: 100%;
+}
+
+nav button,
+button,
+a {
+  -webkit-tap-highlight-color: transparent;
+}
+
+nav button:focus-visible,
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+}
+
+@media (max-width: 640px) {
+  nav button {
+    min-height: 44px;
+  }
+
+  [data-testid^="card-nrfi-"] {
+    border-radius: 0.5rem;
+  }
+
+  [data-testid^="card-nrfi-"] .font-mono {
+    font-variant-numeric: tabular-nums;
+  }
+
+  [data-testid^="card-nrfi-"] p,
+  [data-testid^="card-nrfi-"] span {
+    overflow-wrap: anywhere;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
