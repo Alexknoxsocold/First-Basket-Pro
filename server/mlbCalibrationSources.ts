@@ -1,6 +1,8 @@
 import { Pool } from "@neondatabase/serverless";
 import type { Express } from "express";
 import { getMlbPassedDiagnostics } from "./mlbPassedDiagnostics";
+import { fetchNrfiDataV4Live, fetchUpcomingNrfiDataV4Live } from "./mlbNrfiLiveV4.js";
+import { recordPredictionSnapshot } from "./mlbCalibration.js";
 
 let pool: Pool | null = null;
 function getPool(): Pool | null {
@@ -107,7 +109,43 @@ export async function getCalibrationSources(days = 30): Promise<{ days: number; 
   return { days: safeDays, sources };
 }
 
+function v4LedgerDay<T extends { games: any[] }>(day: T): T {
+  return { ...day, games: day.games.map(game => ({ ...game, modelVersion: "v4-live" })) };
+}
+
 export function registerCalibrationSourceRoute(app: Express): void {
+  // These handlers are registered before the legacy routes module. That makes
+  // V4-live the single public prediction path while keeping the older route as
+  // an unreachable fallback during the migration.
+  app.get("/api/mlb/nrfi", async (req, res) => {
+    try {
+      const requestedDate = typeof req.query.date === "string" ? req.query.date : undefined;
+      if (requestedDate && !/^\d{4}-\d{2}-\d{2}$/.test(requestedDate)) return res.status(400).json({ error: "date must use YYYY-MM-DD format" });
+      const data = await fetchNrfiDataV4Live(requestedDate);
+      void recordPredictionSnapshot(v4LedgerDay(data)).catch(error => console.warn("[MLB V4] Ledger write failed:", error));
+      res.setHeader("Cache-Control", "public, max-age=60, stale-while-revalidate=300");
+      return res.json(data);
+    } catch (error) {
+      console.error("[MLB V4] Live prediction error:", error);
+      return res.status(502).json({ error: "Unable to load MLB NRFI data" });
+    }
+  });
+
+  app.get("/api/mlb/nrfi/upcoming", async (req, res) => {
+    try {
+      const requestedDays = typeof req.query.days === "string" ? Number(req.query.days) : 3;
+      if (!Number.isFinite(requestedDays) || requestedDays < 1 || requestedDays > 3) return res.status(400).json({ error: "days must be a number from 1 to 3" });
+      const data = await fetchUpcomingNrfiDataV4Live(requestedDays);
+      void Promise.all(data.days.map(day => recordPredictionSnapshot(v4LedgerDay(day))))
+        .catch(error => console.warn("[MLB V4] Upcoming ledger write failed:", error));
+      res.setHeader("Cache-Control", "public, max-age=60, stale-while-revalidate=300");
+      return res.json(data);
+    } catch (error) {
+      console.error("[MLB V4] Upcoming prediction error:", error);
+      return res.status(502).json({ error: "Unable to load upcoming MLB NRFI data" });
+    }
+  });
+
   app.get("/api/mlb/nrfi/calibration/sources", async (req, res) => {
     try {
       const days = typeof req.query.days === "string" ? Number(req.query.days) : 30;
