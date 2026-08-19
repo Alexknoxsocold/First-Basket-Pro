@@ -1,9 +1,10 @@
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
-import { LayoutGrid, CircleDot, Trophy, Goal } from "lucide-react";
+import { LayoutGrid, CircleDot, Trophy, Goal, Sparkles } from "lucide-react";
 
 const navItems = [
-  { label: "NBA", path: "/", icon: LayoutGrid },
+  { label: "Best Plays", path: "/", icon: Sparkles },
+  { label: "NBA", path: "/nba", icon: LayoutGrid },
   { label: "WNBA", path: "/wnba", icon: Trophy },
   { label: "MLB", path: "/mlb", icon: CircleDot },
   { label: "NFL", path: "/nfl", icon: Goal },
