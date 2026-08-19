@@ -1,8 +1,9 @@
 /** Automatically records verified first made field goals from completed NBA games. */
 import {
-  incrementCurrentSeasonFirstBasket,
   isVerifiedFirstBasketGameProcessed,
   markVerifiedFirstBasketGame,
+  recordCurrentSeasonFirstBasketGame,
+  type FirstBasketStarter,
 } from './fbSeasonStore';
 
 function etDate(offsetDays = 0): string {
@@ -19,6 +20,19 @@ async function completedGames(date: string): Promise<ESPNGame[]> {
   return (data.events || []).filter((e: ESPNGame) => e.status?.type?.completed === true);
 }
 
+function normalizeName(name: string): string {
+  return name.toLowerCase().replace(/[.'’\-]/g, '').replace(/\s+/g, ' ').trim();
+}
+
+function normalizeTeam(raw: string): string {
+  const value = raw.toUpperCase();
+  const map: Record<string,string> = {
+    GSW:'GS', GS:'GS', NOP:'NO', NO:'NO', NYK:'NY', NY:'NY', SAS:'SA', SA:'SA',
+    PHO:'PHX', PHX:'PHX', UTA:'UTAH', UTAH:'UTAH', WAS:'WAS', WSH:'WAS',
+  };
+  return map[value] || value;
+}
+
 function isMadeFieldGoal(p: any): boolean {
   if (!p?.scoringPlay) return false;
   const text = String(p.text || '').toLowerCase();
@@ -27,26 +41,51 @@ function isMadeFieldGoal(p: any): boolean {
   return v === 2 || v === 3 || text.includes('layup') || text.includes('dunk') || text.includes('jumper') || text.includes('shot');
 }
 
-async function getFirstScorer(gameId: string): Promise<{playerName:string;team:string}|null> {
+function extractStarters(data: any): FirstBasketStarter[] {
+  const starters: FirstBasketStarter[] = [];
+  for (const teamBlock of data?.boxscore?.players || []) {
+    const team = normalizeTeam(String(teamBlock?.team?.abbreviation || ''));
+    if (!team) continue;
+    for (const group of teamBlock?.statistics || []) {
+      for (const row of group?.athletes || []) {
+        if (row?.starter !== true || row?.didNotPlay === true) continue;
+        const playerName = String(row?.athlete?.displayName || '').trim();
+        if (playerName) starters.push({ playerName, team });
+      }
+    }
+  }
+  return [...new Map(starters.map(s => [`${normalizeName(s.playerName)}|${s.team}`, s])).values()];
+}
+
+async function getGameEvidence(gameId: string): Promise<{ scorer: FirstBasketStarter; starters: FirstBasketStarter[] } | null> {
   try {
     const res = await fetch(`https://site.api.espn.com/apis/site/v2/sports/basketball/nba/summary?event=${gameId}`, { signal: AbortSignal.timeout(8000) });
     if (!res.ok) return null;
     const data = await res.json();
+    const starters = extractStarters(data);
+    if (starters.length < 10) return null;
+
     const play = (data.plays || []).find(isMadeFieldGoal);
     if (!play) return null;
     const participant = (play.participants || []).find((p:any) => p.type !== 'assist' && p.type !== 'block') || play.participants?.[0];
     let playerName = participant?.athlete?.displayName || play.athlete?.displayName;
     if (!playerName) {
-      const text = String(play.text || ''); const idx = text.indexOf(' makes ');
+      const text = String(play.text || '');
+      const idx = text.indexOf(' makes ');
       playerName = idx > 0 ? text.slice(0, idx).trim() : null;
     }
     if (!playerName) return null;
-    const raw = String(play.team?.abbreviation || '').toUpperCase();
-    const map: Record<string,string> = { GSW:'GS',GS:'GS',NOP:'NO',NO:'NO',NYK:'NY',NY:'NY',SAS:'SA',SA:'SA',PHO:'PHX',PHX:'PHX',UTA:'UTAH',UTAH:'UTAH',WAS:'WAS' };
-    const team = map[raw] || raw;
+
+    let team = normalizeTeam(String(play.team?.abbreviation || ''));
+    if (!team) {
+      team = starters.find(s => normalizeName(s.playerName) === normalizeName(playerName))?.team || '';
+    }
     if (!team) return null;
-    return { playerName, team };
-  } catch { return null; }
+
+    return { scorer: { playerName, team }, starters };
+  } catch {
+    return null;
+  }
 }
 
 export async function runFirstBasketTracker(): Promise<{processed:number;skipped:number;errors:string[]}> {
@@ -56,15 +95,17 @@ export async function runFirstBasketTracker(): Promise<{processed:number;skipped
     const unique = [...new Map(games.map(g => [g.id, g])).values()];
     for (const game of unique) {
       if (await isVerifiedFirstBasketGameProcessed(game.id)) { result.skipped++; continue; }
-      const scorer = await getFirstScorer(game.id);
-      if (!scorer) {
-        result.errors.push(`Game ${game.id}: first made field goal unresolved; will retry`);
+      const evidence = await getGameEvidence(game.id);
+      if (!evidence) {
+        result.errors.push(`Game ${game.id}: scorer/starters unresolved; will retry`);
         continue;
       }
-      await incrementCurrentSeasonFirstBasket(scorer.playerName, scorer.team);
-      await markVerifiedFirstBasketGame(game.id, scorer.playerName, scorer.team);
+      await recordCurrentSeasonFirstBasketGame(evidence.starters, evidence.scorer);
+      await markVerifiedFirstBasketGame(game.id, evidence.scorer.playerName, evidence.scorer.team);
       result.processed++;
     }
-  } catch (err:any) { result.errors.push(err?.message || String(err)); }
+  } catch (err:any) {
+    result.errors.push(err?.message || String(err));
+  }
   return result;
 }
