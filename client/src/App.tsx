@@ -13,6 +13,7 @@ import SplashScreen from "@/components/SplashScreen";
 import { Skeleton } from "@/components/ui/skeleton";
 
 const NBA = lazy(() => import("@/pages/NBA"));
+const WNBA = lazy(() => import("@/pages/WNBA"));
 const OpeningTips = lazy(() => import("@/pages/OpeningTips"));
 const PlayerStats = lazy(() => import("@/pages/PlayerStats"));
 const TeamStats = lazy(() => import("@/pages/TeamStats"));
@@ -46,6 +47,7 @@ function Router() {
         <Route path="/login" component={Login} />
         <Route path="/invite" component={Invite} />
         <Route path="/" component={NBA} />
+        <Route path="/wnba" component={WNBA} />
         <Route path="/opening-tips" component={OpeningTips} />
         <Route path="/player-stats" component={PlayerStats} />
         <Route path="/team-stats" component={TeamStats} />
