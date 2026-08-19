@@ -1,4 +1,5 @@
 import type { V4Prediction } from "./mlbNrfiV4.js";
+import { recordV4Shadow } from "./mlbV4Evaluation.js";
 
 export type NrfiShadowRecord = {
   gameId: string;
@@ -11,8 +12,22 @@ export type NrfiShadowRecord = {
 const records = new Map<string, NrfiShadowRecord>();
 
 export function recordNrfiShadowPrediction(record: NrfiShadowRecord): void {
-  const key = `${record.gameId}:${record.createdAt.slice(0, 10)}`;
+  const predictionDate = record.createdAt.slice(0, 10);
+  const key = `${record.gameId}:${predictionDate}`;
   records.set(key, record);
+
+  // Keep the fast in-memory diagnostic, but also persist the first V3/V4
+  // probabilities so evaluation survives deploys and process restarts. The
+  // database writer is idempotent and only adds the outcome on later refreshes.
+  void recordV4Shadow({
+    date: predictionDate,
+    gameId: record.gameId,
+    v3Probability: record.v3Probability,
+    v4Probability: record.v4.uncertaintyAdjustedNrfiProbability,
+    uncertaintyScore: record.v4.uncertainty.score,
+    uncertaintyLabel: record.v4.uncertainty.label,
+    outcome: record.outcome,
+  }).catch(error => console.warn("[MLB V4] Persistent shadow record failed:", error));
 }
 
 export function getNrfiShadowRecords(): NrfiShadowRecord[] {
