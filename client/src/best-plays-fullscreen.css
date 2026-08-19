@@ -1,0 +1,27 @@
+/* Best Plays: let the animated space layers fill the entire browser viewport,
+   including the wide desktop gutters outside the centered app content. */
+.bp-stars,
+.bp-nebula,
+.bp-shoot {
+  position: fixed !important;
+}
+
+.bp-stars {
+  inset: -4rem !important;
+}
+
+.bp-nebula {
+  inset: -12vh -12vw !important;
+}
+
+/* Keep the animation behind the interactive Best Plays content while allowing
+   the fixed layers to paint across the full screen. */
+body:has(.bp-stars) {
+  background: rgb(10 18 32);
+}
+
+@media (max-width: 767px) {
+  .bp-nebula {
+    inset: -8vh -18vw !important;
+  }
+}
