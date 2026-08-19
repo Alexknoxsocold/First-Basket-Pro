@@ -5,8 +5,11 @@ import { ensureWnbaSchema, getWnbaDiagnostics, getWnbaSlate, lockWnbaPredictions
 
 let started = false;
 
-export async function registerWnbaFeature(app: Express): Promise<void> {
-  await ensureWnbaSchema();
+export function registerWnbaFeature(app: Express): void {
+  // Route registration must be synchronous so the API exists before the
+  // production static-site fallback is attached. Schema creation warms in the
+  // background and every data function also calls ensureWnbaSchema itself.
+  void ensureWnbaSchema().catch(error => console.error('[WNBA] Schema initialization failed:', error));
 
   app.get('/api/wnba/first-basket', async (_req, res) => {
     try {
