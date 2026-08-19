@@ -33,9 +33,16 @@ export async function lockUpcomingFirstBasketPredictions(): Promise<{ eligible: 
   result.eligible = eligibleGames.length;
 
   for (const game of eligibleGames) {
+    const gameTime = game.gameTime;
+    const espnGameId = game.espnGameId;
+    if (!gameTime || !espnGameId) {
+      result.skipped++;
+      continue;
+    }
+
     const existing = await pool.query(
       `SELECT 1 FROM fb_prediction_ledger WHERE espn_game_id = $1 LIMIT 1`,
-      [game.espnGameId],
+      [espnGameId],
     );
     if (existing.rows.length) {
       result.skipped++;
@@ -72,7 +79,7 @@ export async function lockUpcomingFirstBasketPredictions(): Promise<{ eligible: 
       }
 
       const lockedAt = new Date().toISOString();
-      const season = nbaSeasonForDate(new Date(game.gameTime)).label;
+      const season = nbaSeasonForDate(new Date(gameTime)).label;
       for (let index = 0; index < candidates.length; index++) {
         const player = candidates[index];
         await pool.query(
@@ -83,9 +90,9 @@ export async function lockUpcomingFirstBasketPredictions(): Promise<{ eligible: 
            ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
            ON CONFLICT (espn_game_id, player_name, team) DO NOTHING`,
           [
-            game.espnGameId,
+            espnGameId,
             season,
-            game.gameTime,
+            gameTime,
             lockedAt,
             MODEL_VERSION,
             player.player,
