@@ -20,6 +20,7 @@ export default function Header() {
   const { toast } = useToast();
   const [location, setLocation] = useLocation();
   const isMLB = location === "/mlb";
+  const isBestPlays = location === "/";
   const [theme, setTheme] = useState<"light" | "dark">(() => {
     const savedTheme = localStorage.getItem("theme");
     return (savedTheme as "light" | "dark") || "dark";
@@ -54,18 +55,20 @@ export default function Header() {
           <div className="flex items-center gap-3">
             <img
               src={logoImage}
-              alt="First Basket Pro logo"
+              alt="Prezi Tools logo"
               className="w-14 h-14 rounded-md object-cover cursor-pointer"
               data-testid="img-logo"
               onClick={() => window.location.reload()}
             />
             <div className="flex items-center gap-2">
               <span className="text-base font-bold tracking-tight">
-                {isMLB ? "NRFI Pro" : "First Basket Pro"}
+                {isMLB ? "NRFI Pro" : isBestPlays ? "Prezi Tools" : "First Basket Pro"}
               </span>
-              <Badge variant="secondary" className="text-xs px-1.5 py-0 h-4 font-mono hidden sm:flex">
-                {isMLB ? "MLB" : "2025/26"}
-              </Badge>
+              {!isBestPlays && (
+                <Badge variant="secondary" className="text-xs px-1.5 py-0 h-4 font-mono hidden sm:flex">
+                  {isMLB ? "MLB" : "2025/26"}
+                </Badge>
+              )}
             </div>
           </div>
 
