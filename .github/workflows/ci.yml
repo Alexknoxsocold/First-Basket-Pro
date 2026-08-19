@@ -15,6 +15,17 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  runner-smoke:
+    name: Runner smoke test
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Verify runner starts
+        shell: bash
+        run: |
+          echo "runner-ok"
+          uname -a
+
   build:
     name: Typecheck and production build
     runs-on: ubuntu-latest
