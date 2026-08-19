@@ -39,19 +39,35 @@ async function ensure(): Promise<void> {
       UNIQUE(prediction_date, game_id)
     );
     CREATE INDEX IF NOT EXISTS mlb_v4_shadow_date_idx ON mlb_v4_shadow_history(prediction_date);
+    CREATE INDEX IF NOT EXISTS mlb_v4_shadow_game_idx ON mlb_v4_shadow_history(game_id);
   `).then(() => undefined).catch(error => { ready = null; throw error; });
   return ready;
 }
 
 export async function recordV4Shadow(data: { date: string; gameId: string; v3Probability: number; v4Probability: number; uncertaintyScore: number; uncertaintyLabel: string; outcome?: "NRFI" | "YRFI"; firstInningScore?: string | null }): Promise<void> {
-  const connection = db(); if (!connection) return;
+  const connection = db();
+  if (!connection) return;
   await ensure();
-  const outcome = data.outcome ?? null;
-  await connection.query(`INSERT INTO mlb_v4_shadow_history
-    (id,prediction_date,game_id,v3_probability,v4_probability,uncertainty_score,uncertainty_label,outcome,first_inning_score,predicted_at,graded_at)
-    VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,now(),CASE WHEN $8 IS NULL THEN NULL ELSE now() END)
-    ON CONFLICT(prediction_date,game_id) DO UPDATE SET outcome=COALESCE(EXCLUDED.outcome,mlb_v4_shadow_history.outcome), first_inning_score=COALESCE(EXCLUDED.first_inning_score,mlb_v4_shadow_history.first_inning_score), graded_at=COALESCE(EXCLUDED.graded_at,mlb_v4_shadow_history.graded_at)`,
-    [`${data.date}:${data.gameId}`,data.date,data.gameId,data.v3Probability,data.v4Probability,data.uncertaintyScore,data.uncertaintyLabel,outcome,data.firstInningScore ?? null]);
+
+  // A settled game is allowed to grade a prediction that already existed
+  // pregame, but can never create a retrospective shadow prediction.
+  if (data.outcome) {
+    await connection.query(`
+      UPDATE mlb_v4_shadow_history
+         SET outcome=COALESCE(outcome,$2),
+             first_inning_score=COALESCE(first_inning_score,$3),
+             graded_at=COALESCE(graded_at,now())
+       WHERE game_id=$1 AND outcome IS NULL
+    `, [data.gameId, data.outcome, data.firstInningScore ?? null]);
+    return;
+  }
+
+  await connection.query(`
+    INSERT INTO mlb_v4_shadow_history
+      (id,prediction_date,game_id,v3_probability,v4_probability,uncertainty_score,uncertainty_label,outcome,first_inning_score,predicted_at,graded_at)
+    VALUES($1,$2,$3,$4,$5,$6,$7,NULL,NULL,now(),NULL)
+    ON CONFLICT(prediction_date,game_id) DO NOTHING
+  `, [`${data.date}:${data.gameId}`,data.date,data.gameId,data.v3Probability,data.v4Probability,data.uncertaintyScore,data.uncertaintyLabel]);
 }
 
 export async function getV4Evaluation(days = 90): Promise<V4EvaluationSummary> {
