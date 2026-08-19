@@ -3,6 +3,7 @@ import { getMlbClosingLineSummary } from "./mlbClosingLine.js";
 import { getMlbIntegritySummary } from "./mlbIntegrity.js";
 import { getMlbPassedDiagnostics } from "./mlbPassedDiagnostics.js";
 import { getV4Evaluation } from "./mlbV4Evaluation.js";
+import { getMlbDecisionContextCoverage } from "./mlbDecisionContext.js";
 
 export type LaunchGate = {
   key: string;
@@ -23,12 +24,13 @@ export type MlbLaunchReadiness = {
 
 export async function getMlbLaunchReadiness(days = 30): Promise<MlbLaunchReadiness> {
   const safeDays = Math.min(Math.max(Math.round(days), 7), 90);
-  const [calibration, closing, integrity, passed, v4] = await Promise.all([
+  const [calibration, closing, integrity, passed, v4, contextCoverage] = await Promise.all([
     getCalibrationSummary(safeDays),
     getMlbClosingLineSummary(safeDays),
     getMlbIntegritySummary(safeDays),
     getMlbPassedDiagnostics(safeDays),
     getV4Evaluation(Math.min(180, Math.max(30, safeDays))),
+    getMlbDecisionContextCoverage(safeDays),
   ]);
 
   const gates: LaunchGate[] = [];
@@ -40,7 +42,7 @@ export async function getMlbLaunchReadiness(days = 30): Promise<MlbLaunchReadine
 
   const graded = calibration.gradedPredictions;
   add("sample", "Verified graded sample",
-    graded >= 100 ? "PASS" : graded >= 30 ? "WATCH" : "WATCH",
+    graded >= 100 ? "PASS" : "WATCH",
     `${graded} locked predictions have verified outcomes; 100+ is preferred before strong public performance claims.`);
 
   add("calibration", "Probability calibration",
@@ -60,6 +62,10 @@ export async function getMlbLaunchReadiness(days = 30): Promise<MlbLaunchReadine
   add("closing", "Closing-line coverage",
     closingCoverage === null ? "WATCH" : closingCoverage >= 0.70 ? "PASS" : closingCoverage >= 0.40 ? "WATCH" : "FAIL",
     closingCoverage === null ? "No eligible lock-time prices yet." : `${closing.captured}/${closing.eligible} eligible predictions have a verified closing quote (${(closingCoverage * 100).toFixed(0)}%).`);
+
+  add("context", "Immutable decision-context coverage",
+    contextCoverage.coverage === null ? "WATCH" : contextCoverage.coverage >= 0.80 ? "PASS" : contextCoverage.coverage >= 0.50 ? "WATCH" : "FAIL",
+    contextCoverage.coverage === null ? "No context-capable V4 snapshots yet." : `${contextCoverage.contexts}/${contextCoverage.snapshots} locked snapshots have immutable pregame decision context (${(contextCoverage.coverage * 100).toFixed(0)}%).`);
 
   add("v4", "V4 validation",
     v4.winner === "v4" ? "PASS" : v4.winner === "insufficient_data" || v4.winner === "tie" ? "WATCH" : "FAIL",
@@ -86,6 +92,7 @@ export async function getMlbLaunchReadiness(days = 30): Promise<MlbLaunchReadine
       "READY means the technical and evidence gates are acceptable for a public beta; it does not guarantee profitability.",
       "Performance claims should remain explicitly sample-sized and should never include unlocked retrospective rows.",
       "Missing sportsbook prices are excluded from ROI and CLV rather than estimated.",
+      "Decision-context coverage starts with new V4-live captures; older snapshots are intentionally not backfilled with reconstructed factors.",
     ],
   };
 }
