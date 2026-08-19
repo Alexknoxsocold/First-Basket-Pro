@@ -4,6 +4,7 @@ import { fetchMlbRfiMarkets } from "./mlbOdds.js";
 import { getPredictionHistory } from "./mlbPredictionSnapshots.js";
 import { getMlbPassedDiagnostics } from "./mlbPassedDiagnostics.js";
 import { getMlbAdaptiveDecisionPolicy } from "./mlbAdaptiveDecision.js";
+import { recoverVerifiablePregameDraftLocks } from "./mlbLedgerRecovery.js";
 
 const inflight = new Map<string, Promise<{ date: string; games: number }>>();
 let timer: ReturnType<typeof setInterval> | null = null;
@@ -147,15 +148,20 @@ export function startMlbAutoGradeScheduler(intervalMs = 5 * 60 * 1000): () => vo
   timer = setInterval(run, intervalMs);
   if (typeof timer.unref === "function") timer.unref();
 
-  // On startup, reconcile today plus the prior two days. This grades genuine
-  // pregame locks that may have missed a prior scheduler window after a restart,
-  // without fabricating historical locks for already-completed games.
-  void reconcileRecentMlbResults(2)
-    .then(async results => {
+  // Recover only drafts that the database proves existed before first pitch,
+  // then reconcile recent results. This restores verifiable historical evidence
+  // without inventing locks for predictions first observed after games began.
+  void (async () => {
+    try {
+      const recovery = await recoverVerifiablePregameDraftLocks(30);
+      console.log(`[MLB AutoGrade] Recovered ${recovery.recovered} verifiable pregame draft lock(s) from ${recovery.checkedDays} day(s).`);
+      const results = await reconcileRecentMlbResults(2);
       console.log(`[MLB AutoGrade] Startup reconciliation checked ${results.length} day(s).`);
       await logProductionLearningAudit();
-    })
-    .catch(error => console.error("[MLB AutoGrade] Startup reconciliation failed:", error));
+    } catch (error) {
+      console.error("[MLB AutoGrade] Startup recovery/reconciliation failed:", error);
+    }
+  })();
 
   run();
   console.log(`[MLB AutoGrade] V4-live scheduler started (${Math.round(intervalMs / 1000)}s interval).`);
