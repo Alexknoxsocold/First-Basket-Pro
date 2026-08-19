@@ -2,9 +2,9 @@ import { Pool } from "@neondatabase/serverless";
 import type { Express } from "express";
 import { getMlbPassedDiagnostics } from "./mlbPassedDiagnostics";
 import { fetchNrfiDataV4Live, fetchUpcomingNrfiDataV4Live } from "./mlbNrfiLiveV4.js";
-import { recordPredictionSnapshot } from "./mlbCalibration.js";
 import { getMlbPostgameAttribution } from "./mlbPostgameAttribution.js";
 import { getMlbLaunchReadiness } from "./mlbLaunchReadiness.js";
+import { runMlbAutoGrade } from "./mlbAutoGrade.js";
 
 let pool: Pool | null = null;
 function getPool(): Pool | null {
@@ -111,25 +111,22 @@ export async function getCalibrationSources(days = 30): Promise<{ days: number; 
   return { days: safeDays, sources };
 }
 
-function v4LedgerDay<T extends { games: any[] }>(day: T): T {
-  return { ...day, games: day.games.map(game => ({ ...game, modelVersion: "v4-live" })) };
-}
-
 function validDays(value: unknown, fallback: number, max = 365): number | null {
   const days = typeof value === "string" ? Number(value) : fallback;
   return Number.isFinite(days) && days >= 1 && days <= max ? days : null;
 }
 
 export function registerCalibrationSourceRoute(app: Express): void {
-  // These handlers are registered before the legacy routes module. That makes
-  // V4-live the single public prediction path while keeping the older route as
-  // an unreachable fallback during the migration.
+  // V4-live is the public prediction path. The grader is the single authority
+  // for locking snapshots because it warms/validates the market first and uses
+  // full team names. This prevents a page request from permanently locking a
+  // model-only row milliseconds before verified sportsbook enrichment arrives.
   app.get("/api/mlb/nrfi", async (req, res) => {
     try {
       const requestedDate = typeof req.query.date === "string" ? req.query.date : undefined;
       if (requestedDate && !/^\d{4}-\d{2}-\d{2}$/.test(requestedDate)) return res.status(400).json({ error: "date must use YYYY-MM-DD format" });
       const data = await fetchNrfiDataV4Live(requestedDate);
-      void recordPredictionSnapshot(v4LedgerDay(data)).catch(error => console.warn("[MLB V4] Ledger write failed:", error));
+      void runMlbAutoGrade(requestedDate).catch(error => console.warn("[MLB V4] Authoritative ledger capture failed:", error));
       res.setHeader("Cache-Control", "public, max-age=60, stale-while-revalidate=300");
       return res.json(data);
     } catch (error) {
@@ -142,9 +139,9 @@ export function registerCalibrationSourceRoute(app: Express): void {
     try {
       const requestedDays = validDays(req.query.days, 3, 3);
       if (requestedDays === null) return res.status(400).json({ error: "days must be a number from 1 to 3" });
+      // Upcoming games remain forecasts only. They are intentionally not locked
+      // days early because starters, lineups and markets can still change.
       const data = await fetchUpcomingNrfiDataV4Live(requestedDays);
-      void Promise.all(data.days.map(day => recordPredictionSnapshot(v4LedgerDay(day))))
-        .catch(error => console.warn("[MLB V4] Upcoming ledger write failed:", error));
       res.setHeader("Cache-Control", "public, max-age=60, stale-while-revalidate=300");
       return res.json(data);
     } catch (error) {
