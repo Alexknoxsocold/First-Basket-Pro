@@ -7,7 +7,7 @@ import { randomBytes } from "crypto";
 import ws from "ws";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
-import { authMiddleware } from "./auth";
+import { authMiddleware, requireAdmin } from "./auth";
 import { createDailySyncService } from "./dailySync";
 import { storage } from "./storage";
 import { fetchMlbRfiMarkets, getCachedMlbRfiQuotes, valueFromCachedQuotesForTeams } from "./mlbOdds";
@@ -19,6 +19,8 @@ import { getMlbAutoGradeStatus, startMlbAutoGradeScheduler } from "./mlbAutoGrad
 import { captureMlbClosingLines, getMlbClosingLineSummary } from "./mlbClosingLine";
 import { getPredictionHistory } from "./mlbPredictionSnapshots";
 import { registerMlbHistoryRoutes } from "./mlbHistory";
+import { getMlbLockFunnel } from "./mlbLockFunnel";
+import { registerMlbV4PublicRoutes } from "./mlbPublicV4Routes";
 
 const app = express();
 app.set('trust proxy', 1);
@@ -78,18 +80,19 @@ app.get('/api/health', (_req, res) => {
   return res.status(criticalReady ? 200 : 503).json({ status: criticalReady ? 'ok' : 'degraded', environment: production ? 'production' : 'development', config, generatedAt: new Date().toISOString() });
 });
 
-app.get('/api/admin/mlb/diagnostics', async (_req, res) => {
+app.get('/api/admin/mlb/diagnostics', requireAdmin, async (_req, res) => {
   try {
     const quotes = getCachedMlbRfiQuotes();
     const quoteTimes = quotes
       .map((quote: any) => quote.updatedAt ? new Date(quote.updatedAt).getTime() : Number.NaN)
       .filter((value: number) => Number.isFinite(value));
     const newestQuoteAt = quoteTimes.length ? new Date(Math.max(...quoteTimes)).toISOString() : null;
-    const [history, performance, closingLine, integrity] = await Promise.all([
+    const [history, performance, closingLine, integrity, lockFunnel] = await Promise.all([
       getPredictionHistory(30),
       getCalibrationSummary(30),
       getMlbClosingLineSummary(30),
       getMlbIntegritySummary(30),
+      getMlbLockFunnel(),
     ]);
     const locked = history.filter(row => row.lockedAt).length;
     const graded = history.filter(row => row.lockedAt && row.outcome).length;
@@ -116,6 +119,7 @@ app.get('/api/admin/mlb/diagnostics', async (_req, res) => {
         locked,
         graded,
       },
+      lockFunnel,
       performance: {
         sampleSize: performance.sampleSize,
         gradedPredictions: performance.gradedPredictions,
@@ -157,6 +161,11 @@ app.use("/api/mlb/nrfi", (req, res, next) => {
   }) as typeof res.json;
   next();
 });
+
+// Register the authoritative V4-live public routes before the legacy route
+// definitions in registerRoutes(). The market middleware above still enriches
+// the primary endpoint, but page requests can no longer lock predictions.
+registerMlbV4PublicRoutes(app);
 
 app.get("/api/mlb/performance", async (req, res) => {
   try {
