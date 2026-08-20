@@ -36,6 +36,31 @@ function time(v: string) {
 }
 function pct(v: number | null) { return v === null ? '—' : `${v.toFixed(1)}%`; }
 function rate(f: number, g: number) { return g > 0 ? `${((f / g) * 100).toFixed(1)}%` : '—'; }
+
+const WNBA_LOGO_SLUG: Record<string, string> = {
+  ATL: 'atl', CHI: 'chi', CON: 'con', CT: 'con', DAL: 'dal',
+  GS: 'gs', GSV: 'gs', IND: 'ind', LA: 'la', LAS: 'lv', LV: 'lv',
+  MIN: 'min', NY: 'ny', NYL: 'ny', PHX: 'phx', PHO: 'phx',
+  SEA: 'sea', WAS: 'was', WSH: 'was',
+};
+const WNBA_TEAM_BG: Record<string, string> = {
+  ATL: '#E31837', CHI: '#4DB3E6', CON: '#F05023', CT: '#F05023', DAL: '#0C2340',
+  GS: '#F2C75C', GSV: '#F2C75C', IND: '#002D62', LA: '#552583', LAS: '#000000', LV: '#000000',
+  MIN: '#005083', NY: '#6ECEB2', NYL: '#6ECEB2', PHX: '#201747', PHO: '#201747',
+  SEA: '#2C5234', WAS: '#C8102E', WSH: '#C8102E',
+};
+function wnbaLogo(team: string) {
+  const key = team.toUpperCase();
+  const slug = WNBA_LOGO_SLUG[key] || key.toLowerCase();
+  return `https://a.espncdn.com/i/teamlogos/wnba/500/${slug}.png`;
+}
+function TipTeamLogo({ team }: { team: string }) {
+  const bg = WNBA_TEAM_BG[team.toUpperCase()] || '#1F2937';
+  return <div className="w-9 h-9 rounded-full border border-white/20 shadow-sm flex items-center justify-center overflow-hidden" style={{ backgroundColor: bg }}>
+    <img src={wnbaLogo(team)} alt={`${team} logo`} className="w-7 h-7 object-contain" />
+  </div>;
+}
+
 function tier(p: Candidate) {
   if (p.rank <= 2) return { label: 'CERTAINTY', row: 'bg-emerald-500/10 hover:bg-emerald-500/15', badge: 'bg-emerald-500/15 text-emerald-600 border-emerald-500/30' };
   if (p.rank === 3) return { label: 'VALUE EDGE', row: 'bg-yellow-500/10 hover:bg-yellow-500/15', badge: 'bg-yellow-500/15 text-yellow-600 border-yellow-500/30' };
@@ -109,7 +134,11 @@ function TipCard({ game, mobileExpanded, onMobileToggle }: { game: Game; mobileE
     </div>
     <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
       <div><div className={`text-xs font-semibold ${hasLean ? (awayLean ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500') : ''}`}>{t.awayJumper || 'Tipper not identified'}{awayLean ? <span className="ml-1.5 text-[8px] uppercase tracking-wide">Lean</span> : null}</div><div className="text-[10px] text-muted-foreground">{tipLine(game.awayTeam, t.awayTipWins, t.awayTipEvents, t.awayTipPct)}</div></div>
-      <div className="text-[10px] font-semibold text-muted-foreground">VS</div>
+      <div className="flex flex-col items-center justify-center gap-1.5 px-1">
+        <TipTeamLogo team={game.awayTeam} />
+        <div className="text-[9px] font-black tracking-[.14em] text-muted-foreground">VS</div>
+        <TipTeamLogo team={game.homeTeam} />
+      </div>
       <div className="text-right"><div className={`text-xs font-semibold ${hasLean ? (homeLean ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500') : ''}`}>{t.homeJumper || 'Tipper not identified'}{homeLean ? <span className="ml-1.5 text-[8px] uppercase tracking-wide">Lean</span> : null}</div><div className="text-[10px] text-muted-foreground">{tipLine(game.homeTeam, t.homeTipWins, t.homeTipEvents, t.homeTipPct)}</div></div>
     </div>
     <div className="mt-3 text-[10px] text-muted-foreground">{t.projectedFirstPossessionTeam ? `Opening-possession lean: ${t.projectedFirstPossessionTeam}. Green marks the tip lean; red marks the lower side. Tip remains a supporting input, not the full First Basket prediction.` : 'Tip lean pending — verified player-level sample is still building. No side is colored until the evidence supports a first-possession lean.'}</div>
@@ -118,12 +147,12 @@ function TipCard({ game, mobileExpanded, onMobileToggle }: { game: Game; mobileE
 
 function GameCard({ game, showAll }: { game: Game; showAll: boolean }) {
   const [mobileExpanded, setMobileExpanded] = useState(false);
-  const confirmed = game.lineupStatus === 'confirmed', projected = game.lineupStatus === 'projected';
+  const confirmed = game.lineupStatus === 'confirmed';
   const detailVisibility = `${mobileExpanded ? 'block' : 'hidden'} ${showAll ? 'md:block' : 'md:hidden'}`;
   return <article className="rounded-md border bg-card overflow-hidden">
     <div className="px-4 py-3 border-b flex flex-wrap items-center justify-between gap-2 bg-muted/20">
       <div><div className="font-bold text-sm">{game.awayTeam} @ {game.homeTeam}</div><div className="text-[10px] text-muted-foreground flex items-center gap-1"><Clock className="w-3 h-3" />{time(game.date)} · {game.status}</div></div>
-      <Badge className={confirmed ? 'bg-emerald-500/15 text-emerald-500 border-emerald-500/30' : projected ? 'bg-yellow-500/15 text-yellow-600 border-yellow-500/30' : ''}>{confirmed ? '10 STARTERS CONFIRMED' : projected ? 'PROJECTED · NOT LOCKED' : 'WAITING FOR LINEUP'}</Badge>
+      {confirmed ? <Badge className="bg-emerald-500/15 text-emerald-500 border-emerald-500/30">10 STARTERS CONFIRMED</Badge> : game.lineupStatus === 'waiting' ? <Badge variant="outline">WAITING FOR LINEUP</Badge> : null}
     </div>
     <div className={showAll ? 'p-4' : 'p-3'}>{game.lineupStatus === 'waiting' ? <div className="py-8 text-center text-sm text-muted-foreground">Waiting for enough reliable lineup information.</div> : <><TipCard game={game} mobileExpanded={mobileExpanded} onMobileToggle={() => setMobileExpanded(v => !v)} /><div className={detailVisibility}><TopThree game={game} confirmed={confirmed} /><div className="overflow-hidden rounded-md border">{game.candidates.map(p => <CandidateRow key={`${game.id}-${p.team}-${p.name}`} p={p} projected={!confirmed} />)}</div></div></>}</div>
   </article>;
