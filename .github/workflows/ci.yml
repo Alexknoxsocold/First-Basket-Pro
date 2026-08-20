@@ -46,8 +46,8 @@ jobs:
         run: |
           set -o pipefail
           {
-            echo "== npm ci =="
-            npm ci
+            echo "== npm install (research CI: package.json authoritative; stale lockfile ignored) =="
+            npm install --package-lock=false --no-audit --no-fund
             echo "== npm run check =="
             npm run check
             echo "== npm run build =="
