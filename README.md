@@ -1,13 +1,15 @@
-# PreziPicks / First Basket Pro
+# Prezi Tools
 
-A full-stack sports analytics application focused on first-basket prediction for basketball and NRFI/YRFI prediction for MLB.
+Prezi Tools is a full-stack sports analytics and research platform for building, testing, and evaluating data-driven tools across multiple sports.
 
-This project was built as a real working product rather than a static demo. It combines live sports data, model scoring, historical outcomes, calibration, admin tooling, background sync services, and a responsive web interface.
+The current product includes WNBA / NBA first-basket analytics, MLB NRFI / YRFI prediction, historical grading, model calibration, research workflows, competitor benchmarking, admin tooling, background sync services, and a responsive web interface.
+
+The goal is broader than a single prediction market: Prezi Tools is designed as an umbrella for sports-data products, model research, and future analytics tools.
 
 ## Live product
 
 - Production app: https://first-basket-pro.onrender.com
-- Main sports coverage: WNBA / NBA first-basket analytics and MLB NRFI/YRFI analytics
+- Current sports coverage: WNBA / NBA first-basket analytics and MLB NRFI / YRFI analytics
 
 ## What this project demonstrates
 
@@ -128,7 +130,7 @@ The system is designed so qualification comes from model rules and evidence, not
 
 ## Competitor benchmark research
 
-A separate research effort is being developed to compare PreziPicks predictions against publicly posted competitor projections.
+A separate research effort is being developed to compare Prezi Tools predictions against publicly posted competitor projections.
 
 The purpose is not to copy outside predictions into the production model. Instead, competitor predictions can be timestamped, graded, and compared over a meaningful sample size to answer questions such as:
 
@@ -242,7 +244,7 @@ The goal is not to treat generated code as automatically correct. Changes are re
 
 ## Current direction
 
-The project is continuing to accumulate real prediction outcomes so future improvements can be based on larger samples rather than short-term results.
+Prezi Tools is continuing to accumulate real prediction outcomes so future improvements can be based on larger samples rather than short-term results.
 
 Current priorities include:
 
@@ -252,9 +254,10 @@ Current priorities include:
 - benchmarking outside models without contaminating production
 - improving mobile usability
 - building a stronger long-term evidence base for model decisions
+- expanding the platform with additional sports-data tools over time
 
 ## Project status
 
 Active development.
 
-This repository represents an evolving production analytics product and an ongoing data/modeling learning project.
+This repository represents an evolving production analytics platform and an ongoing data/modeling learning project.
