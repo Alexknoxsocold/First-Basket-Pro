@@ -9,6 +9,9 @@ let schemaReady: Promise<void> | null = null;
 function db(): Pool | null {
   const url = process.env.MLB_RESEARCH_DATABASE_URL;
   if (!url) return null;
+  if (process.env.DATABASE_URL && url === process.env.DATABASE_URL) {
+    throw new Error("MLB_RESEARCH_DATABASE_URL must point to a separate research database branch");
+  }
   if (!pool) pool = new Pool({ connectionString: url });
   return pool;
 }
@@ -73,8 +76,7 @@ async function ensureSchema(connection: Pool): Promise<void> {
 /**
  * Historical research writes are deliberately disabled unless a separate
  * MLB_RESEARCH_DATABASE_URL is configured. DATABASE_URL is never used here.
- * This makes it impossible for replay/backfill code to silently write into
- * the production prediction database.
+ * An explicit equality guard also rejects accidental reuse of production.
  */
 export async function saveResearchPrediction(row: ResearchPrediction): Promise<boolean> {
   const connection = db();
@@ -113,17 +115,31 @@ export async function saveResearchPrediction(row: ResearchPrediction): Promise<b
   return true;
 }
 
-export async function beginResearchRun(researchVersion:string,dateFrom:string,dateTo:string,source:string):Promise<number|null>{
-  const connection=db();
-  if(!connection)return null;
+export async function beginResearchRun(researchVersion: string, dateFrom: string, dateTo: string, source: string): Promise<number | null> {
+  const connection = db();
+  if (!connection) return null;
   await ensureSchema(connection);
-  const result=await connection.query<{id:string}>(`INSERT INTO mlb_research.research_runs(research_version,date_from,date_to,source) VALUES($1,$2,$3,$4) RETURNING id::text`,[researchVersion,dateFrom,dateTo,source]);
+  const result = await connection.query<{ id: string }>(
+    `INSERT INTO mlb_research.research_runs(research_version,date_from,date_to,source)
+     VALUES($1,$2,$3,$4) RETURNING id::text`,
+    [researchVersion, dateFrom, dateTo, source],
+  );
   return Number(result.rows[0]?.id ?? 0) || null;
 }
 
-export async function finishResearchRun(runId:number|null,predictions:number,graded:number,status="completed"):Promise<void>{
-  if(!runId)return;
-  const connection=db();
-  if(!connection)return;
-  await connection.query(`UPDATE mlb_research.research_runs SET status=$2,predictions=$3,graded=$4,finished_at=now() WHERE id=$1`,[runId,status,predictions,graded]);
+export async function finishResearchRun(
+  runId: number | null,
+  predictions: number,
+  graded: number,
+  status = "completed",
+): Promise<void> {
+  if (!runId) return;
+  const connection = db();
+  if (!connection) return;
+  await connection.query(
+    `UPDATE mlb_research.research_runs
+        SET status=$2,predictions=$3,graded=$4,finished_at=now()
+      WHERE id=$1`,
+    [runId, status, predictions, graded],
+  );
 }
