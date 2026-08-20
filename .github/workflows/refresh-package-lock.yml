@@ -5,21 +5,28 @@ on:
     branches: [main]
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   refresh-lock:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: agent/portfolio-readme
       - uses: actions/setup-node@v4
         with:
           node-version: 22
       - name: Refresh lock file
         run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
-      - name: Upload refreshed lock
-        uses: actions/upload-artifact@v4
-        with:
-          name: refreshed-package-lock
-          path: package-lock.json
-          retention-days: 1
+      - name: Commit refreshed lock
+        run: |
+          if git diff --quiet -- package-lock.json; then
+            echo "package-lock.json is already synchronized"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package-lock.json
+          git commit -m "Synchronize package lock with package manifest"
+          git push origin HEAD:agent/portfolio-readme
