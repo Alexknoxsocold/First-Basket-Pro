@@ -1,0 +1,37 @@
+name: MLB Historical Research
+
+on:
+  workflow_dispatch:
+    inputs:
+      date_from:
+        description: "Historical start date (YYYY-MM-DD)"
+        required: true
+        default: "2024-03-20"
+      date_to:
+        description: "Historical end date (YYYY-MM-DD)"
+        required: true
+        default: "2025-09-28"
+
+permissions:
+  contents: read
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      MLB_RESEARCH_DATABASE_URL: ${{ secrets.MLB_RESEARCH_DATABASE_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Refuse missing research database secret
+        shell: bash
+        run: |
+          test -n "$MLB_RESEARCH_DATABASE_URL" || { echo "Missing MLB_RESEARCH_DATABASE_URL repository secret"; exit 1; }
+      - name: Install exact dependencies
+        run: npm ci
+      - name: Run isolated historical backfill and walk-forward replay
+        run: npx tsx scripts/runMlbHistoricalResearch.ts "${{ inputs.date_from }}" "${{ inputs.date_to }}"
