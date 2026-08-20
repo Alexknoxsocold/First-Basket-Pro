@@ -191,6 +191,15 @@
 }
 
 @media (max-width: 640px) {
+  /* Slightly denser phone layout: more content visible without browser zoom. */
+  html {
+    font-size: 14px;
+  }
+
+  body {
+    line-height: 1.4;
+  }
+
   .bp-stars {
     animation-duration: 18s, 5s !important;
     opacity: .64 !important;
