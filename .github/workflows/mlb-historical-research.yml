@@ -1,6 +1,10 @@
 name: MLB Historical Research
 
 on:
+  push:
+    branches: [agent/mlb-historical-research]
+    paths:
+      - .github/workflows/mlb-historical-research.yml
   workflow_dispatch:
     inputs:
       date_from:
@@ -21,6 +25,8 @@ jobs:
     timeout-minutes: 30
     env:
       MLB_RESEARCH_DATABASE_URL: ${{ secrets.MLB_RESEARCH_DATABASE_URL }}
+      DATE_FROM: ${{ github.event_name == 'workflow_dispatch' && inputs.date_from || '2024-03-20' }}
+      DATE_TO: ${{ github.event_name == 'workflow_dispatch' && inputs.date_to || '2025-09-28' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -34,4 +40,4 @@ jobs:
       - name: Install exact dependencies
         run: npm ci
       - name: Run isolated historical backfill and walk-forward replay
-        run: npx tsx scripts/runMlbHistoricalResearch.ts "${{ inputs.date_from }}" "${{ inputs.date_to }}"
+        run: npx tsx scripts/runMlbHistoricalResearch.ts "$DATE_FROM" "$DATE_TO"
