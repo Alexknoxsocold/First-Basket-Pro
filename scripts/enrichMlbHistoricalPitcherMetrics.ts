@@ -10,19 +10,12 @@ if (process.env.DATABASE_URL && process.env.DATABASE_URL === connectionString) {
 }
 
 const pool = new Pool({ connectionString });
-
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-const n = (value: unknown): number => {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : 0;
-};
+const num = (value: unknown): number => Number.isFinite(Number(value)) ? Number(value) : 0;
 
 function inningsToOuts(value: unknown): number {
-  const text = String(value ?? "0");
-  const [whole, partial = "0"] = text.split(".");
-  const innings = Number(whole) || 0;
-  const outs = Number(partial) || 0;
-  return innings * 3 + Math.min(Math.max(outs, 0), 2);
+  const [whole, partial = "0"] = String(value ?? "0").split(".");
+  return (Number(whole) || 0) * 3 + Math.min(Math.max(Number(partial) || 0, 0), 2);
 }
 
 type TargetGame = {
@@ -30,6 +23,7 @@ type TargetGame = {
   gameDate: string;
   pitcherId: string;
   side: "away" | "home";
+  firstInningRunsAllowed: number;
 };
 
 type PitchingLog = {
@@ -59,23 +53,16 @@ async function fetchPitcherSeasonLogs(pitcherId: string, season: number): Promis
   return splits.map((split: any) => ({
     date: String(split?.date ?? ""),
     outs: inningsToOuts(split?.stat?.inningsPitched),
-    hits: n(split?.stat?.hits),
-    walks: n(split?.stat?.baseOnBalls),
-    strikeouts: n(split?.stat?.strikeOuts),
-    earnedRuns: n(split?.stat?.earnedRuns),
-    battersFaced: n(split?.stat?.battersFaced),
+    hits: num(split?.stat?.hits),
+    walks: num(split?.stat?.baseOnBalls),
+    strikeouts: num(split?.stat?.strikeOuts),
+    earnedRuns: num(split?.stat?.earnedRuns),
+    battersFaced: num(split?.stat?.battersFaced),
   })).filter((row: PitchingLog) => /^\d{4}-\d{2}-\d{2}$/.test(row.date));
 }
 
-function priorMetrics(logs: PitchingLog[], beforeDate: string) {
-  let outs = 0;
-  let hits = 0;
-  let walks = 0;
-  let strikeouts = 0;
-  let earnedRuns = 0;
-  let battersFaced = 0;
-  let appearances = 0;
-
+function priorSeasonMetrics(logs: PitchingLog[], beforeDate: string) {
+  let outs = 0, hits = 0, walks = 0, strikeouts = 0, earnedRuns = 0, battersFaced = 0, appearances = 0;
   for (const row of logs) {
     if (row.date >= beforeDate) continue;
     outs += row.outs;
@@ -86,7 +73,6 @@ function priorMetrics(logs: PitchingLog[], beforeDate: string) {
     battersFaced += row.battersFaced;
     appearances += 1;
   }
-
   const innings = outs / 3;
   return {
     appearances,
@@ -96,6 +82,17 @@ function priorMetrics(logs: PitchingLog[], beforeDate: string) {
     strikeoutPct: battersFaced > 0 ? strikeouts / battersFaced : null,
     walkPct: battersFaced > 0 ? walks / battersFaced : null,
   };
+}
+
+function priorFirstInningRate(starts: TargetGame[], beforeDate: string): number | null {
+  let n = 0;
+  let allowed = 0;
+  for (const start of starts) {
+    if (start.gameDate >= beforeDate) continue;
+    n += 1;
+    if (start.firstInningRunsAllowed > 0) allowed += 1;
+  }
+  return n ? allowed / n : null;
 }
 
 async function main() {
@@ -126,25 +123,40 @@ async function main() {
     game_date: string;
     away_pitcher_id: string | null;
     home_pitcher_id: string | null;
+    away_first_runs: number;
+    home_first_runs: number;
   }>(`
-    SELECT game_id, game_date::text, away_pitcher_id, home_pitcher_id
-      FROM mlb_research.historical_pitchers
-     ORDER BY game_date, game_id
+    SELECT p.game_id, p.game_date::text, p.away_pitcher_id, p.home_pitcher_id,
+           g.away_first_runs, g.home_first_runs
+      FROM mlb_research.historical_pitchers p
+      JOIN mlb_research.historical_games g USING(game_id)
+     ORDER BY p.game_date, p.game_id
   `);
 
   const targets: TargetGame[] = [];
   for (const row of result.rows) {
-    if (row.away_pitcher_id) targets.push({ gameId: row.game_id, gameDate: row.game_date, pitcherId: row.away_pitcher_id, side: "away" });
-    if (row.home_pitcher_id) targets.push({ gameId: row.game_id, gameDate: row.game_date, pitcherId: row.home_pitcher_id, side: "home" });
+    if (row.away_pitcher_id) targets.push({
+      gameId: row.game_id, gameDate: row.game_date, pitcherId: row.away_pitcher_id,
+      side: "away", firstInningRunsAllowed: row.home_first_runs,
+    });
+    if (row.home_pitcher_id) targets.push({
+      gameId: row.game_id, gameDate: row.game_date, pitcherId: row.home_pitcher_id,
+      side: "home", firstInningRunsAllowed: row.away_first_runs,
+    });
   }
 
+  const startsByPitcher = new Map<string, TargetGame[]>();
   const byPitcherSeason = new Map<string, TargetGame[]>();
   for (const target of targets) {
+    const starts = startsByPitcher.get(target.pitcherId) ?? [];
+    starts.push(target);
+    startsByPitcher.set(target.pitcherId, starts);
+
     const season = Number(target.gameDate.slice(0, 4));
     const key = `${target.pitcherId}:${season}`;
-    const bucket = byPitcherSeason.get(key) ?? [];
-    bucket.push(target);
-    byPitcherSeason.set(key, bucket);
+    const games = byPitcherSeason.get(key) ?? [];
+    games.push(target);
+    byPitcherSeason.set(key, games);
   }
 
   const entries = [...byPitcherSeason.entries()];
@@ -161,24 +173,10 @@ async function main() {
       const season = Number(seasonText);
       try {
         const logs = await fetchPitcherSeasonLogs(pitcherId, season);
+        const pitcherStarts = startsByPitcher.get(pitcherId) ?? [];
         for (const game of games) {
-          const metrics = priorMetrics(logs, game.gameDate);
-          const fi = await pool.query<{ rate: string | null }>(`
-            WITH starts AS (
-              SELECT g.game_date,
-                     CASE
-                       WHEN p.away_pitcher_id = $1 THEN g.home_first_runs
-                       WHEN p.home_pitcher_id = $1 THEN g.away_first_runs
-                     END AS first_inning_runs_allowed
-                FROM mlb_research.historical_games g
-                JOIN mlb_research.historical_pitchers p USING(game_id)
-               WHERE g.game_date < $2::date
-                 AND (p.away_pitcher_id = $1 OR p.home_pitcher_id = $1)
-            )
-            SELECT AVG((first_inning_runs_allowed > 0)::int)::text AS rate FROM starts
-          `, [game.pitcherId, game.gameDate]);
-          const firstInningRate = fi.rows[0]?.rate == null ? null : Number(fi.rows[0].rate);
-
+          const metrics = priorSeasonMetrics(logs, game.gameDate);
+          const firstInningRate = priorFirstInningRate(pitcherStarts, game.gameDate);
           await pool.query(`
             INSERT INTO mlb_research.historical_pitcher_metrics(
               game_id,game_date,side,pitcher_id,prior_appearances,prior_innings,
@@ -207,7 +205,7 @@ async function main() {
         failed += games.length;
         console.warn(`[Pitcher metrics] ${pitcherId} ${season} failed:`, error);
       }
-      if ((index + 1) % 50 === 0) console.log(`[Pitcher metrics] processed ${index + 1}/${entries.length} pitcher-seasons; rows=${written}; failed=${failed}`);
+      if ((index + 1) % 50 === 0) console.log(`[Pitcher metrics] processed ${index + 1}/${entries.length}; rows=${written}; failed=${failed}`);
       await sleep(80);
     }
   }
