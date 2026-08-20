@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { RefreshCw, Clock, AlertCircle, History, CircleDot, Activity, Trophy, Target } from 'lucide-react';
+import { RefreshCw, Clock, AlertCircle, History, CircleDot, Activity, Trophy, Target, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -80,7 +80,7 @@ function tipLine(team: string, wins: number, events: number, p: number | null) {
   return events > 0 ? `${team} · ${wins}/${events} verified jumps · ${pct(p)}` : `${team} · historical tip sample building`;
 }
 
-function TipCard({ game }: { game: Game }) {
+function TipCard({ game, mobileExpanded, onMobileToggle }: { game: Game; mobileExpanded?: boolean; onMobileToggle?: () => void }) {
   const t = game.tipSignal;
   const awayLean = t.projectedFirstPossessionTeam === game.awayTeam;
   const homeLean = t.projectedFirstPossessionTeam === game.homeTeam;
@@ -90,12 +90,21 @@ function TipCard({ game }: { game: Game }) {
     : homeLean
       ? 'linear-gradient(90deg, rgba(239,68,68,.18) 0%, rgba(239,68,68,.07) 38%, rgba(239,68,68,0) 50%, rgba(16,185,129,.07) 62%, rgba(16,185,129,.18) 100%)'
       : undefined;
-  return <div className="rounded-md border p-3 mb-4 overflow-hidden" style={gradient ? { backgroundImage: gradient } : undefined}>
+  return <div
+    className="rounded-md border p-3 mb-4 overflow-hidden cursor-pointer md:cursor-default select-none"
+    style={gradient ? { backgroundImage: gradient } : undefined}
+    onClick={onMobileToggle}
+    onKeyDown={e => { if (onMobileToggle && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); onMobileToggle(); } }}
+    role={onMobileToggle ? 'button' : undefined}
+    tabIndex={onMobileToggle ? 0 : undefined}
+    aria-expanded={onMobileToggle ? Boolean(mobileExpanded) : undefined}
+  >
     <div className="flex items-center justify-between gap-2 mb-3">
-      <div className="flex items-center gap-2"><CircleDot className="w-4 h-4 text-primary" /><span className="text-xs font-semibold">Opening Tip</span></div>
+      <div className="flex items-center gap-2"><CircleDot className="w-4 h-4 text-primary" /><span className="text-xs font-semibold">Opening Tip</span><span className="md:hidden text-[9px] text-muted-foreground">Tap for picks</span></div>
       <div className="flex items-center gap-1.5">
         {!hasLean ? <Badge variant="outline" className="text-[9px] border-yellow-500/30 bg-yellow-500/10 text-yellow-600 dark:text-yellow-400">TIP LEAN PENDING</Badge> : null}
         <Badge variant="outline" className="text-[9px]">{t.confidence.toUpperCase()}</Badge>
+        <ChevronDown className={`md:hidden w-4 h-4 text-muted-foreground transition-transform ${mobileExpanded ? 'rotate-180' : ''}`} />
       </div>
     </div>
     <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
@@ -108,13 +117,15 @@ function TipCard({ game }: { game: Game }) {
 }
 
 function GameCard({ game, showAll }: { game: Game; showAll: boolean }) {
+  const [mobileExpanded, setMobileExpanded] = useState(false);
   const confirmed = game.lineupStatus === 'confirmed', projected = game.lineupStatus === 'projected';
+  const detailVisibility = `${mobileExpanded ? 'block' : 'hidden'} ${showAll ? 'md:block' : 'md:hidden'}`;
   return <article className="rounded-md border bg-card overflow-hidden">
     <div className="px-4 py-3 border-b flex flex-wrap items-center justify-between gap-2 bg-muted/20">
       <div><div className="font-bold text-sm">{game.awayTeam} @ {game.homeTeam}</div><div className="text-[10px] text-muted-foreground flex items-center gap-1"><Clock className="w-3 h-3" />{time(game.date)} · {game.status}</div></div>
       <Badge className={confirmed ? 'bg-emerald-500/15 text-emerald-500 border-emerald-500/30' : projected ? 'bg-yellow-500/15 text-yellow-600 border-yellow-500/30' : ''}>{confirmed ? '10 STARTERS CONFIRMED' : projected ? 'PROJECTED · NOT LOCKED' : 'WAITING FOR LINEUP'}</Badge>
     </div>
-    <div className={showAll ? 'p-4' : 'p-3'}>{game.lineupStatus === 'waiting' ? <div className="py-8 text-center text-sm text-muted-foreground">Waiting for enough reliable lineup information.</div> : <><TipCard game={game} />{showAll ? <><TopThree game={game} confirmed={confirmed} /><div className="overflow-hidden rounded-md border">{game.candidates.map(p => <CandidateRow key={`${game.id}-${p.team}-${p.name}`} p={p} projected={!confirmed} />)}</div></> : null}</>}</div>
+    <div className={showAll ? 'p-4' : 'p-3'}>{game.lineupStatus === 'waiting' ? <div className="py-8 text-center text-sm text-muted-foreground">Waiting for enough reliable lineup information.</div> : <><TipCard game={game} mobileExpanded={mobileExpanded} onMobileToggle={() => setMobileExpanded(v => !v)} /><div className={detailVisibility}><TopThree game={game} confirmed={confirmed} /><div className="overflow-hidden rounded-md border">{game.candidates.map(p => <CandidateRow key={`${game.id}-${p.team}-${p.name}`} p={p} projected={!confirmed} />)}</div></div></>}</div>
   </article>;
 }
 
@@ -141,7 +152,7 @@ export default function WNBA() {
   return <div className="-mx-4 md:-mx-6 lg:-mx-8 -mt-8">
     <div className="border-b bg-card"><div className="max-w-7xl mx-auto px-4 md:px-6 lg:px-8 flex items-center justify-between"><div className="flex"><button onClick={() => setSection('games')} className={`px-4 py-4 text-xs border-b-2 ${section === 'games' ? 'border-primary' : 'border-transparent text-muted-foreground'}`}>WNBA Games</button><button onClick={() => setSection('history')} className={`px-4 py-4 text-xs border-b-2 flex gap-1.5 ${section === 'history' ? 'border-primary' : 'border-transparent text-muted-foreground'}`}><History className="w-3.5 h-3.5" />FB History</button></div><Button variant="outline" size="sm" onClick={() => { slate.refetch(); history.refetch(); }} className="gap-2"><RefreshCw className={`w-3.5 h-3.5 ${(slate.isFetching || history.isFetching) ? 'animate-spin' : ''}`} />Refresh</Button></div></div>
     <div className="max-w-7xl mx-auto px-4 md:px-6 lg:px-8 py-6">
-      <div className="mb-5 flex flex-wrap items-end justify-between gap-3"><div><h1 className="text-xl font-bold">WNBA First Basket</h1><p className="text-xs text-muted-foreground mt-1">Projected early · confirmed before lock · top 2 picks + value #3 · strict first-shot, tip and First Basket evidence</p></div>{section === 'games' ? <button type="button" role="switch" aria-checked={showAll} onClick={() => setShowAll(v => !v)} className="flex items-center gap-2 rounded-full border bg-card px-3 py-2 text-xs font-medium shadow-sm hover:bg-muted/40 transition-colors"><span>Show all</span><span className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${showAll ? 'bg-emerald-500' : 'bg-muted-foreground/30'}`}><span className={`inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${showAll ? 'translate-x-4' : 'translate-x-0.5'}`} /></span></button> : null}</div>
+      <div className="mb-5 flex flex-wrap items-end justify-between gap-3"><div><h1 className="text-xl font-bold">WNBA First Basket</h1><p className="text-xs text-muted-foreground mt-1">Projected early · confirmed before lock · top 2 picks + value #3 · strict first-shot, tip and First Basket evidence</p></div>{section === 'games' ? <button type="button" role="switch" aria-checked={showAll} onClick={() => setShowAll(v => !v)} className="hidden md:flex items-center gap-2 rounded-full border bg-card px-3 py-2 text-xs font-medium shadow-sm hover:bg-muted/40 transition-colors"><span>Show all</span><span className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${showAll ? 'bg-emerald-500' : 'bg-muted-foreground/30'}`}><span className={`inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${showAll ? 'translate-x-4' : 'translate-x-0.5'}`} /></span></button> : null}</div>
       {section === 'games' ? <><div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6"><div className="rounded-md border bg-card p-4"><Activity className="w-4 h-4 text-primary mb-2" /><div className="text-2xl font-bold">{games.length}</div><div className="text-xs font-medium">Today's Games</div><div className="text-[10px] text-muted-foreground mt-1">WNBA slate</div></div><div className="rounded-md border bg-card p-4"><Target className="w-4 h-4 text-primary mb-2" /><div className="text-2xl font-bold">{avgTopProbability === null ? '—' : `${avgTopProbability.toFixed(1)}%`}</div><div className="text-xs font-medium">Avg Scoring %</div><div className="text-[10px] text-muted-foreground mt-1">average #1 model probability</div></div><div className="rounded-md border bg-card p-4"><CircleDot className="w-4 h-4 text-primary mb-2" /><div className="text-lg font-bold truncate">{topTip?.jumper || topTip?.team || '—'}</div><div className="text-xs font-medium">Top Jump Ball</div><div className="text-[10px] text-muted-foreground mt-1">{topTip ? `${topTip.team} · ${pct(topTip.pct)}` : 'waiting for verified tip data'}</div></div><div className="rounded-md border bg-card p-4"><Trophy className="w-4 h-4 text-primary mb-2" /><div className="text-lg font-bold">{topTeam?.team || topGame?.topPick?.team || '—'}</div><div className="text-xs font-medium">Top Team Today</div><div className="text-[10px] text-muted-foreground mt-1">{topGame?.topPick ? `${topGame.topPick.name} ${topGame.topPick.probability.toFixed(1)}% top individual` : 'waiting for player model'}</div></div></div><div className="grid grid-cols-1 xl:grid-cols-2 gap-4">{games.map(g => <GameCard key={g.id} game={g} showAll={showAll} />)}</div></> : history.isLoading ? <Skeleton className="h-96" /> : <><div className="rounded-md border bg-card p-4 mb-4"><div className="flex items-start gap-2"><AlertCircle className="w-4 h-4 text-yellow-500 mt-0.5" /><div><div className="text-xs font-semibold">History rebuild status: {history.data?.status ?? 'rebuilding'}</div><div className="text-[10px] text-muted-foreground mt-1">{history.data?.note}</div><div className="text-[10px] text-muted-foreground mt-1">Verified games: {history.data?.verifiedGames ?? 0}{history.data?.coverageStart ? ` · coverage ${new Date(history.data.coverageStart).toLocaleDateString()} to ${new Date(history.data?.coverageEnd || history.data.coverageStart).toLocaleDateString()}` : ''}</div></div></div></div><div className="grid grid-cols-1 xl:grid-cols-2 gap-4"><HistoryTable rows={history.data?.current ?? []} season={history.data?.currentSeason ?? new Date().getUTCFullYear()} /><HistoryTable rows={history.data?.previous ?? []} season={history.data?.previousSeason ?? new Date().getUTCFullYear() - 1} /></div></>}
     </div>
   </div>;
