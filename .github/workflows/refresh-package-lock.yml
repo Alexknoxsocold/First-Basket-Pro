@@ -1,0 +1,25 @@
+name: Refresh Package Lock
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  refresh-lock:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Refresh lock file
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+      - name: Upload refreshed lock
+        uses: actions/upload-artifact@v4
+        with:
+          name: refreshed-package-lock
+          path: package-lock.json
+          retention-days: 1
