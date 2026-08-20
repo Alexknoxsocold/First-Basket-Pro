@@ -41,18 +41,29 @@ jobs:
           node-version: 22
           cache: npm
 
-      - name: Verify install, typecheck, and production build
+      - name: Regenerate lockfile and verify clean install, typecheck, and build
         shell: bash
         run: |
           set -o pipefail
           {
-            echo "== npm install (research CI: package.json authoritative; stale lockfile ignored) =="
-            npm install --package-lock=false --no-audit --no-fund
+            echo "== regenerate package-lock.json from package.json =="
+            npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+            echo "== npm ci =="
+            npm ci
             echo "== npm run check =="
             npm run check
             echo "== npm run build =="
             npm run build
           } 2>&1 | tee ci-verification.log
+
+      - name: Upload regenerated lockfile
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: regenerated-package-lock
+          path: package-lock.json
+          if-no-files-found: error
+          retention-days: 3
 
       - name: Upload CI verification log
         if: always()
