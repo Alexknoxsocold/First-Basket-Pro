@@ -183,7 +183,7 @@ export async function buildHistoricalWalkForward(dateFrom:string,dateTo:string):
       const teamNrfi=clamp((away.scoreless+home.scoreless)/2,0.30,0.75);
       const runPressure=clamp((away.allowed+home.allowed)/2,0.10,1.50);
       const nrfi=clamp(0.50+(teamNrfi-0.50)*0.70-(runPressure-0.50)*0.04,0.25,0.75);
-      const recommendation:n"NRFI"|"YRFI"=nrfi>=0.50?"NRFI":"YRFI";
+      const recommendation: "NRFI" | "YRFI" = nrfi>=0.50?"NRFI":"YRFI";
       const probability=recommendation==="NRFI"?nrfi:1-nrfi;
       await connection.query(`
         INSERT INTO mlb_research.replay_predictions(research_version,target_date,game_id,matchup,recommendation,probability,actual_outcome,first_inning_score,training_games,source,feature_cutoff_at)
