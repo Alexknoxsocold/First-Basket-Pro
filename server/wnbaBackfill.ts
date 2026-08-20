@@ -9,6 +9,7 @@ const normName=(v:string)=>v.toLowerCase().replace(/[.'’\-]/g,'').replace(/\s+
 const normTeam=(v:string)=>v.toUpperCase().trim();
 async function json(url:string):Promise<any|null>{try{const r=await fetch(url,{headers:{'User-Agent':'Mozilla/5.0'},signal:AbortSignal.timeout(8000)});return r.ok?await r.json():null}catch{return null}}
 function ymd(d:Date){return d.toISOString().slice(0,10)} function compact(d:Date){return ymd(d).replace(/-/g,'')}
+function dbDate(v:any){if(v instanceof Date&&!Number.isNaN(v.getTime()))return ymd(v);const s=String(v||''),m=s.match(/^\d{4}-\d{2}-\d{2}/);if(m)return m[0];const d=new Date(v);return Number.isNaN(d.getTime())?'':ymd(d)}
 function extractStarters(data:any):WnbaStarter[]{const out:WnbaStarter[]=[];for(const block of data?.boxscore?.players||[]){const team=normTeam(String(block?.team?.abbreviation||''));for(const group of block?.statistics||[])for(const row of group?.athletes||[]){if(row?.starter!==true||row?.didNotPlay===true)continue;const name=String(row?.athlete?.displayName||'').trim();if(name&&team)out.push({name,team})}}return[...new Map(out.map(s=>[`${normName(s.name)}|${s.team}`,s])).values()]}
 
 async function ensureRebuildState(){if(!pool)return;await pool.query(`CREATE TABLE IF NOT EXISTS wnba_history_rebuild_state(season integer PRIMARY KEY,next_date date,done boolean NOT NULL DEFAULT false,updated_at timestamptz NOT NULL DEFAULT now());`)}
@@ -21,7 +22,7 @@ export async function refreshRecentWnbaEvidence(days=10):Promise<{checked:number
   const missing=await pool.query(`SELECT espn_game_id,game_date FROM wnba_opening_evidence WHERE extract(year from game_date)=extract(year from current_date) AND tip_winner_team IS NULL ORDER BY game_date DESC LIMIT 12`);
   const rows=[...new Map([...recent.rows,...missing.rows].map((r:any)=>[String(r.espn_game_id),r])).values()];
   let checked=0,updated=0,rejected=0;
-  for(const r of rows){checked++;const summary=await json(`https://site.api.espn.com/apis/site/v2/sports/basketball/wnba/summary?event=${r.espn_game_id}`),starters=extractStarters(summary),e=await strictEvidence(String(r.espn_game_id),String(r.game_date).slice(0,10),summary,starters);if(!e){rejected++;continue}await saveOpeningEvidence(e);updated++}
+  for(const r of rows){checked++;const date=dbDate(r.game_date);if(!date){rejected++;continue}const summary=await json(`https://site.api.espn.com/apis/site/v2/sports/basketball/wnba/summary?event=${r.espn_game_id}`),starters=extractStarters(summary),e=await strictEvidence(String(r.espn_game_id),date,summary,starters);if(!e){rejected++;continue}await saveOpeningEvidence(e);updated++}
   return{checked,updated,rejected};
 }
 
