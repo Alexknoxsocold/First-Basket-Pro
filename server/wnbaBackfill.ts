@@ -17,9 +17,11 @@ async function strictEvidence(gameId:string,date:string,summary:any,starters:Wnb
 
 export async function refreshRecentWnbaEvidence(days=10):Promise<{checked:number;updated:number;rejected:number}>{
   if(!pool)return{checked:0,updated:0,rejected:0};await ensureWnbaEvidenceSchema();
-  const rows=await pool.query(`SELECT espn_game_id,game_date FROM wnba_processed_games WHERE game_date>=current_date-$1::int ORDER BY game_date DESC`,[Math.max(1,Math.min(days,30))]);
+  const recent=await pool.query(`SELECT espn_game_id,game_date FROM wnba_processed_games WHERE game_date>=current_date-$1::int ORDER BY game_date DESC`,[Math.max(1,Math.min(days,30))]);
+  const missing=await pool.query(`SELECT espn_game_id,game_date FROM wnba_opening_evidence WHERE extract(year from game_date)=extract(year from current_date) AND tip_winner_team IS NULL ORDER BY game_date DESC LIMIT 12`);
+  const rows=[...new Map([...recent.rows,...missing.rows].map((r:any)=>[String(r.espn_game_id),r])).values()];
   let checked=0,updated=0,rejected=0;
-  for(const r of rows.rows){checked++;const summary=await json(`https://site.api.espn.com/apis/site/v2/sports/basketball/wnba/summary?event=${r.espn_game_id}`),starters=extractStarters(summary),e=await strictEvidence(String(r.espn_game_id),String(r.game_date).slice(0,10),summary,starters);if(!e){rejected++;continue}await saveOpeningEvidence(e);updated++}
+  for(const r of rows){checked++;const summary=await json(`https://site.api.espn.com/apis/site/v2/sports/basketball/wnba/summary?event=${r.espn_game_id}`),starters=extractStarters(summary),e=await strictEvidence(String(r.espn_game_id),String(r.game_date).slice(0,10),summary,starters);if(!e){rejected++;continue}await saveOpeningEvidence(e);updated++}
   return{checked,updated,rejected};
 }
 

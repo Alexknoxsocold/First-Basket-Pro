@@ -9,7 +9,7 @@ export type WnbaStarter={name:string;team:string};
 export type WnbaOpeningEvidence={gameId:string;gameDate:string;teamA:string;teamB:string;tipWinnerTeam:string|null;tipPlayerA:string|null;tipPlayerB:string|null;firstShotPlayer:string;firstShotTeam:string;firstShotMade:boolean;firstMadePlayer:string;firstMadeTeam:string;confidence:'verified'};
 const normName=(v:string)=>v.toLowerCase().replace(/[.'’\-]/g,'').replace(/\s+/g,' ').trim();
 const normTeam=(v:string)=>v.toUpperCase().trim();
-const canonicalTeam=(v:string)=>({GS:'GS',GSV:'GS'} as Record<string,string>)[normTeam(v)]||normTeam(v);
+const canonicalTeam=(v:string)=>({GS:'GS',GSV:'GS',LV:'LV',LVA:'LV',LA:'LA',LAS:'LA',NY:'NY',NYL:'NY',WSH:'WSH',WAS:'WSH',PHX:'PHX',PHO:'PHX'} as Record<string,string>)[normTeam(v)]||normTeam(v);
 async function getJson(url:string,headers:Record<string,string>={}){try{const r=await fetch(url,{headers:{'User-Agent':'Mozilla/5.0',...headers},signal:AbortSignal.timeout(9000)});return r.ok?await r.json():null}catch{return null}}
 function periodNumber(p:any){return Number(p?.period?.number??p?.period??99)}
 function clockSeconds(p:any){const raw=String(p?.clock?.displayValue??p?.clock??'0:00');const x=raw.split(':').map(Number);return x.length===2&&!x.some(Number.isNaN)?x[0]*60+x[1]:-1}
