@@ -67,6 +67,7 @@ export default function BestPlaysHub() {
   const filtered = (results.data?.outcomes || []).filter(row => view !== 'wins' || row.result === 'won');
 
   return <div className="space-y-4">
+    <style>{`@keyframes bpHubGreenGlow{0%,100%{opacity:.7;filter:brightness(.95)}50%{opacity:1;filter:brightness(1.18)}}.bp-hub-green-glow{position:relative;isolation:isolate}.bp-hub-green-glow:before{content:'';position:absolute;inset:-3px;border-radius:16px;pointer-events:none;z-index:30;border:1px solid rgba(74,222,128,.28);box-shadow:0 0 10px rgba(34,197,94,.34),0 0 24px rgba(34,197,94,.26),0 0 48px rgba(16,185,129,.18);animation:bpHubGreenGlow 3.8s ease-in-out infinite}@media (prefers-reduced-motion:reduce){.bp-hub-green-glow:before{animation:none}}`}</style>
     <div className="relative z-20 flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-card/95 p-3 shadow-sm backdrop-blur">
       <div>
         <div className="flex items-center gap-2"><Trophy className="w-4 h-4 text-primary" /><span className="text-sm font-bold">Best Plays</span></div>
@@ -87,7 +88,7 @@ export default function BestPlaysHub() {
       </div>
     </div>
 
-    {view === 'games' ? <BestPlays /> : <div className="space-y-4">
+    {view === 'games' ? <div className="bp-hub-green-glow"><BestPlays /></div> : <div className="space-y-4">
       {results.isLoading ? <><Skeleton className="h-24 w-full" /><Skeleton className="h-24 w-full" /></> : results.isError ? <div className="rounded-lg border bg-card p-6 text-center text-sm text-muted-foreground">Today's verified outcomes are temporarily unavailable.</div> : <>
         <div className="grid grid-cols-3 gap-3">
           <div className="rounded-lg border bg-card p-3"><div className="text-xl font-bold">{results.data?.total ?? 0}</div><div className="text-[10px] text-muted-foreground">Graded today</div></div>
