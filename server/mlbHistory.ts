@@ -42,15 +42,24 @@ async function getTodayBestPlayOutcomes() {
 
   if (await tableExists("mlb_prediction_snapshots")) {
     const result = await outcomePool.query(`
-      SELECT game_id, matchup, recommendation, probability, outcome, first_inning_score, graded_at
-      FROM mlb_prediction_snapshots
-      WHERE prediction_date = $1
-        AND locked_at IS NOT NULL
-        AND graded_at IS NOT NULL
-        AND recommendation IN ('NRFI','YRFI')
-        AND outcome IN ('NRFI','YRFI')
-        AND probability >= 0.535
-      ORDER BY graded_at DESC NULLS LAST
+      SELECT s.game_id, s.matchup, s.recommendation, s.probability, s.outcome,
+             s.first_inning_score, s.graded_at, c.context->>'playStatus' AS play_status
+      FROM mlb_prediction_snapshots s
+      LEFT JOIN LATERAL (
+        SELECT context
+        FROM mlb_prediction_context c
+        WHERE c.game_id = s.game_id
+          AND c.captured_at <= s.created_at
+        ORDER BY c.captured_at DESC
+        LIMIT 1
+      ) c ON true
+      WHERE (s.game_start_at AT TIME ZONE 'UTC' AT TIME ZONE 'America/New_York')::date = $1::date
+        AND s.locked_at IS NOT NULL
+        AND s.graded_at IS NOT NULL
+        AND s.recommendation IN ('NRFI','YRFI')
+        AND s.outcome IN ('NRFI','YRFI')
+        AND c.context->>'playStatus' IN ('BEST_PLAY','PLAY','LEAN')
+      ORDER BY s.graded_at DESC NULLS LAST
     `, [date]);
     for (const row of result.rows) {
       rows.push({
