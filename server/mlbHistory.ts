@@ -1,5 +1,10 @@
 import type { Express } from "express";
+import { Pool, neonConfig } from "@neondatabase/serverless";
+import ws from "ws";
 import { getPredictionHistory } from "./mlbPredictionSnapshots.js";
+
+neonConfig.webSocketConstructor = ws;
+const outcomePool = process.env.DATABASE_URL ? new Pool({ connectionString: process.env.DATABASE_URL }) : null;
 
 function outcomeFromScore(score: string | null | undefined): "NRFI" | "YRFI" | null {
   if (!score) return null;
@@ -9,6 +14,118 @@ function outcomeFromScore(score: string | null | undefined): "NRFI" | "YRFI" | n
   const home = Number(match[2]);
   if (!Number.isSafeInteger(away) || !Number.isSafeInteger(home) || away < 0 || home < 0) return null;
   return away === 0 && home === 0 ? "NRFI" : "YRFI";
+}
+
+function todayEt(): string {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  const y = parts.find(p => p.type === "year")?.value;
+  const m = parts.find(p => p.type === "month")?.value;
+  const d = parts.find(p => p.type === "day")?.value;
+  return `${y}-${m}-${d}`;
+}
+
+async function tableExists(name: string): Promise<boolean> {
+  if (!outcomePool) return false;
+  const result = await outcomePool.query("SELECT to_regclass($1) AS name", [`public.${name}`]);
+  return Boolean(result.rows[0]?.name);
+}
+
+async function getTodayBestPlayOutcomes() {
+  const date = todayEt();
+  const rows: any[] = [];
+  if (!outcomePool) return { date, outcomes: rows };
+
+  if (await tableExists("mlb_prediction_snapshots")) {
+    const result = await outcomePool.query(`
+      SELECT game_id, matchup, recommendation, probability, outcome, first_inning_score, graded_at
+      FROM mlb_prediction_snapshots
+      WHERE prediction_date = $1
+        AND locked_at IS NOT NULL
+        AND graded_at IS NOT NULL
+        AND recommendation IN ('NRFI','YRFI')
+        AND outcome IN ('NRFI','YRFI')
+        AND probability >= 0.535
+      ORDER BY graded_at DESC NULLS LAST
+    `, [date]);
+    for (const row of result.rows) {
+      rows.push({
+        id: `mlb-${row.game_id}`,
+        sport: "MLB",
+        market: row.recommendation,
+        matchup: row.matchup,
+        pick: row.recommendation,
+        probability: Math.round(Number(row.probability) * 1000) / 10,
+        result: row.outcome === row.recommendation ? "won" : "lost",
+        actual: `${row.outcome}${row.first_inning_score ? ` · 1st inning ${row.first_inning_score}` : ""}`,
+        gradedAt: row.graded_at,
+        href: "/mlb",
+      });
+    }
+  }
+
+  if (await tableExists("wnba_prediction_ledger")) {
+    const result = await outcomePool.query(`
+      SELECT l.espn_game_id, l.player_name, l.team, l.model_probability, l.model_rank,
+             l.actual_first_scorer, l.actual_first_scorer_team, l.won, l.graded_at,
+             e.team_a, e.team_b
+      FROM wnba_prediction_ledger l
+      LEFT JOIN wnba_opening_evidence e ON e.espn_game_id = l.espn_game_id
+      WHERE (l.game_start_at AT TIME ZONE 'America/New_York')::date = $1::date
+        AND l.graded_at IS NOT NULL
+        AND l.model_rank <= 3
+        AND l.model_probability >= 10
+      ORDER BY l.graded_at DESC NULLS LAST, l.model_rank ASC
+    `, [date]);
+    for (const row of result.rows) {
+      const teams = [row.team_a, row.team_b].filter(Boolean);
+      rows.push({
+        id: `wnba-${row.espn_game_id}-${row.player_name}`,
+        sport: "WNBA",
+        market: row.model_rank === 1 ? "First Basket" : `First Basket #${row.model_rank}`,
+        matchup: teams.length === 2 ? `${teams[0]} vs ${teams[1]}` : `${row.team} game`,
+        pick: row.player_name,
+        probability: Number(row.model_probability),
+        result: row.won === true ? "won" : "lost",
+        actual: row.actual_first_scorer ? `${row.actual_first_scorer}${row.actual_first_scorer_team ? ` (${row.actual_first_scorer_team})` : ""}` : "Result verified",
+        gradedAt: row.graded_at,
+        href: "/wnba",
+      });
+    }
+  }
+
+  if (await tableExists("fb_prediction_ledger")) {
+    const result = await outcomePool.query(`
+      SELECT espn_game_id, player_name, team, model_probability, model_rank,
+             actual_first_scorer, actual_first_scorer_team, won, graded_at
+      FROM fb_prediction_ledger
+      WHERE (game_start_at AT TIME ZONE 'America/New_York')::date = $1::date
+        AND graded_at IS NOT NULL
+        AND model_rank <= 3
+      ORDER BY graded_at DESC NULLS LAST, model_rank ASC
+    `, [date]);
+    for (const row of result.rows) {
+      rows.push({
+        id: `nba-${row.espn_game_id}-${row.player_name}`,
+        sport: "NBA",
+        market: row.model_rank === 1 ? "First Basket" : `First Basket #${row.model_rank}`,
+        matchup: `${row.team} game`,
+        pick: row.player_name,
+        probability: Number(row.model_probability),
+        result: row.won === true ? "won" : "lost",
+        actual: row.actual_first_scorer ? `${row.actual_first_scorer}${row.actual_first_scorer_team ? ` (${row.actual_first_scorer_team})` : ""}` : "Result verified",
+        gradedAt: row.graded_at,
+        href: "/nba",
+      });
+    }
+  }
+
+  rows.sort((a, b) => new Date(b.gradedAt || 0).getTime() - new Date(a.gradedAt || 0).getTime());
+  return { date, outcomes: rows };
 }
 
 export function registerMlbHistoryRoutes(app: Express): void {
@@ -66,6 +183,27 @@ export function registerMlbHistoryRoutes(app: Express): void {
     } catch (error) {
       console.error("[MLB History] Error:", error);
       return res.status(500).json({ error: "Unable to load verified MLB prediction history" });
+    }
+  });
+
+  app.get("/api/best-plays/outcomes", async (_req, res) => {
+    try {
+      const payload = await getTodayBestPlayOutcomes();
+      const wins = payload.outcomes.filter((row: any) => row.result === "won").length;
+      const losses = payload.outcomes.filter((row: any) => row.result === "lost").length;
+      res.setHeader("Cache-Control", "public, max-age=30, stale-while-revalidate=60");
+      return res.json({
+        date: payload.date,
+        resetTimeZone: "America/New_York",
+        resetAt: "00:00 ET",
+        total: payload.outcomes.length,
+        wins,
+        losses,
+        outcomes: payload.outcomes,
+      });
+    } catch (error) {
+      console.error("[Best Plays Outcomes] Error:", error);
+      return res.status(500).json({ error: "Unable to load today's verified Best Plays outcomes" });
     }
   });
 }

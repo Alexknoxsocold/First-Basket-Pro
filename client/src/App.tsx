@@ -13,7 +13,7 @@ import Navigation from "@/components/Navigation";
 import SplashScreen from "@/components/SplashScreen";
 import { Skeleton } from "@/components/ui/skeleton";
 
-const BestPlays = lazy(() => import("@/pages/BestPlays"));
+const BestPlays = lazy(() => import("@/pages/BestPlaysHub"));
 const NBA = lazy(() => import("@/pages/NBA"));
 const WNBA = lazy(() => import("@/pages/WNBA"));
 const NFL = lazy(() => import("@/pages/NFL"));
