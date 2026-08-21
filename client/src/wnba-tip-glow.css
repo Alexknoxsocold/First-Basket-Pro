@@ -1,0 +1,32 @@
+/* WNBA Opening Tip glow: subtle animated blue/cyan halo around the full tip card. */
+@keyframes wnbaTipGlow {
+  0%, 100% {
+    box-shadow:
+      0 0 0 1px rgba(59, 130, 246, 0.16),
+      0 0 10px rgba(59, 130, 246, 0.16),
+      0 0 20px rgba(14, 165, 233, 0.08);
+  }
+  50% {
+    box-shadow:
+      0 0 0 1px rgba(56, 189, 248, 0.30),
+      0 0 17px rgba(59, 130, 246, 0.30),
+      0 0 30px rgba(6, 182, 212, 0.16);
+  }
+}
+
+/*
+ * The WNBA Opening Tip card is the only card in the app with this exact
+ * clickable/expandable utility combination. Keeping the selector narrow lets
+ * us add the effect without changing the prediction UI or other pages.
+ */
+#main-content [role="button"][aria-expanded].rounded-md.border.p-3.mb-4.overflow-hidden {
+  animation: wnbaTipGlow 3.6s ease-in-out infinite;
+  will-change: box-shadow;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #main-content [role="button"][aria-expanded].rounded-md.border.p-3.mb-4.overflow-hidden {
+    animation: none;
+    box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.18), 0 0 12px rgba(59, 130, 246, 0.16);
+  }
+}
