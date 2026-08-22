@@ -9,6 +9,7 @@ import {
 } from './fbSeasonStore';
 import { getFirstBasketLedgerSummary } from './fbPredictionLedger';
 import { registerWnbaFeature } from './wnbaFeature';
+import { registerNewsletterRoutes } from './newsletter';
 
 const SEASON_RE = /^\d{4}\/\d{2}$/;
 const protectedMaintenancePaths = new Set([
@@ -27,6 +28,7 @@ export function registerProductionCleanupRoutes(app: Express): void {
   // WNBA is a standalone lane with its own persistence and schedulers. Register
   // it here because this setup module is already called before legacy routes.
   registerWnbaFeature(app);
+  registerNewsletterRoutes(app);
 
   // All mutation/sync endpoints are operational controls and must never be
   // callable anonymously in production. This middleware is registered before

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'wouter';
-import { CheckCircle2, ChevronDown, Clock3, Trophy, XCircle } from 'lucide-react';
+import { CheckCircle2, ChevronDown, Clock3, Mail, Trophy, XCircle } from 'lucide-react';
 import BestPlays from './BestPlays';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -57,6 +57,9 @@ function OutcomeCard({ row }: { row: Outcome }) {
 
 export default function BestPlaysHub() {
   const [view, setView] = useState<View>('games');
+  const [newsletterEmail, setNewsletterEmail] = useState('');
+  const [newsletterStatus, setNewsletterStatus] = useState('');
+  const [subscribing, setSubscribing] = useState(false);
   const results = useQuery<OutcomePayload>({
     queryKey: ['/api/best-plays/outcomes'],
     staleTime: 30000,
@@ -66,8 +69,25 @@ export default function BestPlaysHub() {
 
   const filtered = (results.data?.outcomes || []).filter(row => view !== 'wins' || row.result === 'won');
 
+  async function subscribeNewsletter(e: React.FormEvent) {
+    e.preventDefault();
+    if (!newsletterEmail.trim()) return;
+    setSubscribing(true);
+    setNewsletterStatus('');
+    try {
+      const r = await fetch('/api/newsletter/subscribe', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ email:newsletterEmail.trim() }) });
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(body?.error || 'Unable to subscribe');
+      setNewsletterStatus('Subscribed — daily strongest plays will be sent to this email.');
+      setNewsletterEmail('');
+    } catch (err:any) {
+      setNewsletterStatus(err?.message || 'Unable to subscribe right now.');
+    } finally {
+      setSubscribing(false);
+    }
+  }
+
   return <div className="space-y-4">
-    <style>{`@keyframes bpHubGreenGlow{0%,100%{opacity:.7;filter:brightness(.95)}50%{opacity:1;filter:brightness(1.18)}}.bp-hub-green-glow{position:relative;isolation:isolate}.bp-hub-green-glow:before{content:'';position:absolute;inset:-3px;border-radius:16px;pointer-events:none;z-index:30;border:1px solid rgba(74,222,128,.28);box-shadow:0 0 10px rgba(34,197,94,.34),0 0 24px rgba(34,197,94,.26),0 0 48px rgba(16,185,129,.18);animation:bpHubGreenGlow 3.8s ease-in-out infinite}@media (prefers-reduced-motion:reduce){.bp-hub-green-glow:before{animation:none}}`}</style>
     <div className="relative z-20 flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-card/95 p-3 shadow-sm backdrop-blur">
       <div>
         <div className="flex items-center gap-2"><Trophy className="w-4 h-4 text-primary" /><span className="text-sm font-bold">Best Plays</span></div>
@@ -88,7 +108,21 @@ export default function BestPlaysHub() {
       </div>
     </div>
 
-    {view === 'games' ? <div className="bp-hub-green-glow"><BestPlays /></div> : <div className="space-y-4">
+    <div className="rounded-lg border bg-card/80 p-3 sm:p-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 text-sm font-bold"><Mail className="h-4 w-4 text-primary" />PreziTools Daily Plays</div>
+          <div className="mt-1 text-[10px] text-muted-foreground">Get WNBA strongest plays, NBA strongest plays when active, and MLB best/value plays by email. Unsubscribe anytime.</div>
+        </div>
+        <form onSubmit={subscribeNewsletter} className="flex w-full gap-2 sm:w-auto">
+          <input type="email" required value={newsletterEmail} onChange={e => setNewsletterEmail(e.target.value)} placeholder="you@email.com" className="min-w-0 flex-1 rounded-md border bg-background px-3 py-2 text-xs outline-none focus:ring-2 focus:ring-ring sm:w-56" aria-label="Newsletter email" />
+          <button type="submit" disabled={subscribing} className="rounded-md bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground disabled:opacity-60">{subscribing ? 'Joining…' : 'Join'}</button>
+        </form>
+      </div>
+      {newsletterStatus ? <div className="mt-2 text-[10px] text-muted-foreground">{newsletterStatus}</div> : null}
+    </div>
+
+    {view === 'games' ? <BestPlays /> : <div className="space-y-4">
       {results.isLoading ? <><Skeleton className="h-24 w-full" /><Skeleton className="h-24 w-full" /></> : results.isError ? <div className="rounded-lg border bg-card p-6 text-center text-sm text-muted-foreground">Today's verified outcomes are temporarily unavailable.</div> : <>
         <div className="grid grid-cols-3 gap-3">
           <div className="rounded-lg border bg-card p-3"><div className="text-xl font-bold">{results.data?.total ?? 0}</div><div className="text-[10px] text-muted-foreground">Graded today</div></div>
