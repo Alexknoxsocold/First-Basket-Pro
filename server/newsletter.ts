@@ -1,7 +1,10 @@
 import { Pool, neonConfig } from '@neondatabase/serverless';
+import type { Express } from 'express';
 import ws from 'ws';
 import { randomBytes } from 'crypto';
+import cron from 'node-cron';
 import { storage } from './storage';
+import { requireAdmin } from './auth';
 import { getWnbaSlate } from './wnbaFirstBasket';
 import { fetchNrfiData } from './mlbNrfi';
 
@@ -10,6 +13,7 @@ const pool = process.env.DATABASE_URL ? new Pool({ connectionString: process.env
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const BASE_URL = process.env.NEWSLETTER_BASE_URL || process.env.RENDER_EXTERNAL_URL || 'https://first-basket-pro.onrender.com';
+let schedulerStarted = false;
 
 function todayET() {
   const p = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date());
@@ -177,4 +181,39 @@ export async function sendNewsletterDigest(force=false) {
     }
   }
   return { enabled:true, date, plays:plays.length, subscribers:subs.rows.length, sent, failed, skipped };
+}
+
+export function registerNewsletterRoutes(app: Express) {
+  ensureNewsletterSchema().catch(err => console.warn('[Newsletter] Schema init failed:', err));
+
+  app.post('/api/newsletter/subscribe', async (req, res) => {
+    try {
+      const row = await subscribeNewsletter(req.body?.email);
+      return res.json({ success:true, email:row.email, message:'You are subscribed to PreziTools Daily Plays.' });
+    } catch (err:any) {
+      const message = String(err?.message || 'Unable to subscribe');
+      return res.status(message.includes('valid email') ? 400 : 500).json({ error:message });
+    }
+  });
+
+  app.get('/api/newsletter/unsubscribe', async (req, res) => {
+    const token = typeof req.query.token === 'string' ? req.query.token : '';
+    const ok = token ? await unsubscribeNewsletter(token) : false;
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    return res.status(ok ? 200 : 400).send(`<html><body style="font-family:Arial,sans-serif;padding:40px"><h2>${ok ? 'Unsubscribed' : 'Unable to unsubscribe'}</h2><p>${ok ? 'You will no longer receive PreziTools newsletter emails.' : 'This unsubscribe link is invalid or expired.'}</p></body></html>`);
+  });
+
+  app.post('/api/admin/newsletter/send-now', requireAdmin, async (req, res) => {
+    try { return res.json(await sendNewsletterDigest(Boolean(req.body?.force))); }
+    catch (err:any) { console.error('[Newsletter] Manual send failed:', err); return res.status(500).json({ error:'Newsletter send failed', detail:String(err?.message || err) }); }
+  });
+
+  if (!schedulerStarted) {
+    schedulerStarted = true;
+    cron.schedule('0 12 * * *', async () => {
+      try { const result = await sendNewsletterDigest(false); console.log('[Newsletter] Noon ET digest:', result); }
+      catch (err) { console.error('[Newsletter] Scheduled send failed:', err); }
+    }, { timezone:'America/New_York' });
+    console.log('[Newsletter] Daily digest scheduled for 12:00 PM ET.');
+  }
 }
