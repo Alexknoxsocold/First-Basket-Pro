@@ -4,57 +4,57 @@
 
 /* LIGHT MODE */
 :root {
-  --button-outline: rgba(0,0,0, .12);
-  --badge-outline: rgba(0,0,0, .08);
-  --opaque-button-border-intensity: -10;
-  --elevate-1: rgba(0,0,0, .04);
-  --elevate-2: rgba(0,0,0, .09);
-  --background: 218 28% 94%;
-  --foreground: 220 35% 11%;
-  --border: 220 20% 76%;
-  --card: 218 30% 99%;
-  --card-foreground: 220 35% 11%;
-  --card-border: 220 20% 82%;
-  --sidebar: 220 25% 90%;
-  --sidebar-foreground: 220 35% 14%;
-  --sidebar-border: 220 20% 80%;
-  --sidebar-primary: 140 58% 24%;
+  --button-outline: rgba(14, 32, 24, .10);
+  --badge-outline: rgba(14, 32, 24, .07);
+  --opaque-button-border-intensity: -8;
+  --elevate-1: rgba(18, 70, 48, .035);
+  --elevate-2: rgba(18, 70, 48, .075);
+  --background: 150 24% 97%;
+  --foreground: 220 32% 12%;
+  --border: 148 14% 84%;
+  --card: 0 0% 100%;
+  --card-foreground: 220 32% 12%;
+  --card-border: 148 14% 88%;
+  --sidebar: 148 22% 95%;
+  --sidebar-foreground: 220 28% 16%;
+  --sidebar-border: 148 14% 86%;
+  --sidebar-primary: 142 66% 28%;
   --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent: 210 45% 88%;
-  --sidebar-accent-foreground: 140 58% 22%;
-  --sidebar-ring: 140 58% 24%;
-  --popover: 218 30% 99%;
-  --popover-foreground: 220 35% 11%;
-  --popover-border: 220 20% 80%;
-  --primary: 140 58% 24%;
+  --sidebar-accent: 142 28% 91%;
+  --sidebar-accent-foreground: 142 55% 23%;
+  --sidebar-ring: 142 66% 28%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 220 32% 12%;
+  --popover-border: 148 14% 88%;
+  --primary: 142 66% 28%;
   --primary-foreground: 0 0% 100%;
-  --secondary: 220 20% 86%;
-  --secondary-foreground: 220 35% 18%;
-  --muted: 218 22% 90%;
-  --muted-foreground: 220 14% 42%;
-  --accent: 210 45% 88%;
-  --accent-foreground: 220 35% 16%;
-  --destructive: 0 72% 44%;
+  --secondary: 150 16% 93%;
+  --secondary-foreground: 220 28% 18%;
+  --muted: 150 14% 94%;
+  --muted-foreground: 220 12% 43%;
+  --accent: 142 30% 91%;
+  --accent-foreground: 142 55% 22%;
+  --destructive: 0 68% 46%;
   --destructive-foreground: 0 0% 100%;
-  --input: 218 22% 89%;
-  --ring: 140 58% 24%;
+  --input: 0 0% 100%;
+  --ring: 142 66% 28%;
   --chart-1: 203 88% 42%;
-  --chart-2: 140 62% 28%;
+  --chart-2: 142 62% 30%;
   --chart-3: 38 90% 46%;
-  --chart-4: 147 72% 32%;
+  --chart-4: 154 68% 34%;
   --chart-5: 341 74% 44%;
   --font-sans: 'Open Sans', sans-serif;
   --font-serif: 'Georgia', serif;
   --font-mono: 'Menlo', monospace;
-  --radius: 0.375rem;
-  --shadow-2xs: 0px 1px 2px 0px rgba(0,0,0,0.06);
-  --shadow-xs: 0px 1px 3px 0px rgba(0,0,0,0.08);
-  --shadow-sm: 0px 2px 4px 0px rgba(0,0,0,0.08), 0px 1px 2px -1px rgba(0,0,0,0.05);
-  --shadow: 0px 3px 6px 0px rgba(0,0,0,0.09), 0px 1px 3px -1px rgba(0,0,0,0.06);
-  --shadow-md: 0px 4px 8px 0px rgba(0,0,0,0.10), 0px 2px 4px -1px rgba(0,0,0,0.07);
-  --shadow-lg: 0px 8px 16px 0px rgba(0,0,0,0.10), 0px 4px 6px -1px rgba(0,0,0,0.07);
-  --shadow-xl: 0px 12px 24px 0px rgba(0,0,0,0.11), 0px 8px 10px -1px rgba(0,0,0,0.07);
-  --shadow-2xl: 0px 20px 40px 0px rgba(0,0,0,0.13);
+  --radius: 0.75rem;
+  --shadow-2xs: 0px 1px 2px 0px rgba(24, 48, 37, 0.035);
+  --shadow-xs: 0px 1px 3px 0px rgba(24, 48, 37, 0.05);
+  --shadow-sm: 0px 2px 6px 0px rgba(24, 48, 37, 0.055), 0px 1px 2px -1px rgba(24, 48, 37, 0.035);
+  --shadow: 0px 4px 10px 0px rgba(24, 48, 37, 0.06), 0px 1px 3px -1px rgba(24, 48, 37, 0.04);
+  --shadow-md: 0px 6px 14px 0px rgba(24, 48, 37, 0.07), 0px 2px 5px -1px rgba(24, 48, 37, 0.04);
+  --shadow-lg: 0px 10px 24px 0px rgba(24, 48, 37, 0.08), 0px 4px 8px -2px rgba(24, 48, 37, 0.045);
+  --shadow-xl: 0px 16px 32px 0px rgba(24, 48, 37, 0.09), 0px 8px 14px -4px rgba(24, 48, 37, 0.05);
+  --shadow-2xl: 0px 24px 48px 0px rgba(24, 48, 37, 0.11);
   --tracking-normal: 0em;
   --spacing: 0.25rem;
   --sidebar-primary-border: hsl(from hsl(var(--sidebar-primary)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
@@ -132,6 +132,14 @@
 @layer base {
   * { @apply border-border; }
   body { @apply font-sans antialiased bg-background text-foreground; }
+}
+
+:root:not(.dark) body {
+  background-image:
+    radial-gradient(circle at 10% 0%, hsl(142 42% 92% / .42), transparent 34rem),
+    radial-gradient(circle at 100% 18%, hsl(203 58% 94% / .34), transparent 30rem),
+    linear-gradient(180deg, hsl(var(--background)), hsl(150 18% 98%));
+  background-attachment: fixed;
 }
 
 @layer utilities {
