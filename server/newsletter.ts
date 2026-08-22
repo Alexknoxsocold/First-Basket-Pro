@@ -63,7 +63,7 @@ export async function unsubscribeNewsletter(token: string) {
   if (!pool) return false;
   await ensureNewsletterSchema();
   const r = await pool.query(`UPDATE newsletter_subscribers SET subscribed=false, unsubscribed_at=now(), updated_at=now() WHERE unsubscribe_token=$1 RETURNING email`, [token]);
-  return r.rowCount > 0;
+  return (r.rowCount ?? 0) > 0;
 }
 
 type DigestPlay = { sport: 'MLB'|'WNBA'|'NBA'; label: string; matchup: string; pick: string; probability: number; note: string };
