@@ -71,21 +71,21 @@ function tierClass(row: Candidate) {
 function PlayerHeadshot({ row, size = 'lg' }: { row: Candidate; size?: 'lg' | 'sm' }) {
   const dimensions = size === 'lg' ? 'h-16 w-16' : 'h-11 w-11';
   return <div className={`${dimensions} shrink-0 overflow-hidden rounded-full bg-muted ring-1 ring-border/70 shadow-sm`}>
-    <img
-      src={row.headshot}
-      alt={row.player}
-      className="h-full w-full scale-[1.08] object-cover object-[50%_28%]"
-      onError={e => { e.currentTarget.style.display = 'none'; }}
-    />
+    <img src={row.headshot} alt={row.player} className="h-full w-full scale-[1.08] object-cover object-[50%_28%]" onError={e => { e.currentTarget.style.display = 'none'; }} />
   </div>;
 }
 
 function ConfirmedRow({ row, onOpen }: { row: Candidate; onOpen: (row: Candidate) => void }) {
-  return <div className="grid grid-cols-[auto_minmax(0,1fr)_110px] items-center gap-3 border-b border-border/45 px-4 py-3.5 last:border-b-0">
+  return <button
+    type="button"
+    onClick={() => onOpen(row)}
+    className="grid w-full grid-cols-[auto_minmax(0,1fr)_110px] items-center gap-3 border-b border-border/45 px-4 py-3.5 text-left transition-colors last:border-b-0 hover:bg-muted/30 focus:outline-none focus-visible:bg-muted/40 focus-visible:ring-2 focus-visible:ring-primary/40"
+    aria-label={`Open ${row.player} home run details`}
+  >
     <PlayerHeadshot row={row} size="lg" />
     <div className="min-w-0">
       <div className="flex flex-wrap items-center gap-2">
-        <button type="button" onClick={() => onOpen(row)} className="truncate text-left text-[15px] font-bold underline-offset-4 hover:text-primary hover:underline focus:outline-none focus-visible:underline">{row.player}</button>
+        <span className="truncate text-[15px] font-bold">{row.player}</span>
         {row.battingOrder !== null && <Badge variant="outline" className="h-5 border-emerald-500/25 bg-emerald-500/10 px-1.5 text-[9px] text-emerald-600">#{row.battingOrder}</Badge>}
       </div>
       <div className="mt-0.5 text-[10px] text-muted-foreground">{row.team} vs {row.opponent} · {time(row.gameTime)}</div>
@@ -99,14 +99,19 @@ function ConfirmedRow({ row, onOpen }: { row: Candidate; onOpen: (row: Candidate
       <div className="text-[8px] uppercase tracking-[.14em] text-muted-foreground">HR probability</div>
       <div className="mt-2 text-[9px] text-muted-foreground">{row.season.homeRuns} season HR</div>
     </div>
-  </div>;
+  </button>;
 }
 
 function WatchRow({ row, onOpen }: { row: Candidate; onOpen: (row: Candidate) => void }) {
-  return <div className="grid grid-cols-[auto_minmax(0,1fr)_90px] items-center gap-3 border-b border-border/45 px-4 py-3 last:border-b-0">
+  return <button
+    type="button"
+    onClick={() => onOpen(row)}
+    className="grid w-full grid-cols-[auto_minmax(0,1fr)_90px] items-center gap-3 border-b border-border/45 px-4 py-3 text-left transition-colors last:border-b-0 hover:bg-muted/30 focus:outline-none focus-visible:bg-muted/40 focus-visible:ring-2 focus-visible:ring-primary/40"
+    aria-label={`Open ${row.player} home run details`}
+  >
     <PlayerHeadshot row={row} size="sm" />
     <div className="min-w-0">
-      <button type="button" onClick={() => onOpen(row)} className="truncate text-left text-sm font-bold underline-offset-4 hover:text-primary hover:underline focus:outline-none focus-visible:underline">{row.player}</button>
+      <span className="truncate text-sm font-bold">{row.player}</span>
       <div className="mt-0.5 text-[10px] text-muted-foreground">{row.team} vs {row.opponent} · {time(row.gameTime)}</div>
       <div className="mt-1.5 flex items-center gap-2">
         <Badge variant="outline" className={`text-[8px] ${tierClass(row)}`}>EARLY WATCH</Badge>
@@ -117,7 +122,7 @@ function WatchRow({ row, onOpen }: { row: Candidate; onOpen: (row: Candidate) =>
       <div className="font-mono text-xl font-black">{row.probability.toFixed(1)}%</div>
       <div className="text-[8px] uppercase tracking-[.14em] text-muted-foreground">HR probability</div>
     </div>
-  </div>;
+  </button>;
 }
 
 function DetailMetric({ label, value, sub }: { label: string; value: string; sub?: string }) {
@@ -240,7 +245,7 @@ export default function MLBHomeRuns() {
         <section className="min-w-0">
           <div className="mb-2">
             <h2 className="text-sm font-bold">Confirmed HR Plays</h2>
-            <p className="mt-0.5 text-[10px] text-muted-foreground">Official lineup is posted and the hitter cleared the model threshold. Click a player name for the full breakdown.</p>
+            <p className="mt-0.5 text-[10px] text-muted-foreground">Official lineup is posted and the hitter cleared the model threshold. Click anywhere on a player card for the full breakdown.</p>
           </div>
           <div className="overflow-hidden rounded-xl border bg-card/75 shadow-sm">
             {confirmedRows.length ? confirmedRows.slice(0,5).map(row => <ConfirmedRow key={`${row.gamePk}-${row.playerId}`} row={row} onOpen={setSelectedPlayer} />) : <div className="px-5 py-12 text-center"><Clock3 className="mx-auto h-7 w-7 text-muted-foreground/35" /><div className="mt-2 text-sm font-semibold">No confirmed HR plays yet</div><div className="mt-1 text-[10px] text-muted-foreground">Watchlist players upgrade automatically when lineups post and the model still supports them.</div></div>}
@@ -250,7 +255,7 @@ export default function MLBHomeRuns() {
         <section className="min-w-0">
           <div className="mb-2">
             <h2 className="text-sm font-bold">Early HR Watchlist</h2>
-            <p className="mt-0.5 text-[10px] text-muted-foreground">Best pre-lineup power profiles. Click a player name to see the detailed model card.</p>
+            <p className="mt-0.5 text-[10px] text-muted-foreground">Best pre-lineup power profiles. Click anywhere on a player card to see the detailed model card.</p>
           </div>
           <div className="overflow-hidden rounded-xl border bg-card/75 shadow-sm">
             {watchRows.length ? watchRows.slice(0,7).map(row => <WatchRow key={`${row.gamePk}-${row.playerId}`} row={row} onOpen={setSelectedPlayer} />) : <div className="px-5 py-12 text-center"><Activity className="mx-auto h-7 w-7 text-muted-foreground/35" /><div className="mt-2 text-sm font-semibold">No early watchlist candidates</div><div className="mt-1 text-[10px] text-muted-foreground">The model is waiting for enough usable hitter and matchup data.</div></div>}
