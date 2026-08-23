@@ -1,12 +1,11 @@
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
-import { LayoutGrid, CircleDot, Trophy, Goal, Sparkles, TrendingUp } from "lucide-react";
+import { LayoutGrid, CircleDot, Trophy, Goal, Sparkles } from "lucide-react";
 
 const navItems = [
   { label: "Best Plays", path: "/", icon: Sparkles },
   { label: "NBA", path: "/nba", icon: LayoutGrid },
   { label: "WNBA", path: "/wnba", icon: Trophy },
-  { label: "WNBA Props", path: "/wnba/props", icon: TrendingUp },
   { label: "MLB", path: "/mlb", icon: CircleDot },
   { label: "NFL", path: "/nfl", icon: Goal },
 ];
@@ -20,7 +19,7 @@ export default function Navigation() {
         <div className="flex items-center gap-0 overflow-x-auto overscroll-x-contain">
           {navItems.map((item) => {
             const Icon = item.icon;
-            const isActive = location === item.path;
+            const isActive = location === item.path || (item.path === '/wnba' && location.startsWith('/wnba/'));
             return (
               <Link key={item.path} href={item.path}>
                 <span
