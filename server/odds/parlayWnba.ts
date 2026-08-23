@@ -31,6 +31,7 @@ export type WnbaFirstBasketMarket = {
 };
 
 let cache: { at: number; rows: ParlayPropRow[] } | null = null;
+let inFlight: Promise<ParlayPropRow[]> | null = null;
 
 function normalizeName(value: unknown): string {
   return String(value ?? '')
@@ -82,19 +83,21 @@ function rowLastUpdate(row: ParlayPropRow): string | null {
   return Number.isNaN(d.getTime()) ? null : d.toISOString();
 }
 
-async function fetchRows(): Promise<ParlayPropRow[]> {
-  if (cache && Date.now() - cache.at < CACHE_TTL_MS) return cache.rows;
+async function requestRows(): Promise<ParlayPropRow[]> {
   const apiKey = process.env.PARLAY_API_KEY;
-  if (!apiKey) return [];
+  if (!apiKey) {
+    console.warn('[ParlayAPI] PARLAY_API_KEY is not configured');
+    return [];
+  }
 
   const url = new URL(PARLAY_URL);
   url.searchParams.set('markets', 'player_first_basket');
   url.searchParams.set('bookmakers', 'fanduel,draftkings');
   url.searchParams.set('include', 'slim');
   url.searchParams.set('limit', '1000');
-  // First-basket boards can be quiet before tip. Keep only reasonably recent
-  // prices while avoiding false staleness on a market that has not moved.
-  url.searchParams.set('maxAgeSec', '1800');
+  // Do not use maxAgeSec here. First-basket boards can be posted hours before
+  // tip without changing; filtering by quote age can incorrectly hide a still-
+  // valid market. We surface lastUpdate separately instead.
 
   try {
     const response = await fetch(url, {
@@ -115,11 +118,29 @@ async function fetchRows(): Promise<ParlayPropRow[]> {
       return market === 'player_first_basket' || market.includes('first_basket');
     });
     cache = { at: Date.now(), rows: firstBasketRows };
-    console.log(`[ParlayAPI] Loaded ${firstBasketRows.length} WNBA first-basket prices`);
+    if (firstBasketRows.length) {
+      console.log(`[ParlayAPI] Loaded ${firstBasketRows.length} WNBA first-basket prices from ${rows.length} prop rows`);
+    } else {
+      const markets = [...new Set(rows.map((row: ParlayPropRow) => String(row.market_key ?? row.market ?? '')).filter(Boolean))].slice(0, 8);
+      console.log(`[ParlayAPI] No WNBA first-basket prices currently available (${rows.length} prop rows; markets: ${markets.join(', ') || 'none'})`);
+    }
     return firstBasketRows;
   } catch (error) {
     console.warn('[ParlayAPI] WNBA first-basket request error:', error);
     return cache?.rows ?? [];
+  }
+}
+
+async function fetchRows(): Promise<ParlayPropRow[]> {
+  if (cache && Date.now() - cache.at < CACHE_TTL_MS) return cache.rows;
+  // Candidate enrichment runs in parallel for up to 10 players. Share one
+  // provider request across all of them instead of spending credits per player.
+  if (inFlight) return inFlight;
+  inFlight = requestRows();
+  try {
+    return await inFlight;
+  } finally {
+    inFlight = null;
   }
 }
 
