@@ -14,24 +14,58 @@
   }
 }
 
-/*
- * The WNBA Opening Tip card is the only card in the app with this exact
- * clickable/expandable utility combination. Keeping the selector narrow lets
- * us add the effect without changing the prediction UI or other pages.
- */
 #main-content [role="button"][aria-expanded].rounded-md.border.p-3.mb-4.overflow-hidden {
   animation: wnbaTipGlow 3.6s ease-in-out infinite;
   will-change: box-shadow;
 }
 
-/*
- * WNBA First Basket matchup header cleanup: hide the redundant status row
- * beneath the matchup time (PROJECTED LINEUP / STARTERS CONFIRMED / WAITING
- * FOR LINEUP plus SCHEDULED or other game-status text). The underlying lineup
- * and game-status data are unchanged; this is display-only.
- */
 #main-content article.rounded-2xl > div.border-b.bg-gradient-to-r > div.mt-3.flex.flex-wrap.items-center.justify-center.gap-2 {
   display: none;
+}
+
+/* MLB First-Inning Value mobile density pass. Scoped to the NRFI/YRFI cards so
+ * other sports pages keep their existing spacing. */
+@media (max-width: 640px) {
+  #main-content:has(article[data-testid^="card-nrfi-"]) nav button { padding: 9px 11px; font-size: 10px; }
+  #main-content:has(article[data-testid^="card-nrfi-"]) nav + div.max-w-7xl { padding-top: 20px; padding-bottom: 24px; }
+  #main-content:has(article[data-testid^="card-nrfi-"]) nav + div.max-w-7xl > div:first-child { margin-bottom: 16px; align-items: center; }
+  #main-content:has(article[data-testid^="card-nrfi-"]) nav + div.max-w-7xl > div:first-child h1 { font-size: 16px; line-height: 1.25; }
+  #main-content:has(article[data-testid^="card-nrfi-"]) nav + div.max-w-7xl > div:first-child p { font-size: 10px; }
+
+  #main-content:has(article[data-testid^="card-nrfi-"]) [class~="md:grid-cols-3"][class~="mb-8"] {
+    display: flex; gap: 10px; overflow-x: auto; overscroll-behavior-x: contain;
+    scroll-snap-type: x proximity; padding-bottom: 3px; margin-bottom: 20px; scrollbar-width: none;
+  }
+  #main-content:has(article[data-testid^="card-nrfi-"]) [class~="md:grid-cols-3"][class~="mb-8"]::-webkit-scrollbar { display: none; }
+  #main-content:has(article[data-testid^="card-nrfi-"]) [class~="md:grid-cols-3"][class~="mb-8"] > div {
+    min-width: min(72vw, 270px); scroll-snap-align: start; padding: 13px; border-radius: 10px;
+  }
+  #main-content:has(article[data-testid^="card-nrfi-"]) [class~="md:grid-cols-3"][class~="mb-8"] > div > div:first-child { margin-bottom: 8px; }
+  #main-content:has(article[data-testid^="card-nrfi-"]) [class~="md:grid-cols-3"][class~="mb-8"] .text-3xl { font-size: 24px; line-height: 1; }
+
+  #main-content:has(article[data-testid^="card-nrfi-"]) div:has(> article[data-testid^="card-nrfi-"]) { gap: 12px; }
+  #main-content article[data-testid^="card-nrfi-"] { border-radius: 10px; }
+  #main-content article[data-testid^="card-nrfi-"] > div:first-child { padding: 10px 12px; gap: 8px; }
+  #main-content article[data-testid^="card-nrfi-"] > div:first-child .text-sm { font-size: 12px; }
+  #main-content article[data-testid^="card-nrfi-"] > div:first-child .text-xs { font-size: 10px; }
+  #main-content article[data-testid^="card-nrfi-"] > div:nth-child(2) { padding: 12px; }
+  #main-content article[data-testid^="card-nrfi-"] > div:nth-child(2) > div:first-child { gap: 8px; }
+  #main-content article[data-testid^="card-nrfi-"] > div:nth-child(2) > div:first-child img,
+  #main-content article[data-testid^="card-nrfi-"] > div:nth-child(2) > div:first-child span.rounded-full { width: 28px; height: 28px; }
+  #main-content article[data-testid^="card-nrfi-"] > div:nth-child(2) > div:first-child p.font-semibold { font-size: 12px; }
+  #main-content article[data-testid^="card-nrfi-"] > div:nth-child(2) > div:nth-child(2) { margin-top: 14px; gap: 10px; }
+  #main-content article[data-testid^="card-nrfi-"] .text-3xl.font-bold.font-mono { font-size: 26px; line-height: 1; }
+  #main-content article[data-testid^="card-nrfi-"] .h-2.rounded-full { height: 6px; }
+  #main-content article[data-testid^="card-nrfi-"] div[class*="mt-4"][class*="rounded-md"][class*="border"] { margin-top: 10px; padding: 8px 10px; font-size: 10px; }
+  #main-content article[data-testid^="card-nrfi-"] div[class~="sm:grid-cols-2"][class~="border-t"] {
+    grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 12px; padding-top: 12px;
+  }
+  #main-content article[data-testid^="card-nrfi-"] div[class~="sm:grid-cols-2"][class~="border-t"] > div { gap: 6px; }
+  #main-content article[data-testid^="card-nrfi-"] div[class~="sm:grid-cols-2"][class~="border-t"] img,
+  #main-content article[data-testid^="card-nrfi-"] div[class~="sm:grid-cols-2"][class~="border-t"] > div > span.rounded-full { width: 24px; height: 24px; }
+  #main-content article[data-testid^="card-nrfi-"] div[class~="sm:grid-cols-2"][class~="border-t"] p.text-xs { font-size: 10px; }
+  #main-content article[data-testid^="card-nrfi-"] div.mt-4.space-y-1 { margin-top: 10px; }
+  #main-content article[data-testid^="card-nrfi-"] div.mt-4.space-y-1 p { font-size: 9px; line-height: 1.35; }
 }
 
 @media (prefers-reduced-motion: reduce) {
