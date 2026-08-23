@@ -5,7 +5,6 @@ import {
   parseAmericanOdds,
   qualifiesAsMarketValue,
 } from './normalized';
-import { getSportsGameOddsWnbaMarket } from './sportsGameOddsWnba';
 
 const PARLAY_URL = 'https://parlay-api.com/v1/sports/basketball_wnba/props';
 const CACHE_TTL_MS = 20 * 60 * 1000;
@@ -13,7 +12,7 @@ const CACHE_TTL_MS = 20 * 60 * 1000;
 type ParlayPropRow = Record<string, unknown>;
 
 export type WnbaFirstBasketMarket = {
-  source: 'ParlayAPI' | 'SportsGameOdds';
+  source: 'ParlayAPI';
   market: 'player_first_basket';
   bestOdds: number;
   bestOddsDisplay: string;
@@ -158,7 +157,7 @@ export function getParlayWnbaDiagnostics(): ParlayWnbaDiagnostics {
   return { ...diagnostics, cacheAgeSeconds: cache ? Math.round((Date.now() - cache.at) / 1000) : null, sample: diagnostics.sample.map(row => ({ ...row })), marketKeys: [...diagnostics.marketKeys], books: [...diagnostics.books] };
 }
 
-async function getParlayMarket(playerName: string, modelProbabilityPct: number, rank: number): Promise<WnbaFirstBasketMarket | null> {
+export async function getWnbaFirstBasketMarket(playerName: string, modelProbabilityPct: number, rank: number): Promise<WnbaFirstBasketMarket | null> {
   const rows = await fetchRows();
   const target = normalizeName(playerName);
   const matches = rows.filter(row => normalizeName(rowPlayer(row)) === target).map(row => ({ row, odds: rowOdds(row) })).filter((entry): entry is { row: ParlayPropRow; odds: number } => entry.odds !== null).sort((a, b) => b.odds - a.odds);
@@ -169,14 +168,6 @@ async function getParlayMarket(playerName: string, modelProbabilityPct: number, 
   const edgePoints = modelEdgePoints(modelProbabilityPct, best.odds);
   const expectedValue = expectedValuePerDollar(modelProbabilityPct, best.odds);
   return { source: 'ParlayAPI', market: 'player_first_basket', bestOdds: best.odds, bestOddsDisplay: formatAmericanOdds(best.odds), bestBook: rowBookTitle(best.row), fanduelOdds: fanduel, draftkingsOdds: draftkings, impliedProbability: Math.max(0, modelProbabilityPct - edgePoints), edgePoints, expectedValue, qualifiesValue: rank === 3 && qualifiesAsMarketValue(modelProbabilityPct, best.odds), lastUpdate: rowLastUpdate(best.row) };
-}
-
-export async function getWnbaFirstBasketMarket(playerName: string, modelProbabilityPct: number, rank: number): Promise<WnbaFirstBasketMarket | null> {
-  // Prefer the existing free ParlayAPI feed when it actually has the board.
-  const parlay = await getParlayMarket(playerName, modelProbabilityPct, rank);
-  if (parlay) return parlay;
-  // Fall back to SportsGameOdds. This remains dormant until SPORTSGAMEODDS_API_KEY is configured.
-  return getSportsGameOddsWnbaMarket(playerName, modelProbabilityPct, rank);
 }
 
 export async function attachWnbaFirstBasketMarkets<T extends { name: string; probability: number; rank: number }>(candidates: T[]): Promise<Array<T & { marketOdds: WnbaFirstBasketMarket | null }>> {
