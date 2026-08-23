@@ -9,7 +9,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 type Pitcher={name?:string|null;headshot?:string|null};
 type MlbTeam=string|{abbreviation?:string;name?:string;logo?:string|null;pitcher?:Pitcher};
 type MlbGame={gamePk?:number;id?:string;away?:MlbTeam;home?:MlbTeam;gameTime?:string;date?:string;shortName?:string;recommendation?:string;pick?:string;playStatus?:'BEST_PLAY'|'PLAY'|'LEAN'|'NO_PLAY';confidence?:string;nrfiProbability?:number;yrfiProbability?:number;probability?:number;modelEdge?:number;edge?:number};
-type WnbaCandidate={name:string;team:string;probability:number;rank:number;headshot?:string|null};
+type WnbaMarketOdds={bestOdds:number;bestOddsDisplay:string;bestBook:string;fanduelOdds:number|null;draftkingsOdds:number|null;edgePoints:number;expectedValue:number;qualifiesValue:boolean};
+type WnbaCandidate={name:string;team:string;probability:number;rank:number;headshot?:string|null;marketOdds?:WnbaMarketOdds|null};
 type WnbaGame={id:string;date:string;awayTeam:string;homeTeam:string;lineupStatus:string;candidates:WnbaCandidate[];topPick:WnbaCandidate|null};
 type WnbaSlate={games:WnbaGame[]};
 type NflGame={id:string;date:string;away:{abbr:string;name:string;winProbability:number|null};home:{abbr:string;name:string;winProbability:number|null};market?:{favorite?:string|null;spread?:number|null;overUnder?:number|null}};
@@ -66,7 +67,17 @@ export default function BestPlays(){
       if(value){const metrics=nbaMarketValue(value);if(metrics?.qualifies){out.push({id:`nba-${g.id}-${value.team}-${value.player}-value`,sport:'NBA',market:'First Basket Value',matchup:`${g.awayTeam} @ ${g.homeTeam}`,pick:value.player,probability:value.firstBasketPct,time:g.gameTime||g.gameDate||'',tier:'VALUE',note:`${value.liveOdds} · +${metrics.edge.toFixed(1)} pt edge · ${(metrics.ev*100)>=0?'+':''}${(metrics.ev*100).toFixed(0)}% EV`,href:'/nba',headshot:value.headshot??null})}}
     }
 
-    for(const g of wnba.data?.games||[])for(const p of(g.candidates||[]).slice(0,2)){if(p.probability<10)continue;out.push({id:`wnba-${g.id}-${p.rank}`,sport:'WNBA',market:p.rank===1?'First Basket':'First Basket #2',matchup:`${g.awayTeam} @ ${g.homeTeam}`,pick:p.name,probability:Math.min(99,Math.max(0,p.probability)),time:g.date,tier:p.rank===1?'BEST PLAY':'STRONG PLAY',note:g.lineupStatus==='confirmed'?'Confirmed starters':'Projected lineup',href:'/wnba',headshot:p.headshot??null})}
+    for(const g of wnba.data?.games||[]){
+      for(const p of(g.candidates||[]).slice(0,2)){
+        if(p.probability<10)continue;
+        out.push({id:`wnba-${g.id}-${p.rank}`,sport:'WNBA',market:p.rank===1?'First Basket':'First Basket #2',matchup:`${g.awayTeam} @ ${g.homeTeam}`,pick:p.name,probability:Math.min(99,Math.max(0,p.probability)),time:g.date,tier:p.rank===1?'BEST PLAY':'STRONG PLAY',note:g.lineupStatus==='confirmed'?'Confirmed starters':'Projected lineup',href:'/wnba',headshot:p.headshot??null});
+      }
+      const value=(g.candidates||[]).find(p=>p.rank===3);
+      if(value?.marketOdds?.qualifiesValue){
+        const m=value.marketOdds;
+        out.push({id:`wnba-${g.id}-${value.rank}-value`,sport:'WNBA',market:'First Basket Value',matchup:`${g.awayTeam} @ ${g.homeTeam}`,pick:value.name,probability:Math.min(99,Math.max(0,value.probability)),time:g.date,tier:'VALUE',note:`${m.bestOddsDisplay} · ${m.bestBook} · ${m.edgePoints>=0?'+':''}${m.edgePoints.toFixed(1)} pt edge · ${m.expectedValue>=0?'+':''}${(m.expectedValue*100).toFixed(0)}% EV`,href:'/wnba',headshot:value.headshot??null});
+      }
+    }
     for(const g of nfl.data?.games||[]){const sides=[g.away,g.home].filter(x=>x.winProbability!==null).sort((a,b)=>(b.winProbability||0)-(a.winProbability||0)),top=sides[0];if(top&&top.winProbability!==null&&top.winProbability>=55)out.push({id:`nfl-ml-${g.id}`,sport:'NFL',market:'Moneyline',matchup:`${g.away.abbr} @ ${g.home.abbr}`,pick:`${top.abbr} ML`,probability:top.winProbability,time:g.date,tier:tier(top.winProbability),note:'Team win model',href:'/nfl'})}
     return out.sort((a,b)=>{const r={'BEST PLAY':0,'STRONG PLAY':1,'VALUE':2};return r[a.tier]-r[b.tier]||b.probability-a.probability});
   },[mlb.data,nbaStats.data,nbaGames.data,wnba.data,nfl.data]);
