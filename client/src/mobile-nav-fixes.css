@@ -1,0 +1,97 @@
+/* Mobile-only full-width section navigation fixes.
+ * Keep page/card content inside its safe gutters while allowing the navigation
+ * strips themselves to span the entire phone viewport. */
+@media (max-width: 640px) {
+  /* NBA secondary tabs: NBA / Player FB Stats / FB History */
+  #main-content nav[aria-label="NBA sections"] {
+    width: 100vw !important;
+    max-width: none !important;
+    margin-left: calc(50% - 50vw) !important;
+    margin-right: calc(50% - 50vw) !important;
+    box-sizing: border-box !important;
+  }
+
+  #main-content nav[aria-label="NBA sections"] > div {
+    width: 100% !important;
+    max-width: none !important;
+    padding-left: 8px !important;
+    padding-right: 8px !important;
+    box-sizing: border-box !important;
+  }
+
+  #main-content nav[aria-label="NBA sections"] > div > div {
+    width: 100% !important;
+    min-width: 100% !important;
+    overflow-x: auto !important;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  #main-content nav[aria-label="NBA sections"] > div > div::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* MLB secondary tabs: First-Inning Value / Home Runs */
+  #main-content nav[aria-label="MLB sections"] {
+    width: 100vw !important;
+    max-width: none !important;
+    margin-left: calc(50% - 50vw) !important;
+    margin-right: calc(50% - 50vw) !important;
+    box-sizing: border-box !important;
+  }
+
+  #main-content nav[aria-label="MLB sections"] > div {
+    width: 100% !important;
+    max-width: none !important;
+    padding-left: 8px !important;
+    padding-right: 8px !important;
+    box-sizing: border-box !important;
+  }
+
+  #main-content nav[aria-label="MLB sections"] > div > div {
+    width: 100% !important;
+    min-width: 100% !important;
+    overflow-x: auto !important;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  #main-content nav[aria-label="MLB sections"] > div > div::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* WNBA secondary tabs: First Baskets / Strongest Play / Props / History. */
+  #main-content > div:has(> .border-b.bg-card button .lucide-target) > .border-b.bg-card {
+    width: 100vw !important;
+    max-width: none !important;
+    margin-left: calc(50% - 50vw) !important;
+    margin-right: calc(50% - 50vw) !important;
+    box-sizing: border-box !important;
+  }
+
+  #main-content > div:has(> .border-b.bg-card button .lucide-target) > .border-b.bg-card > div {
+    width: 100% !important;
+    max-width: none !important;
+    padding-left: 8px !important;
+    padding-right: 8px !important;
+    box-sizing: border-box !important;
+  }
+
+  #main-content > div:has(> .border-b.bg-card button .lucide-target) > .border-b.bg-card .flex.overflow-x-auto {
+    width: 100% !important;
+    min-width: 0 !important;
+    flex: 1 1 auto !important;
+    overflow-x: auto !important;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  #main-content > div:has(> .border-b.bg-card button .lucide-target) > .border-b.bg-card .flex.overflow-x-auto::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Refresh is redundant on the WNBA sub-navigation and consumed mobile width. */
+  #main-content > div:has(> .border-b.bg-card button .lucide-target) > .border-b.bg-card button:has(.lucide-refresh-cw) {
+    display: none !important;
+  }
+}
