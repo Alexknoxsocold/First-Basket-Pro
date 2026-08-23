@@ -130,6 +130,11 @@ export default function MLBHomeRuns() {
   const watchRows = data?.watchlist ?? [];
   const displayRows = confirmedRows.length ? confirmedRows : watchRows;
   const top = displayRows[0];
+  const statusTitle = confirmedRows.length
+    ? 'Confirmed recommendations are live'
+    : watchRows.length
+      ? 'Lineups are still pending — early watchlist is live'
+      : 'Waiting for usable MLB hitter data';
 
   return <div className="space-y-5">
     <div className="flex flex-wrap items-start justify-between gap-3">
@@ -148,7 +153,7 @@ export default function MLBHomeRuns() {
       </div>
 
       <div className="rounded-lg border bg-primary/5 p-4">
-        <div className="text-sm font-semibold">{confirmedRows.length ? 'Confirmed recommendations are live' : 'Lineups are still pending — watchlist is live'}</div>
+        <div className="text-sm font-semibold">{statusTitle}</div>
         <p className="mt-1 text-xs text-muted-foreground">{data?.note}</p>
       </div>
 
