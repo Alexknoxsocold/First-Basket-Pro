@@ -66,7 +66,7 @@ export default function Header() {
     }
   };
 
-  const brand = isBestPlays ? "Prezi Tools" : isMLB ? "NRFI Pro" : isNFL ? "NFL Pro" : "First Basket Pro";
+  const brand = isBestPlays ? "Prezi Tools" : isMLB ? "MLB Pro" : isNFL ? "NFL Pro" : "First Basket Pro";
   const badge = isMLB ? seasonLabel("MLB") : isNFL ? seasonLabel("NFL") : isWNBA ? seasonLabel("WNBA") : isNBA ? seasonLabel("NBA") : null;
 
   return (
