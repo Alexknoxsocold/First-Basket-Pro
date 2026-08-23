@@ -24,6 +24,16 @@
   will-change: box-shadow;
 }
 
+/*
+ * WNBA First Basket matchup header cleanup: hide the redundant status row
+ * beneath the matchup time (PROJECTED LINEUP / STARTERS CONFIRMED / WAITING
+ * FOR LINEUP plus SCHEDULED or other game-status text). The underlying lineup
+ * and game-status data are unchanged; this is display-only.
+ */
+#main-content article.rounded-2xl > div.border-b.bg-gradient-to-r > div.mt-3.flex.flex-wrap.items-center.justify-center.gap-2 {
+  display: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   #main-content [role="button"][aria-expanded].rounded-md.border.p-3.mb-4.overflow-hidden {
     animation: none;
