@@ -88,9 +88,13 @@ type ScheduleGame = {
 };
 type ScheduleResponse = { dates?: { games?: ScheduleGame[] }[] };
 
+type FeedPlayer = {
+  person?: { id?: number; fullName?: string };
+  position?: { type?: string; abbreviation?: string };
+};
 type FeedTeam = {
   battingOrder?: number[];
-  players?: Record<string, { person?: { id?: number; fullName?: string } }>;
+  players?: Record<string, FeedPlayer>;
 };
 type FeedResponse = {
   gameData?: {
@@ -150,21 +154,23 @@ function toNumber(value: unknown): number | null {
 
 function statMap(response: StatsResponse): Map<number, StatLine> {
   const map = new Map<number, StatLine>();
-  for (const split of response.stats?.[0]?.splits ?? []) {
-    const id = Number(split.player?.id);
-    if (!Number.isFinite(id)) continue;
-    const pa = Number(split.stat?.plateAppearances ?? 0);
-    const hr = Number(split.stat?.homeRuns ?? 0);
-    const bf = Number(split.stat?.battersFaced ?? 0);
-    map.set(id, {
-      id,
-      name: split.player?.fullName ?? String(id),
-      plateAppearances: Number.isFinite(pa) ? pa : 0,
-      homeRuns: Number.isFinite(hr) ? hr : 0,
-      slugging: toNumber(split.stat?.sluggingPercentage),
-      ops: toNumber(split.stat?.ops),
-      battersFaced: Number.isFinite(bf) ? bf : 0,
-    });
+  for (const statBlock of response.stats ?? []) {
+    for (const split of statBlock.splits ?? []) {
+      const id = Number(split.player?.id);
+      if (!Number.isFinite(id)) continue;
+      const pa = Number(split.stat?.plateAppearances ?? 0);
+      const hr = Number(split.stat?.homeRuns ?? 0);
+      const bf = Number(split.stat?.battersFaced ?? 0);
+      map.set(id, {
+        id,
+        name: split.player?.fullName ?? String(id),
+        plateAppearances: Number.isFinite(pa) ? pa : 0,
+        homeRuns: Number.isFinite(hr) ? hr : 0,
+        slugging: toNumber(split.stat?.sluggingPercentage),
+        ops: toNumber(split.stat?.ops),
+        battersFaced: Number.isFinite(bf) ? bf : 0,
+      });
+    }
   }
   return map;
 }
@@ -192,22 +198,49 @@ function parseLineup(team: FeedTeam | undefined): PlayerInput[] {
   }).filter(row => row.name !== String(row.id));
 }
 
+function parseFeedHitters(team: FeedTeam | undefined): PlayerInput[] {
+  if (!team?.players) return [];
+  const seen = new Set<number>();
+  const rows: PlayerInput[] = [];
+  for (const row of Object.values(team.players)) {
+    if (row.position?.type === 'Pitcher' || row.position?.abbreviation === 'P') continue;
+    const id = Number(row.person?.id);
+    const name = row.person?.fullName ?? '';
+    if (!Number.isFinite(id) || !name || seen.has(id)) continue;
+    seen.add(id);
+    rows.push({ id, name, order: null, lineupConfirmed: false });
+  }
+  return rows;
+}
+
+function rosterPlayers(roster: RosterResponse): PlayerInput[] {
+  return (roster.roster ?? [])
+    .filter(row => row.position?.type !== 'Pitcher' && row.position?.abbreviation !== 'P')
+    .map(row => ({
+      id: Number(row.person?.id),
+      name: row.person?.fullName ?? '',
+      order: null,
+      lineupConfirmed: false,
+    }))
+    .filter(row => Number.isFinite(row.id) && row.name.length > 0);
+}
+
 async function fetchActiveHitters(teamId: number | undefined, date: string): Promise<PlayerInput[]> {
   if (!teamId) return [];
-  try {
-    const roster = await fetchJson<RosterResponse>(`${MLB_BASE}/teams/${teamId}/roster?rosterType=active&date=${date}`, 6500);
-    return (roster.roster ?? [])
-      .filter(row => row.position?.type !== 'Pitcher' && row.position?.abbreviation !== 'P')
-      .map(row => ({
-        id: Number(row.person?.id),
-        name: row.person?.fullName ?? '',
-        order: null,
-        lineupConfirmed: false,
-      }))
-      .filter(row => Number.isFinite(row.id) && row.name.length > 0);
-  } catch {
-    return [];
+  const urls = [
+    `${MLB_BASE}/teams/${teamId}/roster?rosterType=active&date=${date}`,
+    `${MLB_BASE}/teams/${teamId}/roster?rosterType=active`,
+    `${MLB_BASE}/teams/${teamId}/roster?rosterType=40Man`,
+  ];
+  for (const url of urls) {
+    try {
+      const players = rosterPlayers(await fetchJson<RosterResponse>(url, 6500));
+      if (players.length) return players;
+    } catch {
+      // Try the next official MLB roster representation.
+    }
   }
+  return [];
 }
 
 function parkFactor(venue: string | null | undefined): number {
@@ -399,6 +432,8 @@ async function fetchHomeRunData(date: string): Promise<MlbHomeRunResponse> {
   const candidates: MlbHomeRunCandidate[] = [];
   let gamesWithConfirmedLineups = 0;
   let teamsWithConfirmedLineups = 0;
+  let feedFallbackTeams = 0;
+  let rosterFallbackTeams = 0;
 
   for (const { game, feed } of feeds) {
     const away = game.teams?.away;
@@ -408,19 +443,28 @@ async function fetchHomeRunData(date: string): Promise<MlbHomeRunResponse> {
     const venue = feed?.gameData?.venue?.name ?? game.venue?.name ?? null;
     const weather = feed?.gameData?.weather;
 
-    const awayConfirmed = parseLineup(feed?.liveData?.boxscore?.teams?.away);
-    const homeConfirmed = parseLineup(feed?.liveData?.boxscore?.teams?.home);
+    const awayFeedTeam = feed?.liveData?.boxscore?.teams?.away;
+    const homeFeedTeam = feed?.liveData?.boxscore?.teams?.home;
+    const awayConfirmed = parseLineup(awayFeedTeam);
+    const homeConfirmed = parseLineup(homeFeedTeam);
     if (awayConfirmed.length >= 9) teamsWithConfirmedLineups += 1;
     if (homeConfirmed.length >= 9) teamsWithConfirmedLineups += 1;
     if (awayConfirmed.length >= 9 && homeConfirmed.length >= 9) gamesWithConfirmedLineups += 1;
 
-    const [awayRoster, homeRoster] = await Promise.all([
-      awayConfirmed.length >= 9 ? Promise.resolve([] as PlayerInput[]) : fetchActiveHitters(away?.team?.id, date),
-      homeConfirmed.length >= 9 ? Promise.resolve([] as PlayerInput[]) : fetchActiveHitters(home?.team?.id, date),
-    ]);
+    const awayFeedPlayers = awayConfirmed.length >= 9 ? [] : parseFeedHitters(awayFeedTeam);
+    const homeFeedPlayers = homeConfirmed.length >= 9 ? [] : parseFeedHitters(homeFeedTeam);
+    if (awayFeedPlayers.length) feedFallbackTeams += 1;
+    if (homeFeedPlayers.length) feedFallbackTeams += 1;
 
-    const awayPlayers = awayConfirmed.length >= 9 ? awayConfirmed : awayRoster;
-    const homePlayers = homeConfirmed.length >= 9 ? homeConfirmed : homeRoster;
+    const [awayRoster, homeRoster] = await Promise.all([
+      awayConfirmed.length >= 9 || awayFeedPlayers.length ? Promise.resolve([] as PlayerInput[]) : fetchActiveHitters(away?.team?.id, date),
+      homeConfirmed.length >= 9 || homeFeedPlayers.length ? Promise.resolve([] as PlayerInput[]) : fetchActiveHitters(home?.team?.id, date),
+    ]);
+    if (awayRoster.length) rosterFallbackTeams += 1;
+    if (homeRoster.length) rosterFallbackTeams += 1;
+
+    const awayPlayers = awayConfirmed.length >= 9 ? awayConfirmed : awayFeedPlayers.length ? awayFeedPlayers : awayRoster;
+    const homePlayers = homeConfirmed.length >= 9 ? homeConfirmed : homeFeedPlayers.length ? homeFeedPlayers : homeRoster;
 
     for (const player of awayPlayers) {
       const candidate = buildCandidate({
@@ -459,6 +503,8 @@ async function fetchHomeRunData(date: string): Promise<MlbHomeRunResponse> {
   const strongest = candidates.filter(c => c.lineupConfirmed && c.tier !== 'WATCH').slice(0, 10);
   const watchlist = candidates.filter(c => !c.lineupConfirmed).slice(0, 12);
 
+  console.log(`[MLB Home Runs] ${date}: games=${games.length}, hitting=${hitting.size}, pitching=${pitching.size}, candidates=${candidates.length}, strongest=${strongest.length}, watchlist=${watchlist.length}, feedFallbackTeams=${feedFallbackTeams}, rosterFallbackTeams=${rosterFallbackTeams}`);
+
   const value: MlbHomeRunResponse = {
     date,
     modelVersion: 'hr-v1-research',
@@ -471,12 +517,16 @@ async function fetchHomeRunData(date: string): Promise<MlbHomeRunResponse> {
     totalGames: games.length,
     marketStatus: 'unavailable',
     homepageReady: false,
-    methodology: 'Official MLB season and recent hitting rates are regressed toward league average, then adjusted for probable-pitcher HR allowance, park carry, weather, and plate-appearance opportunity. Before batting orders are official, the page shows a clearly labeled active-roster watchlist with reduced confidence; confirmed lineups replace those provisional rows automatically.',
+    methodology: 'Official MLB season and recent hitting rates are regressed toward league average, then adjusted for probable-pitcher HR allowance, park carry, weather, and plate-appearance opportunity. Before batting orders are official, the page uses MLB live-boxscore player pools first and active/40-man roster fallbacks second, with reduced confidence until the batting order posts.',
     note: strongest.length
       ? 'Confirmed-lineup HR recommendations are live. Pregame watchlist rows remain provisional until that team posts its batting order.'
       : watchlist.length
         ? 'Batting orders are not fully posted yet, so these are early power watchlist candidates rather than official HR plays. They automatically upgrade or disappear when lineups confirm.'
-        : 'No usable MLB hitter data is available for today yet.',
+        : games.length === 0
+          ? 'No MLB games are scheduled for this date.'
+          : hitting.size === 0
+            ? 'MLB season hitting data is temporarily unavailable, so the model is not forcing recommendations.'
+            : 'MLB games are available, but no eligible hitter pool has populated yet. The model will retry automatically as official game feeds and rosters update.',
   };
 
   cache.set(date, { expiresAt: Date.now() + CACHE_TTL_MS, value });
