@@ -69,9 +69,9 @@ function tierClass(row: Candidate) {
 }
 
 function PlayerHeadshot({ row, size = 'lg' }: { row: Candidate; size?: 'lg' | 'sm' }) {
-  const dimensions = size === 'lg' ? 'h-16 w-16' : 'h-11 w-11';
-  return <div className={`${dimensions} shrink-0 overflow-hidden rounded-full bg-muted ring-1 ring-border/70 shadow-sm`}>
-    <img src={row.headshot} alt={row.player} className="h-full w-full scale-[1.08] object-cover object-[50%_28%]" onError={e => { e.currentTarget.style.display = 'none'; }} />
+  const dimensions = size === 'lg' ? 'h-14 w-14' : 'h-10 w-10';
+  return <div className={`${dimensions} shrink-0 overflow-hidden rounded-full bg-muted/70 ring-1 ring-border/70 shadow-sm`}>
+    <img src={row.headshot} alt={row.player} className="h-full w-full scale-[0.9] object-contain object-center" onError={e => { e.currentTarget.style.display = 'none'; }} />
   </div>;
 }
 
@@ -79,7 +79,7 @@ function ConfirmedRow({ row, onOpen }: { row: Candidate; onOpen: (row: Candidate
   return <button
     type="button"
     onClick={() => onOpen(row)}
-    className="grid w-full grid-cols-[auto_minmax(0,1fr)_110px] items-center gap-3 border-b border-border/45 px-4 py-3.5 text-left transition-colors last:border-b-0 hover:bg-muted/30 focus:outline-none focus-visible:bg-muted/40 focus-visible:ring-2 focus-visible:ring-primary/40"
+    className="grid w-full grid-cols-[auto_minmax(0,1fr)_110px] items-center gap-3 border-b border-border/45 px-4 py-3.5 text-left transition-all last:border-b-0 hover:bg-emerald-500/[.045] focus:outline-none focus-visible:bg-muted/40 focus-visible:ring-2 focus-visible:ring-primary/40"
     aria-label={`Open ${row.player} home run details`}
   >
     <PlayerHeadshot row={row} size="lg" />
@@ -241,16 +241,16 @@ export default function MLBHomeRuns() {
         <p className="mt-1 text-[10px] text-muted-foreground">{data?.note}</p>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[1.02fr_.98fr]">
+      <div className="grid gap-4 xl:grid-cols-[1.12fr_.88fr]">
         <section className="min-w-0">
           <div className="mb-2">
             <div className="flex items-end justify-between gap-3">
-              <h2 className="text-sm font-bold">Confirmed HR Plays</h2>
-              {confirmedRows.length > 5 && <span className="text-[9px] font-medium text-muted-foreground">Scroll to view all {confirmedRows.length}</span>}
+              <div className="flex items-center gap-2"><h2 className="text-sm font-bold">Confirmed HR Plays</h2><Badge variant="outline" className="h-5 border-emerald-500/25 bg-emerald-500/[.08] px-1.5 text-[9px] text-emerald-600">{confirmedRows.length}</Badge></div>
+              {confirmedRows.length > 6 && <span className="text-[9px] font-medium text-muted-foreground">Scroll to view all {confirmedRows.length}</span>}
             </div>
             <p className="mt-0.5 text-[10px] text-muted-foreground">Official lineup is posted and the hitter cleared the model threshold. Tap any player card for the full breakdown.</p>
           </div>
-          <div className="max-h-[440px] touch-pan-y overflow-y-auto overscroll-contain rounded-xl border bg-card/75 shadow-sm [scrollbar-gutter:stable]">
+          <div className="max-h-[560px] touch-pan-y overflow-y-auto overscroll-contain rounded-2xl border border-emerald-500/15 bg-gradient-to-b from-card/95 to-card/70 shadow-md shadow-black/5 [scrollbar-gutter:stable]">
             {confirmedRows.length ? confirmedRows.map(row => <ConfirmedRow key={`${row.gamePk}-${row.playerId}`} row={row} onOpen={setSelectedPlayer} />) : <div className="px-5 py-12 text-center"><Clock3 className="mx-auto h-7 w-7 text-muted-foreground/35" /><div className="mt-2 text-sm font-semibold">No confirmed HR plays yet</div><div className="mt-1 text-[10px] text-muted-foreground">Watchlist players upgrade automatically when lineups post and the model still supports them.</div></div>}
           </div>
         </section>
@@ -263,7 +263,7 @@ export default function MLBHomeRuns() {
             </div>
             <p className="mt-0.5 text-[10px] text-muted-foreground">Best pre-lineup power profiles. Tap any player card to see the detailed model card.</p>
           </div>
-          <div className="max-h-[440px] touch-pan-y overflow-y-auto overscroll-contain rounded-xl border bg-card/75 shadow-sm [scrollbar-gutter:stable]">
+          <div className="max-h-[500px] touch-pan-y overflow-y-auto overscroll-contain rounded-xl border bg-card/75 shadow-sm [scrollbar-gutter:stable]">
             {watchRows.length ? watchRows.map(row => <WatchRow key={`${row.gamePk}-${row.playerId}`} row={row} onOpen={setSelectedPlayer} />) : <div className="px-5 py-12 text-center"><Activity className="mx-auto h-7 w-7 text-muted-foreground/35" /><div className="mt-2 text-sm font-semibold">No early watchlist candidates</div><div className="mt-1 text-[10px] text-muted-foreground">The model is waiting for enough usable hitter and matchup data.</div></div>}
           </div>
         </section>
