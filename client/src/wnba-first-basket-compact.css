@@ -1,5 +1,12 @@
 /* Compact WNBA First Basket presentation without changing model/data logic. */
 
+/* Keep the WNBA section navigation focused on the core first-basket workflow:
+   First Baskets, Strongest Play, WNBA Props, then FB History. */
+#main-content > div > div.border-b.bg-card .flex.overflow-x-auto > button:nth-child(1) { order: 3; }
+#main-content > div > div.border-b.bg-card .flex.overflow-x-auto > button:nth-child(2) { order: 1; }
+#main-content > div > div.border-b.bg-card .flex.overflow-x-auto > button:nth-child(3) { order: 2; }
+#main-content > div > div.border-b.bg-card .flex.overflow-x-auto > button:nth-child(4) { order: 4; }
+
 /* The First Basket screen renders this switch only on the games section, so
    :has() keeps these layout overrides scoped away from WNBA Props/History. */
 #main-content:has(button[role="switch"][aria-checked]) .mx-auto.max-w-7xl.px-4.py-6 {
