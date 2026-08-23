@@ -30,8 +30,6 @@ function TeamLogo({ team, size = "sm" }: { team: string; size?: "sm" | "md" }) {
   );
 }
 
-// FanDuel is only linked as a manual comparison destination; it is not assumed
-// to be the source of the live odds returned by the PreziTools backend.
 function FdLogo({ className = "w-5 h-5", dimmed = false }: { className?: string; dimmed?: boolean }) {
   return (
     <img
@@ -67,47 +65,53 @@ interface EspnPlayerStat {
   isStarter?: boolean;
 }
 
+type MarketValueMetrics = {
+  impliedPct: number;
+  edgePoints: number;
+  expectedValue: number;
+  qualifies: boolean;
+};
+
 function liveOddsSourceLabel(stat: EspnPlayerStat): string {
   if (stat.liveOddsSportsbook) return stat.liveOddsSportsbook;
   if (stat.liveOddsSource === "espn-core") return "ESPN market feed";
   return "Live market";
 }
 
-// Parse American odds string → implied probability (0–100)
-function parseOddsToImplied(odds: string): number {
-  const match = odds?.match(/^([+-]?\d+)/);
-  if (!match) return 0;
-  const num = parseInt(match[1]);
-  if (num > 0) return (100 / (num + 100)) * 100;
-  if (num < 0) return (Math.abs(num) / (Math.abs(num) + 100)) * 100;
-  return 0;
+function parseAmericanOdds(odds?: string): number | null {
+  const match = odds?.trim().match(/^([+-]?\d+)/);
+  if (!match) return null;
+  const num = Number(match[1]);
+  return Number.isFinite(num) && num !== 0 ? num : null;
 }
 
-// Sneaky Value: player is NOT the top pick on their team but has compelling
-// first-basket indicators. Uses 5 independent signals; needs ≥ 2 to qualify.
-function checkSneakyValue(stat: EspnPlayerStat, teamRank: number): boolean {
-  if (teamRank <= 2) return false;           // already highlighted as top picks
-  if (teamRank > 3) return false;            // only consider top 3 per team
-  if (stat.firstBasketPct < 5) return false; // negligible probability
+function marketValueMetrics(stat: EspnPlayerStat): MarketValueMetrics | null {
+  // Real VALUE requires a live market price. Never fall back to model-estimated odds.
+  const americanOdds = parseAmericanOdds(stat.liveOdds);
+  if (americanOdds === null) return null;
+
+  const impliedPct = americanOdds > 0
+    ? (100 / (americanOdds + 100)) * 100
+    : (Math.abs(americanOdds) / (Math.abs(americanOdds) + 100)) * 100;
+  const edgePoints = stat.firstBasketPct - impliedPct;
+  const p = Math.max(0, Math.min(1, stat.firstBasketPct / 100));
+  const profitPerDollar = americanOdds > 0 ? americanOdds / 100 : 100 / Math.abs(americanOdds);
+  const expectedValue = p * profitPerDollar - (1 - p);
+
+  return {
+    impliedPct,
+    edgePoints,
+    expectedValue,
+    qualifies: edgePoints >= 2.5 && expectedValue >= 0.05,
+  };
+}
+
+function checkMarketValue(stat: EspnPlayerStat, teamRank: number): boolean {
+  if (teamRank !== 3) return false;
+  if (!stat.isStarter) return false;
   const inj = stat.injuryStatus?.toLowerCase() || "";
-  if (inj.includes("out")) return false;
-
-  const displayOdds = stat.liveOdds || stat.odds;
-  const impliedPct = parseOddsToImplied(displayOdds);
-
-  let score = 0;
-  // Signal 1: starter who gets into rhythm early
-  if (stat.isStarter) score++;
-  // Signal 2: high shot volume — shoots a lot, likely to attempt first basket
-  if (stat.avgFGA >= 10) score++;
-  // Signal 3: long floor time — more possessions = more shots
-  if (stat.avgMinutes >= 28) score++;
-  // Signal 4: model sees more value than the available market price implies
-  if (impliedPct > 0 && stat.firstBasketPct > impliedPct + 1.5) score++;
-  // Signal 5: efficient high-volume shooter — goes for shots confidently
-  if (stat.avgFGA >= 8 && stat.fgPct >= 44) score++;
-
-  return score >= 2;
+  if (inj.includes("out") || inj.includes("suspend") || inj === "inactive") return false;
+  return marketValueMetrics(stat)?.qualifies ?? false;
 }
 
 function InjuryBadge({ status }: { status?: string }) {
@@ -219,6 +223,7 @@ function PlayerCard({
   const initials = stat.player.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase();
   const displayOdds = stat.liveOdds || stat.odds;
   const isLive = !!stat.liveOdds;
+  const valueMetrics = isLive ? marketValueMetrics(stat) : null;
 
   const cardBg = isElite
     ? "bg-green-100/70 dark:bg-green-500/5"
@@ -298,7 +303,7 @@ function PlayerCard({
           )}
           {isSneakyValue && !isTopPick && !isElite && (
             <Badge className="text-[9px] h-4 px-1.5 bg-blue-900/70 text-blue-300 border border-blue-700/40 font-semibold no-default-active-elevate">
-              Value
+              Market Value
             </Badge>
           )}
           {isDarkHorse && !isSneakyValue && !isTopPick && !isElite && (
@@ -325,11 +330,18 @@ function PlayerCard({
             {displayOdds}
           </span>
           {isLive ? (
-            <Badge variant="outline" className="text-[8px] h-4 px-1.5 bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/20">
-              {liveOddsSourceLabel(stat)}
-            </Badge>
+            <>
+              <Badge variant="outline" className="text-[8px] h-4 px-1.5 bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/20">
+                {liveOddsSourceLabel(stat)}
+              </Badge>
+              {valueMetrics && (
+                <span className={`text-[9px] font-mono ${valueMetrics.edgePoints >= 0 ? "text-blue-600 dark:text-blue-300" : "text-muted-foreground"}`}>
+                  Edge {valueMetrics.edgePoints >= 0 ? "+" : ""}{valueMetrics.edgePoints.toFixed(1)} pts · EV {valueMetrics.expectedValue >= 0 ? "+" : ""}{(valueMetrics.expectedValue * 100).toFixed(0)}%
+                </span>
+              )}
+            </>
           ) : (
-            <span className="text-[9px] text-muted-foreground/50 font-medium">Model estimate</span>
+            <span className="text-[9px] text-muted-foreground/50 font-medium">Model estimate · not eligible for Value</span>
           )}
         </div>
       </div>
@@ -416,7 +428,7 @@ function MatchupH2H({
                     rank={i + 1}
                     showLiveOdds={showLiveOdds}
                     isTopPick={i <= 1}
-                    isSneakyValue={checkSneakyValue(p, i + 1)}
+                    isSneakyValue={checkMarketValue(p, i + 1)}
                     isDarkHorse={i === 3}
                   />
                 ))
@@ -444,7 +456,7 @@ function MatchupH2H({
                     rank={i + 1}
                     showLiveOdds={showLiveOdds}
                     isTopPick={i <= 1}
-                    isSneakyValue={checkSneakyValue(p, i + 1)}
+                    isSneakyValue={checkMarketValue(p, i + 1)}
                     isDarkHorse={i === 3}
                   />
                 ))
@@ -637,12 +649,12 @@ export default function PlayerStats() {
         <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-green-500 inline-block" />Elite 28%+</span>
         <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-yellow-500 inline-block" />Good 20–27%</span>
         <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-emerald-700 inline-block" />Top Pick</span>
-        <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-blue-700 inline-block" />Value</span>
+        <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-blue-700 inline-block" />Market Value = live odds + edge</span>
         <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-red-500/70 inline-block" />Low &lt;20%</span>
         <span className="ml-auto flex items-center gap-3 flex-wrap">
           <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-green-500 inline-block" />Live = market feed</span>
           <span className="text-muted-foreground/40">|</span>
-          <span className="flex items-center gap-1"><span className="text-muted-foreground/60 font-bold text-[10px]">Est</span> = model estimate</span>
+          <span className="flex items-center gap-1"><span className="text-muted-foreground/60 font-bold text-[10px]">Est</span> = model estimate only</span>
           <span className="text-muted-foreground/40">|</span>
           <a
             href="https://www.fanduel.com/sports/nba"
@@ -701,7 +713,7 @@ export default function PlayerStats() {
                     teamRank={teamRank}
                     showLiveOdds={hasLiveOdds}
                     isTopPick={teamRank <= 2}
-                    isSneakyValue={checkSneakyValue(stat, teamRank)}
+                    isSneakyValue={checkMarketValue(stat, teamRank)}
                     isDarkHorse={teamRank === 4}
                   />
                 );
