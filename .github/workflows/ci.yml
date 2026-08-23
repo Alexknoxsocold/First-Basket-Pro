@@ -49,9 +49,6 @@ jobs:
             echo "== npm ci =="
             npm ci
             echo "== npm audit --omit=dev =="
-            # Capture production dependency findings without blocking an otherwise
-            # healthy deploy. The audit output is retained as a CI artifact so
-            # vulnerable packages can be upgraded deliberately with the lockfile.
             npm audit --omit=dev || true
             echo "== npm run check =="
             npm run check
@@ -59,11 +56,18 @@ jobs:
             npm run build
           } 2>&1 | tee ci-verification.log
 
-      - name: Upload CI verification log
+      - name: Capture production audit JSON
+        if: always()
+        shell: bash
+        run: npm audit --omit=dev --json > npm-audit-production.json || true
+
+      - name: Upload CI verification artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: ci-verification-log
-          path: ci-verification.log
+          name: ci-verification
+          path: |
+            ci-verification.log
+            npm-audit-production.json
           if-no-files-found: warn
           retention-days: 3
