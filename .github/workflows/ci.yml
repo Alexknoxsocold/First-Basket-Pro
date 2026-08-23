@@ -41,13 +41,18 @@ jobs:
           node-version: 22
           cache: npm
 
-      - name: Verify install, typecheck, and production build
+      - name: Verify install, audit, typecheck, and production build
         shell: bash
         run: |
           set -o pipefail
           {
             echo "== npm ci =="
             npm ci
+            echo "== npm audit --omit=dev =="
+            # Capture production dependency findings without blocking an otherwise
+            # healthy deploy. The audit output is retained as a CI artifact so
+            # vulnerable packages can be upgraded deliberately with the lockfile.
+            npm audit --omit=dev || true
             echo "== npm run check =="
             npm run check
             echo "== npm run build =="
