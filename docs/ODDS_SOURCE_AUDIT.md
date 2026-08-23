@@ -19,9 +19,15 @@ Current flow:
 - Provider identity is hard-coded in the UI instead of being supplied by the data source.
 - The generated model `odds` field is an implied-price conversion from the model probability and must remain clearly separate from real market odds.
 
+## Normalized odds layer
+
+`server/odds/normalized.ts` now defines the shared market-price contract for future NBA/WNBA integrations. It includes sportsbook/source identity, American odds, implied probability, fetched time, model edge, expected value, and a reusable market-value qualifier.
+
+This layer is intentionally provider-agnostic so ESPN can remain a fallback while an authorized odds provider is tested in parallel.
+
 ## Recommended architecture
 
-Create a shared odds-provider layer for NBA and WNBA with normalized fields:
+Use the shared odds-provider layer for NBA and WNBA with normalized fields:
 
 - sport
 - event id
@@ -40,7 +46,7 @@ For WNBA first-basket value, only label a play `VALUE` when an actual market pri
 ## Migration order
 
 1. Stop assuming live NBA prices are DraftKings unless provider metadata confirms it.
-2. Add normalized odds-provider types/service.
+2. Use the normalized odds-provider types/service now added in `server/odds/normalized.ts`.
 3. Integrate an authorized provider in parallel with ESPN.
 4. Compare NBA first-basket prices and player matching before switching production reads.
 5. Reuse the same provider layer for WNBA first-basket odds.
