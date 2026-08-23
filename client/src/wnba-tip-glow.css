@@ -112,6 +112,38 @@
     content: '';
     flex: 0 0 18px;
   }
+
+  /* WNBA First Basket: keep the entire mobile experience inside safe side
+   * gutters, matching the contained feel of the repaired MLB page. */
+  #main-content > div:has(> .border-b.bg-card button .lucide-target) {
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    width: auto !important;
+    max-width: 100% !important;
+  }
+  #main-content > div:has(> .border-b.bg-card button .lucide-target) > .border-b.bg-card > div {
+    padding-left: 6px !important;
+    padding-right: 6px !important;
+  }
+  #main-content > div:has(> .border-b.bg-card button .lucide-target) > .border-b.bg-card button {
+    padding: 11px 10px !important;
+    font-size: 10px !important;
+  }
+  #main-content > div:has(> .border-b.bg-card button .lucide-target) > .border-b.bg-card + div {
+    padding-left: 8px !important;
+    padding-right: 8px !important;
+    padding-top: 18px !important;
+  }
+  #main-content > div:has(> .border-b.bg-card button .lucide-target) article.rounded-2xl {
+    max-width: 100% !important;
+    border-radius: 12px !important;
+  }
+  #main-content > div:has(> .border-b.bg-card button .lucide-target) article.rounded-2xl > div:first-child {
+    padding: 10px !important;
+  }
+  #main-content > div:has(> .border-b.bg-card button .lucide-target) article.rounded-2xl > div:nth-child(2) {
+    padding: 9px !important;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
