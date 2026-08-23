@@ -13,7 +13,6 @@ import {
 
 import type { Game } from "@shared/schema";
 import { getTeamLogoUrl } from "@/components/GameRow";
-import dkLogoImg from "@assets/fyz4mydi8ceuovtoaooy_1775294282507.avif";
 import fdLogoImg from "@assets/Daniel+Frumhoff_FanDuel+9_1775294382033.jpg";
 
 function TeamLogo({ team, size = "sm" }: { team: string; size?: "sm" | "md" }) {
@@ -31,19 +30,8 @@ function TeamLogo({ team, size = "sm" }: { team: string; size?: "sm" | "md" }) {
   );
 }
 
-// DraftKings logo badge
-function DkLogo({ className = "w-5 h-5", dimmed = false }: { className?: string; dimmed?: boolean }) {
-  return (
-    <img
-      src={dkLogoImg}
-      alt="DraftKings"
-      className={`${className} rounded object-contain`}
-      style={{ opacity: dimmed ? 0.45 : 1 }}
-    />
-  );
-}
-
-// FanDuel logo badge
+// FanDuel is only linked as a manual comparison destination; it is not assumed
+// to be the source of the live odds returned by the PreziTools backend.
 function FdLogo({ className = "w-5 h-5", dimmed = false }: { className?: string; dimmed?: boolean }) {
   return (
     <img
@@ -72,9 +60,17 @@ interface EspnPlayerStat {
   q1FgaRate: number;
   odds: string;
   liveOdds?: string;
+  liveOddsSource?: string;
+  liveOddsSportsbook?: string;
   headshot?: string;
   injuryStatus?: string;
   isStarter?: boolean;
+}
+
+function liveOddsSourceLabel(stat: EspnPlayerStat): string {
+  if (stat.liveOddsSportsbook) return stat.liveOddsSportsbook;
+  if (stat.liveOddsSource === "espn-core") return "ESPN market feed";
+  return "Live market";
 }
 
 // Parse American odds string → implied probability (0–100)
@@ -106,7 +102,7 @@ function checkSneakyValue(stat: EspnPlayerStat, teamRank: number): boolean {
   if (stat.avgFGA >= 10) score++;
   // Signal 3: long floor time — more possessions = more shots
   if (stat.avgMinutes >= 28) score++;
-  // Signal 4: model sees more value than DK's odds imply
+  // Signal 4: model sees more value than the available market price implies
   if (impliedPct > 0 && stat.firstBasketPct > impliedPct + 1.5) score++;
   // Signal 5: efficient high-volume shooter — goes for shots confidently
   if (stat.avgFGA >= 8 && stat.fgPct >= 44) score++;
@@ -219,13 +215,11 @@ function PlayerCard({
   const effectiveTeamRank = teamRank ?? rank;
   const isElite = stat.firstBasketPct >= 28;
   const isGood = stat.firstBasketPct >= 20;
-  // isLow only applies if not highlighted by another flag
   const isLow = stat.firstBasketPct < 20 && !isTopPick && !isSneakyValue && !isDarkHorse;
   const initials = stat.player.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase();
   const displayOdds = stat.liveOdds || stat.odds;
   const isLive = !!stat.liveOdds;
 
-  // Card tint — uses light/dark explicit variants so both modes look correct
   const cardBg = isElite
     ? "bg-green-100/70 dark:bg-green-500/5"
     : isTopPick
@@ -238,7 +232,6 @@ function PlayerCard({
             ? "bg-red-100/60 dark:bg-red-500/5"
             : "";
 
-  // Avatar ring
   const avatarRing = isElite
     ? "ring-green-500/60"
     : isTopPick
@@ -249,7 +242,6 @@ function PlayerCard({
           ? "ring-amber-500/80"
           : "ring-border";
 
-  // Odds color — darker in light mode for contrast, bright in dark mode
   const oddsColor = isElite || isGood
     ? "text-green-700 dark:text-green-400"
     : isTopPick
@@ -265,7 +257,6 @@ function PlayerCard({
       className={`flex gap-3 p-3 rounded-md transition-colors hover-elevate ${cardBg}`}
       data-testid={`card-player-${stat.player.replace(/\s/g, '-')}`}
     >
-      {/* Rank + Avatar */}
       <div className="flex items-start gap-2 shrink-0">
         <span className={`text-[10px] font-bold w-4 text-center pt-1 ${rank <= 3 ? "text-primary" : "text-muted-foreground/50"}`}>
           {rank}
@@ -288,9 +279,7 @@ function PlayerCard({
         </div>
       </div>
 
-      {/* Info */}
       <div className="flex-1 min-w-0">
-        {/* Name row */}
         <div className="flex items-center gap-1.5 flex-wrap">
           <span className="text-sm font-semibold leading-tight">{stat.player}</span>
           <InjuryBadge status={stat.injuryStatus} />
@@ -319,12 +308,10 @@ function PlayerCard({
           )}
         </div>
 
-        {/* Position + GP */}
         <p className="text-[10px] text-muted-foreground mt-0.5">
           {stat.position} &bull; {stat.avgMinutes.toFixed(0)} MIN &bull; {stat.gamesPlayed} GP
         </p>
 
-        {/* FB bars */}
         <div className="mt-2 flex flex-col gap-1">
           <FbCountBar
             count={stat.firstBasketsScored ?? Math.round(stat.firstBasketPct / 100 * stat.gamesPlayed)}
@@ -333,19 +320,17 @@ function PlayerCard({
           <FbBar pct={stat.firstBasketPct} isTopPick={isTopPick} isSneakyValue={isSneakyValue} isDarkHorse={isDarkHorse} />
         </div>
 
-        {/* Stats row */}
-        <div className="flex items-center gap-3 mt-1.5 flex-wrap">
-          {/* Odds — always show DK logo, dimmed if estimated */}
-          <div className="flex items-center gap-1.5">
-            <DkLogo className="w-4 h-4 shrink-0" dimmed={!isLive} />
-            <span className={`font-mono text-xs font-bold ${oddsColor}`}>
-              {displayOdds}
-            </span>
-            {!isLive && (
-              <span className="text-[9px] text-muted-foreground/40 font-medium">Est</span>
-            )}
-          </div>
-
+        <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+          <span className={`font-mono text-xs font-bold ${oddsColor}`}>
+            {displayOdds}
+          </span>
+          {isLive ? (
+            <Badge variant="outline" className="text-[8px] h-4 px-1.5 bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/20">
+              {liveOddsSourceLabel(stat)}
+            </Badge>
+          ) : (
+            <span className="text-[9px] text-muted-foreground/50 font-medium">Model estimate</span>
+          )}
         </div>
       </div>
     </div>
@@ -379,7 +364,6 @@ function MatchupH2H({
 
   return (
     <div className="rounded-md border bg-card overflow-hidden">
-      {/* Matchup header */}
       <button
         className="w-full flex items-center justify-between px-4 py-3 bg-muted/30 border-b hover-elevate"
         onClick={() => setExpanded(e => !e)}
@@ -397,8 +381,8 @@ function MatchupH2H({
             </span>
           )}
           {hasLive && (
-            <Badge className="text-[9px] h-4 px-1.5 bg-green-500/15 text-green-400 border border-green-500/20 font-semibold no-default-active-elevate">
-              DK LIVE ODDS
+            <Badge className="text-[9px] h-4 px-1.5 bg-green-500/15 text-green-500 border border-green-500/20 font-semibold no-default-active-elevate">
+              LIVE MARKET ODDS
             </Badge>
           )}
         </div>
@@ -412,7 +396,6 @@ function MatchupH2H({
 
       {expanded && (
         <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-border">
-          {/* Away team */}
           <div>
             <div className="px-4 py-2 border-b bg-muted/20 flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -441,7 +424,6 @@ function MatchupH2H({
             </div>
           </div>
 
-          {/* Home team */}
           <div>
             <div className="px-4 py-2 border-b bg-muted/20 flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -491,7 +473,6 @@ export default function PlayerStats() {
 
   const todayGames = useMemo(() => {
     if (!games) return [];
-    // ET-aware active date: after 11 PM ET, advance to tomorrow automatically
     const now = new Date();
     const etHour = parseInt(new Intl.DateTimeFormat('en-US', {
       timeZone: 'America/New_York', hour: 'numeric', hour12: false
@@ -509,11 +490,8 @@ export default function PlayerStats() {
     });
 
     return games.filter((g) => {
-      // gameDate is authoritative when it's a specific date
       if (g.gameDate && g.gameDate !== 'Today') return g.gameDate === activeDateISO;
-      // Legacy "Today" label
       if (g.gameDate === 'Today' && etHour < 23) return true;
-      // No gameDate — fall back to gameTime in ET
       if (g.gameTime) {
         const gp = etFormatter.formatToParts(new Date(g.gameTime));
         const gy = gp.find(p => p.type === 'year')?.value;
@@ -525,7 +503,6 @@ export default function PlayerStats() {
     });
   }, [games]);
 
-  // Get all active (non-out) players sorted by FB%
   const allActivePlayers = useMemo(() => {
     if (!espnStats) return [];
     let result = [...espnStats].filter((p) => {
@@ -542,7 +519,6 @@ export default function PlayerStats() {
     return result.sort((a, b) => b.firstBasketPct - a.firstBasketPct);
   }, [espnStats, filterStarters, searchQuery]);
 
-  // Group players by game matchup
   const matchupGroups = useMemo(() => {
     return todayGames.map((game) => {
       const away = allActivePlayers
@@ -557,7 +533,6 @@ export default function PlayerStats() {
 
   const hasLiveOdds = useMemo(() => espnStats?.some((p) => !!p.liveOdds) ?? false, [espnStats]);
 
-  // Map each player to their rank within their own team (for sneaky value detection in list view)
   const teamRankMap = useMemo<Record<string, number>>(() => {
     if (!espnStats) return {};
     const byTeam: Record<string, EspnPlayerStat[]> = {};
@@ -573,7 +548,6 @@ export default function PlayerStats() {
     return map;
   }, [espnStats]);
 
-
   if (espnLoading) {
     return (
       <div className="p-6 space-y-4">
@@ -588,8 +562,6 @@ export default function PlayerStats() {
 
   return (
     <div className="p-6 space-y-5 max-w-7xl mx-auto">
-
-      {/* Page header */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-lg font-bold flex items-center gap-2">
@@ -597,14 +569,13 @@ export default function PlayerStats() {
             Player FB Stats
           </h1>
           {hasLiveOdds && (
-            <p className="text-xs text-green-400 font-semibold mt-0.5">
-              DraftKings Live Odds
+            <p className="text-xs text-green-500 font-semibold mt-0.5">
+              Live First-Basket Market Odds
             </p>
           )}
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
-          {/* View mode toggle */}
           <div className="flex rounded-md border overflow-hidden">
             <button
               onClick={() => setViewMode("h2h")}
@@ -661,7 +632,6 @@ export default function PlayerStats() {
         </div>
       )}
 
-      {/* Legend */}
       <div className="flex flex-wrap items-center gap-3 text-[10px] text-muted-foreground">
         <span className="font-semibold uppercase tracking-wider">FB% key:</span>
         <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-green-500 inline-block" />Elite 28%+</span>
@@ -670,7 +640,7 @@ export default function PlayerStats() {
         <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-blue-700 inline-block" />Value</span>
         <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-red-500/70 inline-block" />Low &lt;20%</span>
         <span className="ml-auto flex items-center gap-3 flex-wrap">
-          <span className="flex items-center gap-1.5"><DkLogo className="w-3.5 h-3.5" /> = DraftKings live odds</span>
+          <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-green-500 inline-block" />Live = market feed</span>
           <span className="text-muted-foreground/40">|</span>
           <span className="flex items-center gap-1"><span className="text-muted-foreground/60 font-bold text-[10px]">Est</span> = model estimate</span>
           <span className="text-muted-foreground/40">|</span>
@@ -686,20 +656,18 @@ export default function PlayerStats() {
         </span>
       </div>
 
-      {/* Main content */}
       {!hasStats ? (
         <div className="rounded-md border bg-card px-6 py-12 text-center">
           <TrendingUp className="w-8 h-8 text-muted-foreground mx-auto mb-3" />
           <p className="text-sm font-medium">Loading player data from ESPN...</p>
           <p className="text-xs text-muted-foreground mt-1">
-            Fetching stats + DraftKings scoring odds for all players on today's rosters.
+            Fetching stats + available first-basket market odds for today's rosters.
           </p>
           <Button variant="outline" size="sm" className="mt-4 gap-2" onClick={() => refetch()}>
             <RefreshCw className="w-3.5 h-3.5" /> Try Again
           </Button>
         </div>
       ) : viewMode === "h2h" ? (
-        /* H2H MATCHUP VIEW */
         <div className="space-y-4">
           {matchupGroups.length === 0 ? (
             <div className="rounded-md border bg-card px-6 py-8 text-center">
@@ -718,7 +686,6 @@ export default function PlayerStats() {
           )}
         </div>
       ) : (
-        /* LIST VIEW — all players sorted by FB% */
         <div className="rounded-md border bg-card overflow-hidden">
           <div className="divide-y divide-border/40">
             {allActivePlayers.length === 0 ? (
@@ -744,7 +711,7 @@ export default function PlayerStats() {
           <div className="px-4 py-2 border-t bg-muted/30">
             <p className="text-xs text-muted-foreground">
               {allActivePlayers.length} players shown &bull; Sorted by Scoring Probability
-              {hasLiveOdds && " &bull; DraftKings live odds included"}
+              {hasLiveOdds && " &bull; live market odds included"}
             </p>
           </div>
         </div>
