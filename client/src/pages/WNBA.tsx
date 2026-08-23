@@ -390,7 +390,7 @@ function SummaryCard({ icon, value, label, detail }: { icon: React.ReactNode; va
 }
 
 export default function WNBA() {
-  const [section, setSection] = useState<Section>('props');
+  const [section, setSection] = useState<Section>('games');
   const [showAll, setShowAll] = useState(true);
   const slate = useQuery<Slate>({ queryKey: ['/api/wnba/first-basket'], staleTime: 60000, refetchInterval: 120000 });
   const history = useQuery<HistoryPayload>({ queryKey: ['/api/wnba/history'], staleTime: 60000, refetchInterval: 180000 });
@@ -415,9 +415,9 @@ export default function WNBA() {
       <div className="border-b bg-card">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-2 px-4 md:px-6 lg:px-8">
           <div className="flex overflow-x-auto">
-            <button onClick={() => setSection('props')} className={`flex items-center gap-1.5 whitespace-nowrap border-b-2 px-4 py-4 text-xs ${section === 'props' ? 'border-primary font-semibold' : 'border-transparent text-muted-foreground'}`}><TrendingUp className="h-3.5 w-3.5" />WNBA Props</button>
             <button onClick={() => setSection('games')} className={`flex items-center gap-1.5 whitespace-nowrap border-b-2 px-4 py-4 text-xs ${section === 'games' ? 'border-primary font-semibold' : 'border-transparent text-muted-foreground'}`}><Target className="h-3.5 w-3.5" />First Baskets</button>
             <button onClick={() => setSection('strongest')} className={`flex items-center gap-1.5 whitespace-nowrap border-b-2 px-4 py-4 text-xs ${section === 'strongest' ? 'border-primary font-semibold' : 'border-transparent text-muted-foreground'}`}><Sparkles className="h-3.5 w-3.5" />Strongest Play</button>
+            <button onClick={() => setSection('props')} className={`flex items-center gap-1.5 whitespace-nowrap border-b-2 px-4 py-4 text-xs ${section === 'props' ? 'border-primary font-semibold' : 'border-transparent text-muted-foreground'}`}><TrendingUp className="h-3.5 w-3.5" />WNBA Props</button>
             <button onClick={() => setSection('history')} className={`flex items-center gap-1.5 whitespace-nowrap border-b-2 px-4 py-4 text-xs ${section === 'history' ? 'border-primary font-semibold' : 'border-transparent text-muted-foreground'}`}><History className="h-3.5 w-3.5" />FB History</button>
           </div>
           <Button variant="outline" size="sm" onClick={() => { slate.refetch(); history.refetch(); }} className="shrink-0 gap-2"><RefreshCw className={`h-3.5 w-3.5 ${(slate.isFetching || history.isFetching) ? 'animate-spin' : ''}`} />Refresh</Button>

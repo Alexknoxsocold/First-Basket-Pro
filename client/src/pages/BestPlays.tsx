@@ -68,7 +68,7 @@ export default function BestPlays(){
     const verifiedProps=(wnbaProps.data?.plays||[]).filter(p=>p.isBettable&&p.side&&p.line!==null).slice(0,3);
     for(const p of verifiedProps){const marketNote=[`Model ${p.projection.toFixed(1)}`,p.edge!==null?`${p.edge.toFixed(1)} edge`:null,p.book,p.odds!==null?americanOdds(p.odds):null].filter(Boolean).join(' · ');out.push({id:`wnba-prop-${p.player}-${p.marketLabel}-${p.gameTime}`,sport:'WNBA',market:`Prop · ${p.marketLabel}`,matchup:`${p.team} vs ${p.opponent}`,pick:`${p.player} ${p.side} ${p.line!.toFixed(1)}`,probability:Math.max(0,Math.min(99,p.confidence)),time:p.gameTime,tier:p.confidenceLabel==='STRONG'?'STRONG PLAY':'VALUE',note:marketNote,href:'/wnba/props',headshot:p.headshot})}
     for(const g of nfl.data?.games||[]){const sides=[g.away,g.home].filter(x=>x.winProbability!==null).sort((a,b)=>(b.winProbability||0)-(a.winProbability||0)),top=sides[0];if(top&&top.winProbability!==null&&top.winProbability>=55)out.push({id:`nfl-ml-${g.id}`,sport:'NFL',market:'Moneyline',matchup:`${g.away.abbr} @ ${g.home.abbr}`,pick:`${top.abbr} ML`,probability:top.winProbability,time:g.date,tier:tier(top.winProbability),note:'Team win model',href:'/nfl'})}
-    return out.sort((a,b)=>{const r={'BEST PLAY':0,'STRONG PLAY':1,'VALUE':2};return r[a.tier]-r[b.tier]||b.probability-a.probability});
+    return out.filter(p=>!p.id.startsWith('wnba-prop-')).sort((a,b)=>{const r={'BEST PLAY':0,'STRONG PLAY':1,'VALUE':2};return r[a.tier]-r[b.tier]||b.probability-a.probability});
   },[mlb.data,mlbHr.data,nbaStats.data,nbaGames.data,wnba.data,wnbaProps.data,nfl.data]);
 
   const totalPages=Math.max(1,Math.ceil(plays.length/PAGE_SIZE));
