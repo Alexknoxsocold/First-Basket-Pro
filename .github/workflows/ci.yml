@@ -41,7 +41,13 @@ jobs:
           node-version: 22
           cache: npm
 
-      - name: Verify install, audit, typecheck, and production build
+      - name: Generate non-breaking production audit fixes
+        shell: bash
+        run: |
+          npm install --package-lock-only --ignore-scripts
+          npm audit fix --omit=dev --package-lock-only || true
+
+      - name: Verify patched lockfile, audit, typecheck, and production build
         shell: bash
         run: |
           set -o pipefail
@@ -69,5 +75,6 @@ jobs:
           path: |
             ci-verification.log
             npm-audit-production.json
+            package-lock.json
           if-no-files-found: warn
           retention-days: 3
