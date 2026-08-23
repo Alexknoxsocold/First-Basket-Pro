@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   RefreshCw, Clock, AlertCircle, History, CircleDot, Activity, Trophy, Target,
-  ChevronDown, ChevronRight, Sparkles, TrendingUp, BarChart3
+  ChevronDown, ChevronRight, Sparkles, TrendingUp
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -438,7 +438,6 @@ export default function WNBA() {
               <SummaryCard icon={<CircleDot className="h-4 w-4 text-cyan-500" />} value={topTip?.jumper || topTip?.team || '—'} label="Top Jump Ball" detail={topTip ? `${topTip.team} · ${pct(topTip.pct)} verified tip rate` : 'Waiting for verified tip data.'} />
               <SummaryCard icon={<Trophy className="h-4 w-4 text-yellow-500" />} value={topTeam?.team || topGame?.topPick?.team || '—'} label="Top Team Today" detail={topGame?.topPick ? `${topGame.topPick.name} leads at ${topGame.topPick.probability.toFixed(1)}%.` : 'Waiting for player model data.'} />
             </div>
-            <div className="mb-5 rounded-xl border bg-muted/[.08] p-4"><div className="flex items-start gap-3"><BarChart3 className="mt-0.5 h-4 w-4 text-primary" /><div><div className="text-xs font-bold">How to read First Basket</div><div className="mt-1 text-[10px] leading-relaxed text-muted-foreground">Start with the opening-possession matchup, then scan the player rankings below. Green marks the stronger verified tip side and red marks the weaker side. Tap any player ranking for deeper first-basket and opening-shot evidence. Sportsbook odds and value only appear when a fresh market price is available.</div></div></div></div>
             <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">{games.map(g => <GameCard key={g.id} game={g} showAll={showAll} />)}</div>
           </> : section === 'strongest' ? <>
             <div className="mb-4 flex items-center justify-between gap-3 rounded-xl border bg-card p-4 shadow-sm"><div><div className="text-sm font-semibold">Strongest WNBA plays</div><div className="mt-1 text-[10px] text-muted-foreground">Only each game's #1 Best Play and #2 Strong Play appear when model probability is at least 10%. Market Value remains separate and only appears when real odds clear the edge/EV threshold.</div></div><Badge variant="outline">{strongest.length} plays</Badge></div>
