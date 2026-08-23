@@ -7,7 +7,11 @@ import {
 } from './normalized';
 
 const PARLAY_URL = 'https://parlay-api.com/v1/sports/basketball_wnba/props';
-const CACHE_TTL_MS = 90_000;
+// The free plan has 1,000 credits/month and a props snapshot costs credits.
+// Keep one shared market snapshot for 20 minutes so normal page refreshes do
+// not burn through the allowance. The WNBA slate can still refresh its model
+// data more frequently without re-requesting sportsbook prices each time.
+const CACHE_TTL_MS = 20 * 60 * 1000;
 
 type ParlayPropRow = Record<string, unknown>;
 
