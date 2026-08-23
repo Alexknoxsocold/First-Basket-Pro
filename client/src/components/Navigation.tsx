@@ -19,7 +19,7 @@ export default function Navigation() {
         <div className="flex items-center gap-0 overflow-x-auto overscroll-x-contain">
           {navItems.map((item) => {
             const Icon = item.icon;
-            const isActive = location === item.path || (item.path === '/wnba' && location.startsWith('/wnba/'));
+            const isActive = location === item.path || (item.path === '/wnba' && location.startsWith('/wnba/')) || (item.path === '/mlb' && location.startsWith('/mlb/'));
             return (
               <Link key={item.path} href={item.path}>
                 <span
