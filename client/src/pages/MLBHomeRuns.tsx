@@ -244,21 +244,27 @@ export default function MLBHomeRuns() {
       <div className="grid gap-4 xl:grid-cols-[1.02fr_.98fr]">
         <section className="min-w-0">
           <div className="mb-2">
-            <h2 className="text-sm font-bold">Confirmed HR Plays</h2>
-            <p className="mt-0.5 text-[10px] text-muted-foreground">Official lineup is posted and the hitter cleared the model threshold. Click anywhere on a player card for the full breakdown.</p>
+            <div className="flex items-end justify-between gap-3">
+              <h2 className="text-sm font-bold">Confirmed HR Plays</h2>
+              {confirmedRows.length > 5 && <span className="text-[9px] font-medium text-muted-foreground">Scroll to view all {confirmedRows.length}</span>}
+            </div>
+            <p className="mt-0.5 text-[10px] text-muted-foreground">Official lineup is posted and the hitter cleared the model threshold. Tap any player card for the full breakdown.</p>
           </div>
-          <div className="overflow-hidden rounded-xl border bg-card/75 shadow-sm">
-            {confirmedRows.length ? confirmedRows.slice(0,5).map(row => <ConfirmedRow key={`${row.gamePk}-${row.playerId}`} row={row} onOpen={setSelectedPlayer} />) : <div className="px-5 py-12 text-center"><Clock3 className="mx-auto h-7 w-7 text-muted-foreground/35" /><div className="mt-2 text-sm font-semibold">No confirmed HR plays yet</div><div className="mt-1 text-[10px] text-muted-foreground">Watchlist players upgrade automatically when lineups post and the model still supports them.</div></div>}
+          <div className="max-h-[440px] touch-pan-y overflow-y-auto overscroll-contain rounded-xl border bg-card/75 shadow-sm [scrollbar-gutter:stable]">
+            {confirmedRows.length ? confirmedRows.map(row => <ConfirmedRow key={`${row.gamePk}-${row.playerId}`} row={row} onOpen={setSelectedPlayer} />) : <div className="px-5 py-12 text-center"><Clock3 className="mx-auto h-7 w-7 text-muted-foreground/35" /><div className="mt-2 text-sm font-semibold">No confirmed HR plays yet</div><div className="mt-1 text-[10px] text-muted-foreground">Watchlist players upgrade automatically when lineups post and the model still supports them.</div></div>}
           </div>
         </section>
 
         <section className="min-w-0">
           <div className="mb-2">
-            <h2 className="text-sm font-bold">Early HR Watchlist</h2>
-            <p className="mt-0.5 text-[10px] text-muted-foreground">Best pre-lineup power profiles. Click anywhere on a player card to see the detailed model card.</p>
+            <div className="flex items-end justify-between gap-3">
+              <h2 className="text-sm font-bold">Early HR Watchlist</h2>
+              {watchRows.length > 7 && <span className="text-[9px] font-medium text-muted-foreground">Scroll to view all {watchRows.length}</span>}
+            </div>
+            <p className="mt-0.5 text-[10px] text-muted-foreground">Best pre-lineup power profiles. Tap any player card to see the detailed model card.</p>
           </div>
-          <div className="overflow-hidden rounded-xl border bg-card/75 shadow-sm">
-            {watchRows.length ? watchRows.slice(0,7).map(row => <WatchRow key={`${row.gamePk}-${row.playerId}`} row={row} onOpen={setSelectedPlayer} />) : <div className="px-5 py-12 text-center"><Activity className="mx-auto h-7 w-7 text-muted-foreground/35" /><div className="mt-2 text-sm font-semibold">No early watchlist candidates</div><div className="mt-1 text-[10px] text-muted-foreground">The model is waiting for enough usable hitter and matchup data.</div></div>}
+          <div className="max-h-[440px] touch-pan-y overflow-y-auto overscroll-contain rounded-xl border bg-card/75 shadow-sm [scrollbar-gutter:stable]">
+            {watchRows.length ? watchRows.map(row => <WatchRow key={`${row.gamePk}-${row.playerId}`} row={row} onOpen={setSelectedPlayer} />) : <div className="px-5 py-12 text-center"><Activity className="mx-auto h-7 w-7 text-muted-foreground/35" /><div className="mt-2 text-sm font-semibold">No early watchlist candidates</div><div className="mt-1 text-[10px] text-muted-foreground">The model is waiting for enough usable hitter and matchup data.</div></div>}
           </div>
         </section>
       </div>
