@@ -30,8 +30,44 @@ export type WnbaFirstBasketMarket = {
   lastUpdate: string | null;
 };
 
+export type ParlayWnbaDiagnostics = {
+  keyConfigured: boolean;
+  endpoint: string;
+  cacheAgeSeconds: number | null;
+  rawRowCount: number;
+  firstBasketRowCount: number;
+  marketKeys: string[];
+  books: string[];
+  draftkingsRows: number;
+  fanduelRows: number;
+  sample: Array<{
+    player: string;
+    market: string;
+    book: string;
+    odds: number | null;
+  }>;
+  lastFetchAt: string | null;
+  lastHttpStatus: number | null;
+  payloadShape: string;
+};
+
 let cache: { at: number; rows: ParlayPropRow[] } | null = null;
 let inFlight: Promise<ParlayPropRow[]> | null = null;
+let diagnostics: ParlayWnbaDiagnostics = {
+  keyConfigured: Boolean(process.env.PARLAY_API_KEY),
+  endpoint: PARLAY_URL,
+  cacheAgeSeconds: null,
+  rawRowCount: 0,
+  firstBasketRowCount: 0,
+  marketKeys: [],
+  books: [],
+  draftkingsRows: 0,
+  fanduelRows: 0,
+  sample: [],
+  lastFetchAt: null,
+  lastHttpStatus: null,
+  payloadShape: 'not-fetched',
+};
 
 function normalizeName(value: unknown): string {
   return String(value ?? '')
@@ -47,13 +83,17 @@ function rowPlayer(row: ParlayPropRow): string {
   return String(row.player ?? row.player_name ?? row.athlete ?? row.selection ?? '').trim();
 }
 
+function rowMarket(row: ParlayPropRow): string {
+  return String(row.market_key ?? row.market ?? row.marketKey ?? row.market_name ?? '').trim();
+}
+
 function rowBookKey(row: ParlayPropRow): string {
-  return String(row.bookmaker ?? row.source ?? row.bookmaker_key ?? '').toLowerCase().trim();
+  return String(row.bookmaker ?? row.source ?? row.bookmaker_key ?? row.book ?? '').toLowerCase().trim();
 }
 
 function rowBookTitle(row: ParlayPropRow): string {
   const key = rowBookKey(row);
-  const title = String(row.bookmaker_title ?? row.source_title ?? row.bookmaker_name ?? '').trim();
+  const title = String(row.bookmaker_title ?? row.source_title ?? row.bookmaker_name ?? row.book_name ?? '').trim();
   if (title) return title;
   if (key === 'fanduel') return 'FanDuel';
   if (key === 'draftkings') return 'DraftKings';
@@ -64,7 +104,7 @@ function rowOdds(row: ParlayPropRow): number | null {
   // ParlayAPI's REST props shape is normally over_price/under_price. One-way
   // scorer markets can also surface a direct price depending on the source.
   // Accept all documented/stream-compatible aliases and never infer a price.
-  const values = [row.price_american, row.price, row.over_price, row.odds];
+  const values = [row.price_american, row.price, row.over_price, row.odds, row.american_odds];
   for (const value of values) {
     const parsed = parseAmericanOdds(value as string | number | null | undefined);
     if (parsed !== null) return parsed;
@@ -83,10 +123,57 @@ function rowLastUpdate(row: ParlayPropRow): string | null {
   return Number.isNaN(d.getTime()) ? null : d.toISOString();
 }
 
+function payloadShape(payload: any): string {
+  if (Array.isArray(payload)) return 'array';
+  if (!payload || typeof payload !== 'object') return typeof payload;
+  const keys = Object.keys(payload).slice(0, 12);
+  const arrays = keys.filter(key => Array.isArray(payload[key]));
+  return `object keys=[${keys.join(',')}] arrays=[${arrays.join(',')}]`;
+}
+
+function extractRows(payload: any): ParlayPropRow[] {
+  if (Array.isArray(payload)) return payload;
+  const direct = [payload?.data, payload?.results, payload?.props, payload?.markets, payload?.items];
+  for (const candidate of direct) if (Array.isArray(candidate)) return candidate;
+  // Some APIs wrap data one level deeper. Inspect common containers without
+  // recursively walking arbitrary payloads or logging private response data.
+  for (const container of direct) {
+    if (!container || typeof container !== 'object' || Array.isArray(container)) continue;
+    for (const value of Object.values(container)) if (Array.isArray(value)) return value as ParlayPropRow[];
+  }
+  return [];
+}
+
+function updateDiagnostics(rawRows: ParlayPropRow[], firstBasketRows: ParlayPropRow[], status: number | null, shape: string) {
+  const marketKeys = [...new Set(rawRows.map(rowMarket).filter(Boolean))].sort();
+  const books = [...new Set(rawRows.map(rowBookKey).filter(Boolean))].sort();
+  diagnostics = {
+    keyConfigured: Boolean(process.env.PARLAY_API_KEY),
+    endpoint: PARLAY_URL,
+    cacheAgeSeconds: 0,
+    rawRowCount: rawRows.length,
+    firstBasketRowCount: firstBasketRows.length,
+    marketKeys: marketKeys.slice(0, 30),
+    books: books.slice(0, 20),
+    draftkingsRows: rawRows.filter(row => rowBookKey(row) === 'draftkings').length,
+    fanduelRows: rawRows.filter(row => rowBookKey(row) === 'fanduel').length,
+    sample: rawRows.slice(0, 8).map(row => ({
+      player: rowPlayer(row),
+      market: rowMarket(row),
+      book: rowBookTitle(row),
+      odds: rowOdds(row),
+    })),
+    lastFetchAt: new Date().toISOString(),
+    lastHttpStatus: status,
+    payloadShape: shape,
+  };
+}
+
 async function requestRows(): Promise<ParlayPropRow[]> {
   const apiKey = process.env.PARLAY_API_KEY;
   if (!apiKey) {
     console.warn('[ParlayAPI] PARLAY_API_KEY is not configured');
+    diagnostics = { ...diagnostics, keyConfigured: false, lastFetchAt: new Date().toISOString() };
     return [];
   }
 
@@ -109,24 +196,35 @@ async function requestRows(): Promise<ParlayPropRow[]> {
     });
     if (!response.ok) {
       console.warn(`[ParlayAPI] WNBA first-basket request failed: ${response.status}`);
+      diagnostics = { ...diagnostics, keyConfigured: true, lastFetchAt: new Date().toISOString(), lastHttpStatus: response.status };
       return cache?.rows ?? [];
     }
     const payload = await response.json();
-    const rows = Array.isArray(payload) ? payload : Array.isArray(payload?.data) ? payload.data : Array.isArray(payload?.results) ? payload.results : [];
+    const shape = payloadShape(payload);
+    const rows = extractRows(payload);
     const firstBasketRows = rows.filter((row: ParlayPropRow) => {
-      const market = String(row.market_key ?? row.market ?? '').toLowerCase();
-      return market === 'player_first_basket' || market.includes('first_basket');
+      const market = rowMarket(row).toLowerCase();
+      return market === 'player_first_basket' || market.includes('first_basket') || market.includes('first point scorer');
     });
     cache = { at: Date.now(), rows: firstBasketRows };
-    if (firstBasketRows.length) {
-      console.log(`[ParlayAPI] Loaded ${firstBasketRows.length} WNBA first-basket prices from ${rows.length} prop rows`);
-    } else {
-      const markets = [...new Set(rows.map((row: ParlayPropRow) => String(row.market_key ?? row.market ?? '')).filter(Boolean))].slice(0, 8);
-      console.log(`[ParlayAPI] No WNBA first-basket prices currently available (${rows.length} prop rows; markets: ${markets.join(', ') || 'none'})`);
-    }
+    updateDiagnostics(rows, firstBasketRows, response.status, shape);
+
+    // Safe operational diagnostics: no API key and no raw provider payload.
+    console.log('[ParlayAPI][WNBA diagnostics]', JSON.stringify({
+      httpStatus: diagnostics.lastHttpStatus,
+      payloadShape: diagnostics.payloadShape,
+      rawRows: diagnostics.rawRowCount,
+      firstBasketRows: diagnostics.firstBasketRowCount,
+      markets: diagnostics.marketKeys,
+      books: diagnostics.books,
+      draftkingsRows: diagnostics.draftkingsRows,
+      fanduelRows: diagnostics.fanduelRows,
+      sample: diagnostics.sample,
+    }));
     return firstBasketRows;
   } catch (error) {
     console.warn('[ParlayAPI] WNBA first-basket request error:', error);
+    diagnostics = { ...diagnostics, keyConfigured: true, lastFetchAt: new Date().toISOString(), lastHttpStatus: null };
     return cache?.rows ?? [];
   }
 }
@@ -142,6 +240,16 @@ async function fetchRows(): Promise<ParlayPropRow[]> {
   } finally {
     inFlight = null;
   }
+}
+
+export function getParlayWnbaDiagnostics(): ParlayWnbaDiagnostics {
+  return {
+    ...diagnostics,
+    cacheAgeSeconds: cache ? Math.round((Date.now() - cache.at) / 1000) : null,
+    sample: diagnostics.sample.map(row => ({ ...row })),
+    marketKeys: [...diagnostics.marketKeys],
+    books: [...diagnostics.books],
+  };
 }
 
 export async function getWnbaFirstBasketMarket(
