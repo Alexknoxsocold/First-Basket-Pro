@@ -20,6 +20,40 @@ body:has(.bp-stars) {
   background: rgb(10 18 32);
 }
 
+/* In light mode, keep the interface itself light while preserving the same
+   deep-blue starfield feel used by dark mode. Best Plays renders its space
+   backdrop as the first div inside the page shell, so override only that
+   decorative layer and leave cards, controls, tables, badges, etc. on the
+   normal light-theme tokens. */
+:root:not(.dark) body:has(.bp-stars) div:has(> .bp-stars) > div:first-of-type {
+  background: linear-gradient(
+    180deg,
+    rgb(19 42 76) 0%,
+    rgb(12 29 55) 34%,
+    rgb(8 18 36) 72%,
+    rgb(7 13 27) 100%
+  ) !important;
+}
+
+:root:not(.dark) body:has(.bp-stars) .bp-stars {
+  opacity: .56 !important;
+}
+
+:root:not(.dark) body:has(.bp-stars) .bp-nebula {
+  opacity: .48 !important;
+}
+
+/* The page title sits directly on the starfield; keep just that small header
+   readable while the play list remains fully light-mode styled. */
+:root:not(.dark) body:has(.bp-stars) div:has(> .bp-stars) h1 {
+  color: rgb(248 250 252);
+  text-shadow: 0 1px 12px rgba(15, 23, 42, .45);
+}
+
+:root:not(.dark) body:has(.bp-stars) div:has(> .bp-stars) > .relative > div:first-child p {
+  color: rgb(203 213 225);
+}
+
 @media (max-width: 767px) {
   .bp-nebula {
     inset: -8vh -18vw !important;
