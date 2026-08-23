@@ -2,7 +2,8 @@ import type { Express } from 'express';
 
 const MLB_BASE = 'https://statsapi.mlb.com/api/v1';
 const LEAGUE_HR_PER_PA = 0.032;
-const CACHE_TTL_MS = 5 * 60 * 1000;
+const DEFAULT_CACHE_TTL_MS = 5 * 60 * 1000;
+const NEAR_GAME_CACHE_TTL_MS = 60 * 1000;
 
 export type MlbHomeRunCandidate = {
   gamePk: number;
@@ -19,30 +20,10 @@ export type MlbHomeRunCandidate = {
   probability: number;
   confidence: number;
   tier: 'POWER_PLAY' | 'STRONG' | 'WATCH';
-  season: {
-    plateAppearances: number;
-    homeRuns: number;
-    homeRunRate: number;
-    slugging: number | null;
-    ops: number | null;
-  };
-  recent: {
-    plateAppearances: number;
-    homeRuns: number;
-    homeRunRate: number | null;
-  };
-  pitcher: {
-    battersFaced: number;
-    homeRunsAllowed: number;
-    homeRunRateAllowed: number | null;
-  };
-  environment: {
-    parkFactor: number;
-    temperatureF: number | null;
-    windMph: number | null;
-    windDirection: string | null;
-    weatherFactor: number;
-  };
+  season: { plateAppearances: number; homeRuns: number; homeRunRate: number; slugging: number | null; ops: number | null };
+  recent: { plateAppearances: number; homeRuns: number; homeRunRate: number | null };
+  pitcher: { battersFaced: number; homeRunsAllowed: number; homeRunRateAllowed: number | null };
+  environment: { parkFactor: number; temperatureF: number | null; windMph: number | null; windDirection: string | null; weatherFactor: number };
   factors: string[];
   market: null;
   homepageEligible: false;
@@ -64,61 +45,20 @@ export type MlbHomeRunResponse = {
   note: string;
 };
 
-type StatSplit = {
-  player?: { id?: number; fullName?: string };
-  stat?: {
-    plateAppearances?: number;
-    homeRuns?: number;
-    sluggingPercentage?: string | number;
-    ops?: string | number;
-    battersFaced?: number;
-  };
-};
-
+type StatSplit = { player?: { id?: number; fullName?: string }; stat?: { plateAppearances?: number; homeRuns?: number; sluggingPercentage?: string | number; ops?: string | number; battersFaced?: number } };
 type StatsResponse = { stats?: { splits?: StatSplit[] }[] };
-
 type TeamRef = { id?: number; name?: string; abbreviation?: string };
 type PitcherRef = { id?: number; fullName?: string };
 type ScheduleSide = { team?: TeamRef; probablePitcher?: PitcherRef };
-type ScheduleGame = {
-  gamePk: number;
-  gameDate: string;
-  venue?: { name?: string };
-  teams?: { away?: ScheduleSide; home?: ScheduleSide };
-};
+type ScheduleGame = { gamePk: number; gameDate: string; venue?: { name?: string }; teams?: { away?: ScheduleSide; home?: ScheduleSide } };
 type ScheduleResponse = { dates?: { games?: ScheduleGame[] }[] };
-
-type FeedPlayer = {
-  person?: { id?: number; fullName?: string };
-  position?: { type?: string; abbreviation?: string };
-};
-type FeedTeam = {
-  battingOrder?: number[];
-  players?: Record<string, FeedPlayer>;
-};
-type FeedResponse = {
-  gameData?: {
-    weather?: { temp?: number; wind?: string };
-    venue?: { name?: string };
-  };
-  liveData?: { boxscore?: { teams?: { away?: FeedTeam; home?: FeedTeam } } };
-};
-
-type RosterResponse = {
-  roster?: { person?: { id?: number; fullName?: string }; position?: { type?: string; abbreviation?: string } }[];
-};
-
-type StatLine = {
-  id: number;
-  name: string;
-  plateAppearances: number;
-  homeRuns: number;
-  slugging: number | null;
-  ops: number | null;
-  battersFaced: number;
-};
-
-type PlayerInput = { id: number; name: string; order: number | null; lineupConfirmed: boolean };
+type FeedPlayer = { person?: { id?: number; fullName?: string }; position?: { type?: string; abbreviation?: string } };
+type FeedTeam = { battingOrder?: number[]; players?: Record<string, FeedPlayer> };
+type FeedResponse = { gameData?: { weather?: { temp?: number; wind?: string }; venue?: { name?: string } }; liveData?: { boxscore?: { teams?: { away?: FeedTeam; home?: FeedTeam } } } };
+type BoxscoreResponse = { teams?: { away?: FeedTeam; home?: FeedTeam } };
+type RosterResponse = { roster?: { person?: { id?: number; fullName?: string }; position?: { type?: string; abbreviation?: string } }[] };
+type StatLine = { id: number; name: string; plateAppearances: number; homeRuns: number; slugging: number | null; ops: number | null; battersFaced: number };
+type PlayerInput = { id: number; name: string; order: number | null; lineupConfirmed: boolean; source: 'feed' | 'boxscore' | 'feed-pool' | 'roster' };
 
 const cache = new Map<string, { expiresAt: number; value: MlbHomeRunResponse }>();
 
@@ -126,426 +66,151 @@ async function fetchJson<T>(url: string, timeoutMs = 7000): Promise<T> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const response = await fetch(url, {
-      signal: controller.signal,
-      headers: { 'User-Agent': 'PreziTools/1.0' },
-    });
+    const response = await fetch(url, { signal: controller.signal, headers: { 'User-Agent': 'PreziTools/1.0' } });
     if (!response.ok) throw new Error(`MLB API ${response.status}`);
     return await response.json() as T;
-  } finally {
-    clearTimeout(timer);
-  }
+  } finally { clearTimeout(timer); }
 }
 
 function etDateISO(): string {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit',
-  }).formatToParts(new Date());
-  const y = parts.find(p => p.type === 'year')?.value;
-  const m = parts.find(p => p.type === 'month')?.value;
-  const d = parts.find(p => p.type === 'day')?.value;
-  return `${y}-${m}-${d}`;
+  const parts = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date());
+  return `${parts.find(p => p.type === 'year')?.value}-${parts.find(p => p.type === 'month')?.value}-${parts.find(p => p.type === 'day')?.value}`;
 }
-
-function toNumber(value: unknown): number | null {
-  const n = Number(value);
-  return Number.isFinite(n) ? n : null;
-}
-
+function toNumber(value: unknown): number | null { const n = Number(value); return Number.isFinite(n) ? n : null; }
 function statMap(response: StatsResponse): Map<number, StatLine> {
   const map = new Map<number, StatLine>();
-  for (const statBlock of response.stats ?? []) {
-    for (const split of statBlock.splits ?? []) {
-      const id = Number(split.player?.id);
-      if (!Number.isFinite(id)) continue;
-      const pa = Number(split.stat?.plateAppearances ?? 0);
-      const hr = Number(split.stat?.homeRuns ?? 0);
-      const bf = Number(split.stat?.battersFaced ?? 0);
-      map.set(id, {
-        id,
-        name: split.player?.fullName ?? String(id),
-        plateAppearances: Number.isFinite(pa) ? pa : 0,
-        homeRuns: Number.isFinite(hr) ? hr : 0,
-        slugging: toNumber(split.stat?.sluggingPercentage),
-        ops: toNumber(split.stat?.ops),
-        battersFaced: Number.isFinite(bf) ? bf : 0,
-      });
-    }
+  for (const block of response.stats ?? []) for (const split of block.splits ?? []) {
+    const id = Number(split.player?.id); if (!Number.isFinite(id)) continue;
+    const pa = Number(split.stat?.plateAppearances ?? 0), hr = Number(split.stat?.homeRuns ?? 0), bf = Number(split.stat?.battersFaced ?? 0);
+    map.set(id, { id, name: split.player?.fullName ?? String(id), plateAppearances: Number.isFinite(pa) ? pa : 0, homeRuns: Number.isFinite(hr) ? hr : 0, slugging: toNumber(split.stat?.sluggingPercentage), ops: toNumber(split.stat?.ops), battersFaced: Number.isFinite(bf) ? bf : 0 });
   }
   return map;
 }
-
 async function fetchStats(season: number, group: 'hitting' | 'pitching', statType = 'season', startDate?: string, endDate?: string): Promise<Map<number, StatLine>> {
-  const params = new URLSearchParams({
-    stats: statType,
-    group,
-    season: String(season),
-    sportIds: '1',
-    playerPool: 'ALL',
-    limit: '2000',
-    hydrate: 'person',
-  });
-  if (startDate) params.set('startDate', startDate);
-  if (endDate) params.set('endDate', endDate);
+  const params = new URLSearchParams({ stats: statType, group, season: String(season), sportIds: '1', playerPool: 'ALL', limit: '2000', hydrate: 'person' });
+  if (startDate) params.set('startDate', startDate); if (endDate) params.set('endDate', endDate);
   return statMap(await fetchJson<StatsResponse>(`${MLB_BASE}/stats?${params.toString()}`, 10000));
 }
 
-function parseLineup(team: FeedTeam | undefined): PlayerInput[] {
+function parseLineup(team: FeedTeam | undefined, source: 'feed' | 'boxscore'): PlayerInput[] {
   if (!team?.battingOrder?.length || !team.players) return [];
-  return team.battingOrder.map((id, index) => {
+  const rows = team.battingOrder.map((id, index) => {
     const row = team.players?.[`ID${id}`];
-    return { id, name: row?.person?.fullName ?? String(id), order: index + 1, lineupConfirmed: true };
+    return { id, name: row?.person?.fullName ?? String(id), order: index + 1, lineupConfirmed: true, source } satisfies PlayerInput;
   }).filter(row => row.name !== String(row.id));
+  return rows.length >= 9 ? rows.slice(0, 9) : [];
 }
-
 function parseFeedHitters(team: FeedTeam | undefined): PlayerInput[] {
   if (!team?.players) return [];
-  const seen = new Set<number>();
-  const rows: PlayerInput[] = [];
+  const seen = new Set<number>(), rows: PlayerInput[] = [];
   for (const row of Object.values(team.players)) {
     if (row.position?.type === 'Pitcher' || row.position?.abbreviation === 'P') continue;
-    const id = Number(row.person?.id);
-    const name = row.person?.fullName ?? '';
+    const id = Number(row.person?.id), name = row.person?.fullName ?? '';
     if (!Number.isFinite(id) || !name || seen.has(id)) continue;
-    seen.add(id);
-    rows.push({ id, name, order: null, lineupConfirmed: false });
+    seen.add(id); rows.push({ id, name, order: null, lineupConfirmed: false, source: 'feed-pool' });
   }
   return rows;
 }
-
 function rosterPlayers(roster: RosterResponse): PlayerInput[] {
-  return (roster.roster ?? [])
-    .filter(row => row.position?.type !== 'Pitcher' && row.position?.abbreviation !== 'P')
-    .map(row => ({
-      id: Number(row.person?.id),
-      name: row.person?.fullName ?? '',
-      order: null,
-      lineupConfirmed: false,
-    }))
-    .filter(row => Number.isFinite(row.id) && row.name.length > 0);
+  return (roster.roster ?? []).filter(r => r.position?.type !== 'Pitcher' && r.position?.abbreviation !== 'P').map(r => ({ id: Number(r.person?.id), name: r.person?.fullName ?? '', order: null, lineupConfirmed: false, source: 'roster' as const })).filter(r => Number.isFinite(r.id) && r.name.length > 0);
 }
-
 async function fetchActiveHitters(teamId: number | undefined, date: string): Promise<PlayerInput[]> {
   if (!teamId) return [];
-  const urls = [
-    `${MLB_BASE}/teams/${teamId}/roster?rosterType=active&date=${date}`,
-    `${MLB_BASE}/teams/${teamId}/roster?rosterType=active`,
-    `${MLB_BASE}/teams/${teamId}/roster?rosterType=40Man`,
-  ];
-  for (const url of urls) {
-    try {
-      const players = rosterPlayers(await fetchJson<RosterResponse>(url, 6500));
-      if (players.length) return players;
-    } catch {
-      // Try the next official MLB roster representation.
-    }
+  for (const url of [`${MLB_BASE}/teams/${teamId}/roster?rosterType=active&date=${date}`, `${MLB_BASE}/teams/${teamId}/roster?rosterType=active`, `${MLB_BASE}/teams/${teamId}/roster?rosterType=40Man`]) {
+    try { const rows = rosterPlayers(await fetchJson<RosterResponse>(url, 6500)); if (rows.length) return rows; } catch {}
   }
   return [];
 }
 
-function parkFactor(venue: string | null | undefined): number {
-  const name = (venue ?? '').toLowerCase();
-  if (name.includes('coors')) return 1.12;
-  if (name.includes('great american')) return 1.07;
-  if (name.includes('yankee')) return 1.05;
-  if (name.includes('citizens bank')) return 1.05;
-  if (name.includes('fenway')) return 1.03;
-  if (name.includes('wrigley')) return 1.02;
-  if (name.includes('dodger')) return 1.02;
-  if (name.includes('camden')) return 0.99;
-  if (name.includes('oracle')) return 0.96;
-  if (name.includes('petco')) return 0.96;
-  if (name.includes('t-mobile')) return 0.97;
-  return 1;
+function parkFactor(venue?: string | null): number {
+  const n = (venue ?? '').toLowerCase();
+  if (n.includes('coors')) return 1.12; if (n.includes('great american')) return 1.07; if (n.includes('yankee')) return 1.05; if (n.includes('citizens bank')) return 1.05; if (n.includes('fenway')) return 1.03; if (n.includes('wrigley')) return 1.02; if (n.includes('dodger')) return 1.02; if (n.includes('camden')) return 0.99; if (n.includes('oracle')) return 0.96; if (n.includes('petco')) return 0.96; if (n.includes('t-mobile')) return 0.97; return 1;
 }
+function parseWind(wind?: string) { if (!wind) return { mph: null as number | null, direction: null as string | null, multiplier: 1 }; const m = wind.match(/(\d+(?:\.\d+)?)\s*mph/i); const mph = m ? Number(m[1]) : null; const lower = wind.toLowerCase(); let sign = 0; if (lower.includes('out to') || lower.includes('blowing out')) sign = 1; else if (lower.includes('in from') || lower.includes('blowing in')) sign = -1; const amt = mph === null ? 0 : Math.min(0.08, mph * 0.005); return { mph, direction: wind, multiplier: 1 + sign * amt }; }
+function weatherFactor(temp?: number, wind?: string) { const tempAdj = temp === undefined ? 0 : Math.max(-0.06, Math.min(0.06, (temp - 72) * 0.0025)); const w = parseWind(wind); return { factor: Math.max(0.86, Math.min(1.15, (1 + tempAdj) * w.multiplier)), windMph: w.mph, direction: w.direction }; }
+function expectedPlateAppearances(order: number | null): number { if (order === null) return 4.15; return [4.65,4.55,4.45,4.35,4.25,4.15,4.05,3.95,3.85][Math.max(0, Math.min(8, order - 1))] ?? 4.15; }
+function smoothedRate(events: number, opps: number, prior: number, weight: number) { return (Math.max(0, events) + prior * weight) / (Math.max(0, opps) + weight); }
+function pct(v: number) { return `${(v * 100).toFixed(1)}%`; }
+function factorText(label: string, factor: number) { const d = (factor - 1) * 100; return `${label} ${d >= 0 ? '+' : ''}${d.toFixed(1)}%`; }
 
-function parseWind(wind: string | undefined): { mph: number | null; direction: string | null; multiplier: number } {
-  if (!wind) return { mph: null, direction: null, multiplier: 1 };
-  const mphMatch = wind.match(/(\d+(?:\.\d+)?)\s*mph/i);
-  const mph = mphMatch ? Number(mphMatch[1]) : null;
-  const lower = wind.toLowerCase();
-  let sign = 0;
-  if (lower.includes('out to') || lower.includes('blowing out')) sign = 1;
-  else if (lower.includes('in from') || lower.includes('blowing in')) sign = -1;
-  const amount = mph === null ? 0 : Math.min(0.08, mph * 0.005);
-  return { mph, direction: wind, multiplier: 1 + sign * amount };
-}
-
-function weatherFactor(temp: number | undefined, wind: string | undefined): { factor: number; windMph: number | null; direction: string | null } {
-  const tempAdjustment = temp === undefined ? 0 : Math.max(-0.06, Math.min(0.06, (temp - 72) * 0.0025));
-  const parsed = parseWind(wind);
-  return {
-    factor: Math.max(0.86, Math.min(1.15, (1 + tempAdjustment) * parsed.multiplier)),
-    windMph: parsed.mph,
-    direction: parsed.direction,
-  };
-}
-
-function expectedPlateAppearances(order: number | null): number {
-  if (order === null) return 4.15;
-  const values = [4.65, 4.55, 4.45, 4.35, 4.25, 4.15, 4.05, 3.95, 3.85];
-  return values[Math.max(0, Math.min(8, order - 1))] ?? 4.15;
-}
-
-function smoothedRate(events: number, opportunities: number, priorRate: number, priorWeight: number): number {
-  return (Math.max(0, events) + priorRate * priorWeight) / (Math.max(0, opportunities) + priorWeight);
-}
-
-function pct(value: number): string { return `${(value * 100).toFixed(1)}%`; }
-function factorText(label: string, factor: number): string {
-  const delta = (factor - 1) * 100;
-  return `${label} ${delta >= 0 ? '+' : ''}${delta.toFixed(1)}%`;
-}
-
-function buildCandidate(args: {
-  game: ScheduleGame;
-  player: PlayerInput;
-  team: string;
-  opponent: string;
-  pitcher: PitcherRef | undefined;
-  hitter: StatLine | undefined;
-  recent: StatLine | undefined;
-  pitcherStat: StatLine | undefined;
-  venue: string | null;
-  weather?: { temp?: number; wind?: string };
-}): MlbHomeRunCandidate | null {
+function buildCandidate(args: { game: ScheduleGame; player: PlayerInput; team: string; opponent: string; pitcher?: PitcherRef; hitter?: StatLine; recent?: StatLine; pitcherStat?: StatLine; venue: string | null; weather?: { temp?: number; wind?: string } }): MlbHomeRunCandidate | null {
   const { game, player, team, opponent, pitcher, hitter, recent, pitcherStat, venue, weather } = args;
   if (!hitter || hitter.plateAppearances < 35) return null;
-
   const seasonRate = smoothedRate(hitter.homeRuns, hitter.plateAppearances, LEAGUE_HR_PER_PA, 90);
-  const recentRate = recent && recent.plateAppearances >= 12
-    ? smoothedRate(recent.homeRuns, recent.plateAppearances, seasonRate, 35)
-    : seasonRate;
-  const blendedHitterRate = seasonRate * 0.82 + recentRate * 0.18;
-  const hitterFactor = Math.max(0.55, Math.min(2.3, blendedHitterRate / LEAGUE_HR_PER_PA));
-
-  const pitcherRate = pitcherStat && pitcherStat.battersFaced >= 40
-    ? smoothedRate(pitcherStat.homeRuns, pitcherStat.battersFaced, LEAGUE_HR_PER_PA, 160)
-    : LEAGUE_HR_PER_PA;
+  const recentRate = recent && recent.plateAppearances >= 12 ? smoothedRate(recent.homeRuns, recent.plateAppearances, seasonRate, 35) : seasonRate;
+  const hitterFactor = Math.max(0.55, Math.min(2.3, (seasonRate * 0.82 + recentRate * 0.18) / LEAGUE_HR_PER_PA));
+  const pitcherRate = pitcherStat && pitcherStat.battersFaced >= 40 ? smoothedRate(pitcherStat.homeRuns, pitcherStat.battersFaced, LEAGUE_HR_PER_PA, 160) : LEAGUE_HR_PER_PA;
   const pitcherFactor = Math.max(0.75, Math.min(1.45, pitcherRate / LEAGUE_HR_PER_PA));
-  const park = parkFactor(venue);
-  const wf = weatherFactor(weather?.temp, weather?.wind);
-  const pa = expectedPlateAppearances(player.order);
-
-  const perPa = Math.max(0.008, Math.min(0.12,
-    LEAGUE_HR_PER_PA * hitterFactor * Math.sqrt(pitcherFactor) * park * wf.factor,
-  ));
+  const park = parkFactor(venue), wf = weatherFactor(weather?.temp, weather?.wind), pa = expectedPlateAppearances(player.order);
+  const perPa = Math.max(0.008, Math.min(0.12, LEAGUE_HR_PER_PA * hitterFactor * Math.sqrt(pitcherFactor) * park * wf.factor));
   const probability = Math.max(0.03, Math.min(0.45, 1 - Math.pow(1 - perPa, pa)));
-
-  let confidence = player.lineupConfirmed ? 58 : 48;
-  confidence += Math.min(14, hitter.plateAppearances / 45);
-  if (recent && recent.plateAppearances >= 20) confidence += 5;
-  if (pitcherStat && pitcherStat.battersFaced >= 150) confidence += 7;
-  if (weather?.temp !== undefined || weather?.wind) confidence += 3;
-  confidence = Math.round(Math.max(player.lineupConfirmed ? 55 : 48, Math.min(player.lineupConfirmed ? 92 : 76, confidence)));
-
-  const tier: MlbHomeRunCandidate['tier'] = player.lineupConfirmed && probability >= 0.24 && confidence >= 78
-    ? 'POWER_PLAY'
-    : player.lineupConfirmed && probability >= 0.19 && confidence >= 70
-      ? 'STRONG'
-      : 'WATCH';
-
-  const orderFactor = player.lineupConfirmed && player.order !== null
-    ? `Confirmed batting order #${player.order} · projected ${pa.toFixed(2)} PA`
-    : `Pregame active-roster watchlist · neutral ${pa.toFixed(2)} PA assumption until batting order posts`;
-
+  let confidence = player.lineupConfirmed ? 58 : 48; confidence += Math.min(14, hitter.plateAppearances / 45); if (recent && recent.plateAppearances >= 20) confidence += 5; if (pitcherStat && pitcherStat.battersFaced >= 150) confidence += 7; if (weather?.temp !== undefined || weather?.wind) confidence += 3; confidence = Math.round(Math.max(player.lineupConfirmed ? 55 : 48, Math.min(player.lineupConfirmed ? 92 : 76, confidence)));
+  const tier: MlbHomeRunCandidate['tier'] = player.lineupConfirmed && probability >= 0.24 && confidence >= 78 ? 'POWER_PLAY' : player.lineupConfirmed && probability >= 0.19 && confidence >= 70 ? 'STRONG' : 'WATCH';
+  const sourceText = player.lineupConfirmed ? `Official MLB ${player.source === 'boxscore' ? 'boxscore' : 'live feed'} batting order confirmed` : 'Official MLB pregame player pool';
   const factors = [
     `Season HR rate ${hitter.homeRuns}/${hitter.plateAppearances} PA (${pct(hitter.homeRuns / Math.max(1, hitter.plateAppearances))})`,
     recent && recent.plateAppearances >= 12 ? `Recent 14-day HR rate ${recent.homeRuns}/${recent.plateAppearances} PA (${pct(recent.homeRuns / Math.max(1, recent.plateAppearances))})` : 'Recent sample too small; season baseline carries more weight',
     pitcherStat && pitcherStat.battersFaced >= 40 ? `Probable pitcher HR allowed ${pitcherStat.homeRuns}/${pitcherStat.battersFaced} BF (${pct(pitcherStat.homeRuns / Math.max(1, pitcherStat.battersFaced))})` : 'Probable pitcher HR sample unavailable; league-average pitcher prior used',
-    orderFactor,
-    factorText('Park carry', park),
-    factorText('Weather carry', wf.factor),
+    player.lineupConfirmed && player.order !== null ? `${sourceText} · batting #${player.order} · projected ${pa.toFixed(2)} PA` : `Pregame watchlist · neutral ${pa.toFixed(2)} PA assumption until order posts`,
+    factorText('Park carry', park), factorText('Weather carry', wf.factor),
   ];
+  return { gamePk: game.gamePk, gameTime: game.gameDate, playerId: player.id, player: player.name, team, opponent, headshot: `https://img.mlbstatic.com/mlb-photos/image/upload/w_213,q_100/v1/people/${player.id}/headshot/67/current`, battingOrder: player.order, lineupConfirmed: player.lineupConfirmed, probablePitcher: pitcher?.fullName ?? null, venue, probability: Math.round(probability * 1000) / 10, confidence, tier, season: { plateAppearances: hitter.plateAppearances, homeRuns: hitter.homeRuns, homeRunRate: Math.round((hitter.homeRuns / Math.max(1, hitter.plateAppearances)) * 1000) / 10, slugging: hitter.slugging, ops: hitter.ops }, recent: { plateAppearances: recent?.plateAppearances ?? 0, homeRuns: recent?.homeRuns ?? 0, homeRunRate: recent && recent.plateAppearances > 0 ? Math.round((recent.homeRuns / recent.plateAppearances) * 1000) / 10 : null }, pitcher: { battersFaced: pitcherStat?.battersFaced ?? 0, homeRunsAllowed: pitcherStat?.homeRuns ?? 0, homeRunRateAllowed: pitcherStat && pitcherStat.battersFaced > 0 ? Math.round((pitcherStat.homeRuns / pitcherStat.battersFaced) * 1000) / 10 : null }, environment: { parkFactor: Math.round(park * 1000) / 1000, temperatureF: weather?.temp ?? null, windMph: wf.windMph, windDirection: wf.direction, weatherFactor: Math.round(wf.factor * 1000) / 1000 }, factors, market: null, homepageEligible: false };
+}
 
-  return {
-    gamePk: game.gamePk,
-    gameTime: game.gameDate,
-    playerId: player.id,
-    player: player.name,
-    team,
-    opponent,
-    headshot: `https://img.mlbstatic.com/mlb-photos/image/upload/w_213,q_100/v1/people/${player.id}/headshot/67/current`,
-    battingOrder: player.order,
-    lineupConfirmed: player.lineupConfirmed,
-    probablePitcher: pitcher?.fullName ?? null,
-    venue,
-    probability: Math.round(probability * 1000) / 10,
-    confidence,
-    tier,
-    season: {
-      plateAppearances: hitter.plateAppearances,
-      homeRuns: hitter.homeRuns,
-      homeRunRate: Math.round((hitter.homeRuns / Math.max(1, hitter.plateAppearances)) * 1000) / 10,
-      slugging: hitter.slugging,
-      ops: hitter.ops,
-    },
-    recent: {
-      plateAppearances: recent?.plateAppearances ?? 0,
-      homeRuns: recent?.homeRuns ?? 0,
-      homeRunRate: recent && recent.plateAppearances > 0 ? Math.round((recent.homeRuns / recent.plateAppearances) * 1000) / 10 : null,
-    },
-    pitcher: {
-      battersFaced: pitcherStat?.battersFaced ?? 0,
-      homeRunsAllowed: pitcherStat?.homeRuns ?? 0,
-      homeRunRateAllowed: pitcherStat && pitcherStat.battersFaced > 0 ? Math.round((pitcherStat.homeRuns / pitcherStat.battersFaced) * 1000) / 10 : null,
-    },
-    environment: {
-      parkFactor: Math.round(park * 1000) / 1000,
-      temperatureF: weather?.temp ?? null,
-      windMph: wf.windMph,
-      windDirection: wf.direction,
-      weatherFactor: Math.round(wf.factor * 1000) / 1000,
-    },
-    factors,
-    market: null,
-    homepageEligible: false,
-  };
+function cacheTtl(games: ScheduleGame[]): number {
+  const now = Date.now();
+  const near = games.some(g => { const t = new Date(g.gameDate).getTime(); return Number.isFinite(t) && t >= now - 30 * 60_000 && t <= now + 4 * 60 * 60_000; });
+  return near ? NEAR_GAME_CACHE_TTL_MS : DEFAULT_CACHE_TTL_MS;
 }
 
 async function fetchHomeRunData(date: string): Promise<MlbHomeRunResponse> {
-  const cached = cache.get(date);
-  if (cached && cached.expiresAt > Date.now()) return cached.value;
-
-  const season = Number(date.slice(0, 4));
-  const startRecent = new Date(`${date}T12:00:00Z`);
-  startRecent.setUTCDate(startRecent.getUTCDate() - 14);
-  const recentStart = startRecent.toISOString().slice(0, 10);
-
+  const cached = cache.get(date); if (cached && cached.expiresAt > Date.now()) return cached.value;
+  const season = Number(date.slice(0, 4)); const d = new Date(`${date}T12:00:00Z`); d.setUTCDate(d.getUTCDate() - 14); const recentStart = d.toISOString().slice(0, 10);
   const schedule = await fetchJson<ScheduleResponse>(`${MLB_BASE}/schedule?sportId=1&date=${date}&hydrate=team,venue,probablePitcher`);
   const games = schedule.dates?.flatMap(day => day.games ?? []) ?? [];
-
-  const [hitting, pitching, recentHitting, feeds] = await Promise.all([
-    fetchStats(season, 'hitting'),
-    fetchStats(season, 'pitching'),
-    fetchStats(season, 'hitting', 'byDateRange', recentStart, date).catch(() => new Map<number, StatLine>()),
+  const [hitting, pitching, recentHitting, gameSources] = await Promise.all([
+    fetchStats(season, 'hitting'), fetchStats(season, 'pitching'), fetchStats(season, 'hitting', 'byDateRange', recentStart, date).catch(() => new Map<number, StatLine>()),
     Promise.all(games.map(async game => {
-      try {
-        const feed = await fetchJson<FeedResponse>(`${MLB_BASE}/game/${game.gamePk}/feed/live`, 6500);
-        return { game, feed };
-      } catch {
-        return { game, feed: null as FeedResponse | null };
-      }
+      const [feed, boxscore] = await Promise.all([
+        fetchJson<FeedResponse>(`${MLB_BASE}/game/${game.gamePk}/feed/live`, 6500).catch(() => null),
+        fetchJson<BoxscoreResponse>(`${MLB_BASE}/game/${game.gamePk}/boxscore`, 6500).catch(() => null),
+      ]);
+      return { game, feed, boxscore };
     })),
   ]);
 
-  const candidates: MlbHomeRunCandidate[] = [];
-  let gamesWithConfirmedLineups = 0;
-  let teamsWithConfirmedLineups = 0;
-  let feedFallbackTeams = 0;
-  let rosterFallbackTeams = 0;
-
-  for (const { game, feed } of feeds) {
-    const away = game.teams?.away;
-    const home = game.teams?.home;
-    const awayAbbr = away?.team?.abbreviation ?? away?.team?.name ?? 'AWAY';
-    const homeAbbr = home?.team?.abbreviation ?? home?.team?.name ?? 'HOME';
-    const venue = feed?.gameData?.venue?.name ?? game.venue?.name ?? null;
-    const weather = feed?.gameData?.weather;
-
-    const awayFeedTeam = feed?.liveData?.boxscore?.teams?.away;
-    const homeFeedTeam = feed?.liveData?.boxscore?.teams?.home;
-    const awayConfirmed = parseLineup(awayFeedTeam);
-    const homeConfirmed = parseLineup(homeFeedTeam);
-    if (awayConfirmed.length >= 9) teamsWithConfirmedLineups += 1;
-    if (homeConfirmed.length >= 9) teamsWithConfirmedLineups += 1;
-    if (awayConfirmed.length >= 9 && homeConfirmed.length >= 9) gamesWithConfirmedLineups += 1;
-
-    const awayFeedPlayers = awayConfirmed.length >= 9 ? [] : parseFeedHitters(awayFeedTeam);
-    const homeFeedPlayers = homeConfirmed.length >= 9 ? [] : parseFeedHitters(homeFeedTeam);
-    if (awayFeedPlayers.length) feedFallbackTeams += 1;
-    if (homeFeedPlayers.length) feedFallbackTeams += 1;
-
+  const candidates: MlbHomeRunCandidate[] = []; let gamesWithConfirmedLineups = 0, teamsWithConfirmedLineups = 0, feedConfirmedTeams = 0, boxscoreConfirmedTeams = 0, fallbackTeams = 0;
+  for (const { game, feed, boxscore } of gameSources) {
+    const away = game.teams?.away, home = game.teams?.home; const awayAbbr = away?.team?.abbreviation ?? away?.team?.name ?? 'AWAY', homeAbbr = home?.team?.abbreviation ?? home?.team?.name ?? 'HOME';
+    const venue = feed?.gameData?.venue?.name ?? game.venue?.name ?? null, weather = feed?.gameData?.weather;
+    const feedAway = feed?.liveData?.boxscore?.teams?.away, feedHome = feed?.liveData?.boxscore?.teams?.home, boxAway = boxscore?.teams?.away, boxHome = boxscore?.teams?.home;
+    const awayFeedLineup = parseLineup(feedAway, 'feed'), homeFeedLineup = parseLineup(feedHome, 'feed');
+    const awayBoxLineup = awayFeedLineup.length ? [] : parseLineup(boxAway, 'boxscore'), homeBoxLineup = homeFeedLineup.length ? [] : parseLineup(boxHome, 'boxscore');
+    const awayConfirmed = awayFeedLineup.length ? awayFeedLineup : awayBoxLineup, homeConfirmed = homeFeedLineup.length ? homeFeedLineup : homeBoxLineup;
+    if (awayFeedLineup.length) feedConfirmedTeams++; if (homeFeedLineup.length) feedConfirmedTeams++; if (awayBoxLineup.length) boxscoreConfirmedTeams++; if (homeBoxLineup.length) boxscoreConfirmedTeams++;
+    if (awayConfirmed.length) teamsWithConfirmedLineups++; if (homeConfirmed.length) teamsWithConfirmedLineups++; if (awayConfirmed.length && homeConfirmed.length) gamesWithConfirmedLineups++;
+    const awayPool = awayConfirmed.length ? [] : (parseFeedHitters(feedAway).length ? parseFeedHitters(feedAway) : parseFeedHitters(boxAway));
+    const homePool = homeConfirmed.length ? [] : (parseFeedHitters(feedHome).length ? parseFeedHitters(feedHome) : parseFeedHitters(boxHome));
     const [awayRoster, homeRoster] = await Promise.all([
-      awayConfirmed.length >= 9 || awayFeedPlayers.length ? Promise.resolve([] as PlayerInput[]) : fetchActiveHitters(away?.team?.id, date),
-      homeConfirmed.length >= 9 || homeFeedPlayers.length ? Promise.resolve([] as PlayerInput[]) : fetchActiveHitters(home?.team?.id, date),
+      awayConfirmed.length || awayPool.length ? Promise.resolve([] as PlayerInput[]) : fetchActiveHitters(away?.team?.id, date),
+      homeConfirmed.length || homePool.length ? Promise.resolve([] as PlayerInput[]) : fetchActiveHitters(home?.team?.id, date),
     ]);
-    if (awayRoster.length) rosterFallbackTeams += 1;
-    if (homeRoster.length) rosterFallbackTeams += 1;
-
-    const awayPlayers = awayConfirmed.length >= 9 ? awayConfirmed : awayFeedPlayers.length ? awayFeedPlayers : awayRoster;
-    const homePlayers = homeConfirmed.length >= 9 ? homeConfirmed : homeFeedPlayers.length ? homeFeedPlayers : homeRoster;
-
-    for (const player of awayPlayers) {
-      const candidate = buildCandidate({
-        game,
-        player,
-        team: awayAbbr,
-        opponent: homeAbbr,
-        pitcher: home?.probablePitcher,
-        hitter: hitting.get(player.id),
-        recent: recentHitting.get(player.id),
-        pitcherStat: home?.probablePitcher?.id ? pitching.get(home.probablePitcher.id) : undefined,
-        venue,
-        weather,
-      });
-      if (candidate) candidates.push(candidate);
-    }
-
-    for (const player of homePlayers) {
-      const candidate = buildCandidate({
-        game,
-        player,
-        team: homeAbbr,
-        opponent: awayAbbr,
-        pitcher: away?.probablePitcher,
-        hitter: hitting.get(player.id),
-        recent: recentHitting.get(player.id),
-        pitcherStat: away?.probablePitcher?.id ? pitching.get(away.probablePitcher.id) : undefined,
-        venue,
-        weather,
-      });
-      if (candidate) candidates.push(candidate);
-    }
+    if (!awayConfirmed.length) fallbackTeams++; if (!homeConfirmed.length) fallbackTeams++;
+    const awayPlayers = awayConfirmed.length ? awayConfirmed : awayPool.length ? awayPool : awayRoster; const homePlayers = homeConfirmed.length ? homeConfirmed : homePool.length ? homePool : homeRoster;
+    for (const p of awayPlayers) { const c = buildCandidate({ game, player: p, team: awayAbbr, opponent: homeAbbr, pitcher: home?.probablePitcher, hitter: hitting.get(p.id), recent: recentHitting.get(p.id), pitcherStat: home?.probablePitcher?.id ? pitching.get(home.probablePitcher.id) : undefined, venue, weather }); if (c) candidates.push(c); }
+    for (const p of homePlayers) { const c = buildCandidate({ game, player: p, team: homeAbbr, opponent: awayAbbr, pitcher: away?.probablePitcher, hitter: hitting.get(p.id), recent: recentHitting.get(p.id), pitcherStat: away?.probablePitcher?.id ? pitching.get(away.probablePitcher.id) : undefined, venue, weather }); if (c) candidates.push(c); }
   }
-
-  candidates.sort((a, b) => b.probability - a.probability || b.confidence - a.confidence);
-  const strongest = candidates.filter(c => c.lineupConfirmed && c.tier !== 'WATCH').slice(0, 10);
-  const watchlist = candidates.filter(c => !c.lineupConfirmed).slice(0, 12);
-
-  console.log(`[MLB Home Runs] ${date}: games=${games.length}, hitting=${hitting.size}, pitching=${pitching.size}, candidates=${candidates.length}, strongest=${strongest.length}, watchlist=${watchlist.length}, feedFallbackTeams=${feedFallbackTeams}, rosterFallbackTeams=${rosterFallbackTeams}`);
-
-  const value: MlbHomeRunResponse = {
-    date,
-    modelVersion: 'hr-v1-research',
-    updatedAt: new Date().toISOString(),
-    candidates,
-    strongest,
-    watchlist,
-    gamesWithConfirmedLineups,
-    teamsWithConfirmedLineups,
-    totalGames: games.length,
-    marketStatus: 'unavailable',
-    homepageReady: false,
-    methodology: 'Official MLB season and recent hitting rates are regressed toward league average, then adjusted for probable-pitcher HR allowance, park carry, weather, and plate-appearance opportunity. Before batting orders are official, the page uses MLB live-boxscore player pools first and active/40-man roster fallbacks second, with reduced confidence until the batting order posts.',
-    note: strongest.length
-      ? 'Confirmed-lineup HR recommendations are live. Pregame watchlist rows remain provisional until that team posts its batting order.'
-      : watchlist.length
-        ? 'Batting orders are not fully posted yet, so these are early power watchlist candidates rather than official HR plays. They automatically upgrade or disappear when lineups confirm.'
-        : games.length === 0
-          ? 'No MLB games are scheduled for this date.'
-          : hitting.size === 0
-            ? 'MLB season hitting data is temporarily unavailable, so the model is not forcing recommendations.'
-            : 'MLB games are available, but no eligible hitter pool has populated yet. The model will retry automatically as official game feeds and rosters update.',
-  };
-
-  cache.set(date, { expiresAt: Date.now() + CACHE_TTL_MS, value });
-  return value;
+  candidates.sort((a,b) => b.probability - a.probability || b.confidence - a.confidence); const strongest = candidates.filter(c => c.lineupConfirmed && c.tier !== 'WATCH').slice(0,10), watchlist = candidates.filter(c => !c.lineupConfirmed).slice(0,12);
+  console.log(`[MLB Home Runs] ${date}: games=${games.length}, candidates=${candidates.length}, strongest=${strongest.length}, watchlist=${watchlist.length}, confirmedTeams=${teamsWithConfirmedLineups}, feedConfirmed=${feedConfirmedTeams}, boxscoreConfirmed=${boxscoreConfirmedTeams}, fallbackTeams=${fallbackTeams}`);
+  const value: MlbHomeRunResponse = { date, modelVersion: 'hr-v1-research', updatedAt: new Date().toISOString(), candidates, strongest, watchlist, gamesWithConfirmedLineups, teamsWithConfirmedLineups, totalGames: games.length, marketStatus: 'unavailable', homepageReady: false, methodology: 'Official MLB season and recent hitting rates are regressed toward league average, then adjusted for probable-pitcher HR allowance, park carry, weather, and plate-appearance opportunity. Lineup confirmation now cross-checks both the official MLB live feed and official MLB boxscore; when first pitch is within four hours, the server rechecks official lineups every minute.', note: strongest.length ? 'Confirmed-lineup HR recommendations are live. PreziTools cross-checks the official MLB live feed and boxscore for batting orders.' : watchlist.length ? 'Official batting orders are still pending for these teams. PreziTools is rechecking the MLB live feed and boxscore frequently as first pitch approaches.' : games.length === 0 ? 'No MLB games are scheduled for this date.' : hitting.size === 0 ? 'MLB season hitting data is temporarily unavailable, so the model is not forcing recommendations.' : 'MLB games are available, but no eligible hitter pool has populated yet. The model will retry automatically as official MLB feeds update.' };
+  cache.set(date, { expiresAt: Date.now() + cacheTtl(games), value }); return value;
 }
 
 export function registerMlbHomeRunRoutes(app: Express): void {
   app.get('/api/mlb/home-runs', async (req, res) => {
     try {
-      const requested = typeof req.query.date === 'string' ? req.query.date.trim() : '';
-      if (requested && !/^\d{4}-\d{2}-\d{2}$/.test(requested)) {
-        return res.status(400).json({ error: 'date must use YYYY-MM-DD format' });
-      }
-      const data = await fetchHomeRunData(requested || etDateISO());
-      res.setHeader('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
-      return res.json(data);
-    } catch (error) {
-      console.error('[MLB Home Runs] Error:', error);
-      return res.status(502).json({ error: 'Unable to load MLB home-run model data' });
-    }
+      const requested = typeof req.query.date === 'string' ? req.query.date.trim() : ''; if (requested && !/^\d{4}-\d{2}-\d{2}$/.test(requested)) return res.status(400).json({ error: 'date must use YYYY-MM-DD format' });
+      const data = await fetchHomeRunData(requested || etDateISO()); res.setHeader('Cache-Control', 'public, max-age=30, stale-while-revalidate=60'); return res.json(data);
+    } catch (error) { console.error('[MLB Home Runs] Error:', error); return res.status(502).json({ error: 'Unable to load MLB home-run model data' }); }
   });
 }
