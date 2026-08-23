@@ -4,6 +4,7 @@
 import { fetchMultiTeamFirstBasketHistory } from './firstBasketHistory';
 import { currentAndPreviousSeasonLabels, getFirstBasketSeasonRows, upsertFirstBasketPlayerSeason } from './fbSeasonStore';
 import { nbaSeasonForDate } from './nbaSeason';
+import { formatAmericanOdds, parseAmericanOdds } from './odds/normalized';
 
 export interface EspnPlayerStat {
   player: string;
@@ -26,6 +27,8 @@ export interface EspnPlayerStat {
   q1FgaRate: number;
   odds: string;
   liveOdds?: string;
+  liveOddsSource?: 'espn-core';
+  liveOddsSportsbook?: string;
   headshot?: string;
   injuryStatus?: string;
   isStarter?: boolean;
@@ -186,10 +189,9 @@ export async function fetchFirstBasketOdds(eventIds: string[]): Promise<Record<s
         foundOnPage = true;
         const athleteRef = prop.athlete?.$ref || '';
         const espnId = athleteRef.match(/athletes\/(\d+)/)?.[1];
-        const americanOdds = prop.odds?.american?.value;
-        if (espnId && americanOdds) {
-          const val = parseFloat(americanOdds);
-          oddsMap[espnId] = val > 0 ? `+${Math.round(val)}` : `${Math.round(val)}`;
+        const americanOdds = parseAmericanOdds(prop.odds?.american?.value);
+        if (espnId && americanOdds !== null) {
+          oddsMap[espnId] = formatAmericanOdds(americanOdds);
         }
       }
       const passedFirstBasket = Object.keys(oddsMap).length > 0 && !foundOnPage;
@@ -285,6 +287,7 @@ export async function fetchEspnTeamStats(
           q1FgaRate,
           odds,
           liveOdds,
+          liveOddsSource: liveOdds ? 'espn-core' : undefined,
           headshot: player.headshot?.href,
           injuryStatus: getInjuryStatus(player),
           isStarter: isStarterByLineup,
