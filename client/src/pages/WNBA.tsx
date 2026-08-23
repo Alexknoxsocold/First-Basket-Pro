@@ -134,6 +134,33 @@ function PlayerHeadshot({ p, large = false }: { p: Candidate; large?: boolean })
   );
 }
 
+function normalizePersonName(name: string | null) {
+  return (name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+function jumperCandidate(game: Game, name: string | null, team: string) {
+  if (!name) return null;
+  const target = normalizePersonName(name);
+  const exact = game.candidates.find(p => p.team === team && normalizePersonName(p.name) === target);
+  if (exact) return exact;
+  const last = name.trim().toLowerCase().split(/\s+/).pop();
+  return game.candidates.find(p => p.team === team && p.name.trim().toLowerCase().split(/\s+/).pop() === last) || null;
+}
+
+function TipHeadshot({ player, name, team }: { player: Candidate | null; name: string | null; team: string }) {
+  return (
+    <div className="relative mx-auto h-16 w-16 shrink-0 overflow-hidden rounded-full border-2 border-background/80 bg-muted shadow-md sm:h-[72px] sm:w-[72px]">
+      {player?.headshot ? (
+        <img src={player.headshot} alt={name || `${team} jump-ball player`} className="h-full w-full object-cover object-[50%_20%]" />
+      ) : (
+        <div className="flex h-full w-full items-center justify-center" style={{ backgroundColor: WNBA_TEAM_BG[team.toUpperCase()] || '#1F2937' }}>
+          <img src={wnbaLogo(team)} alt={`${team} logo`} className="h-11 w-11 object-contain" />
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Metric({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
     <div className="rounded-lg border bg-background/45 px-3 py-2">
@@ -224,6 +251,8 @@ function tipLine(team: string, wins: number, events: number, p: number | null) {
 
 function TipCard({ game }: { game: Game }) {
   const t = game.tipSignal;
+  const awayJumperPlayer = jumperCandidate(game, t.awayJumper, game.awayTeam);
+  const homeJumperPlayer = jumperCandidate(game, t.homeJumper, game.homeTeam);
   const bothRates = t.awayTipPct !== null && t.homeTipPct !== null && t.awayTipPct !== t.homeTipPct;
   const awayFavored = bothRates ? (t.awayTipPct as number) > (t.homeTipPct as number) : t.projectedFirstPossessionTeam === game.awayTeam;
   const homeFavored = bothRates ? (t.homeTipPct as number) > (t.awayTipPct as number) : t.projectedFirstPossessionTeam === game.homeTeam;
@@ -252,31 +281,26 @@ function TipCard({ game }: { game: Game }) {
         </div>
       </div>
 
-      <div className="grid grid-cols-[1fr_auto_1fr] items-stretch gap-3">
-        <div className={`rounded-xl border p-3 transition-colors ${awayClass}`}>
-          <div className="flex items-center gap-2">
-            <TeamLogo team={game.awayTeam} size="sm" />
-            <div className="min-w-0">
-              <div className={`truncate text-xs font-black ${hasLean ? (awayFavored ? 'text-emerald-600 dark:text-emerald-300' : 'text-red-500') : ''}`}>{game.awayTeam}</div>
-              <div className="truncate text-[9px] text-muted-foreground">{t.awayJumper || 'Tipper pending'}</div>
-            </div>
-          </div>
-          <div className={`mt-3 font-mono text-xl font-black ${hasLean ? (awayFavored ? 'text-emerald-600 dark:text-emerald-300' : 'text-red-500') : ''}`}>{pct(t.awayTipPct)}</div>
+      <div className="grid grid-cols-[1fr_auto_1fr] items-stretch gap-2 sm:gap-3">
+        <div className={`rounded-xl border p-3 text-center transition-colors ${awayClass}`}>
+          <TipHeadshot player={awayJumperPlayer} name={t.awayJumper} team={game.awayTeam} />
+          <div className={`mt-2 truncate text-xs font-black ${hasLean ? (awayFavored ? 'text-emerald-600 dark:text-emerald-300' : 'text-red-500') : ''}`}>{t.awayJumper || 'Tipper pending'}</div>
+          <div className="mt-1 flex items-center justify-center gap-1.5"><TeamLogo team={game.awayTeam} size="sm" /><span className="text-[9px] font-bold text-muted-foreground">{game.awayTeam}</span></div>
+          <div className={`mt-2 font-mono text-xl font-black ${hasLean ? (awayFavored ? 'text-emerald-600 dark:text-emerald-300' : 'text-red-500') : ''}`}>{pct(t.awayTipPct)}</div>
           <div className="mt-0.5 text-[8px] uppercase tracking-[.1em] text-muted-foreground">verified tip rate</div>
           <div className="mt-2 text-[9px] text-muted-foreground">{tipLine(game.awayTeam, t.awayTipWins, t.awayTipEvents, t.awayTipPct)}</div>
         </div>
 
-        <div className="flex items-center text-[9px] font-black tracking-[.15em] text-muted-foreground">VS</div>
+        <div className="flex flex-col items-center justify-center px-0.5 text-center">
+          <div className="rounded-full border bg-background/70 px-2 py-1 text-[9px] font-black tracking-[.15em] text-muted-foreground shadow-sm">VS</div>
+          <div className="mt-1 text-[7px] uppercase tracking-[.12em] text-muted-foreground/70">jump ball</div>
+        </div>
 
-        <div className={`rounded-xl border p-3 text-right transition-colors ${homeClass}`}>
-          <div className="flex items-center justify-end gap-2">
-            <div className="min-w-0">
-              <div className={`truncate text-xs font-black ${hasLean ? (homeFavored ? 'text-emerald-600 dark:text-emerald-300' : 'text-red-500') : ''}`}>{game.homeTeam}</div>
-              <div className="truncate text-[9px] text-muted-foreground">{t.homeJumper || 'Tipper pending'}</div>
-            </div>
-            <TeamLogo team={game.homeTeam} size="sm" />
-          </div>
-          <div className={`mt-3 font-mono text-xl font-black ${hasLean ? (homeFavored ? 'text-emerald-600 dark:text-emerald-300' : 'text-red-500') : ''}`}>{pct(t.homeTipPct)}</div>
+        <div className={`rounded-xl border p-3 text-center transition-colors ${homeClass}`}>
+          <TipHeadshot player={homeJumperPlayer} name={t.homeJumper} team={game.homeTeam} />
+          <div className={`mt-2 truncate text-xs font-black ${hasLean ? (homeFavored ? 'text-emerald-600 dark:text-emerald-300' : 'text-red-500') : ''}`}>{t.homeJumper || 'Tipper pending'}</div>
+          <div className="mt-1 flex items-center justify-center gap-1.5"><TeamLogo team={game.homeTeam} size="sm" /><span className="text-[9px] font-bold text-muted-foreground">{game.homeTeam}</span></div>
+          <div className={`mt-2 font-mono text-xl font-black ${hasLean ? (homeFavored ? 'text-emerald-600 dark:text-emerald-300' : 'text-red-500') : ''}`}>{pct(t.homeTipPct)}</div>
           <div className="mt-0.5 text-[8px] uppercase tracking-[.1em] text-muted-foreground">verified tip rate</div>
           <div className="mt-2 text-[9px] text-muted-foreground">{tipLine(game.homeTeam, t.homeTipWins, t.homeTipEvents, t.homeTipPct)}</div>
         </div>
