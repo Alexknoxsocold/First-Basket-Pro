@@ -7,6 +7,13 @@
 #main-content [role="button"][aria-expanded].rounded-md.border.p-3.mb-4.overflow-hidden { animation: wnbaTipGlow 3.6s ease-in-out infinite; will-change: box-shadow; }
 #main-content article.rounded-2xl > div.border-b.bg-gradient-to-r > div.mt-3.flex.flex-wrap.items-center.justify-center.gap-2 { display: none; }
 
+/* Force the WNBA sub-tab visual order even if an older cached bundle renders
+ * the previous JSX order. Icons uniquely identify these four WNBA tabs. */
+#main-content .border-b.bg-card .flex.overflow-x-auto > button:has(.lucide-target) { order: 1; }
+#main-content .border-b.bg-card .flex.overflow-x-auto > button:has(.lucide-sparkles) { order: 2; }
+#main-content .border-b.bg-card .flex.overflow-x-auto > button:has(.lucide-trending-up) { order: 3; }
+#main-content .border-b.bg-card .flex.overflow-x-auto > button:has(.lucide-history) { order: 4; }
+
 /* MLB First-Inning Value: true compact phone layout. This targets the actual
  * NRFIPro card markup directly instead of relying on page-level :has(). */
 @media (max-width: 640px) {
