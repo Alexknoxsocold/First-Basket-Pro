@@ -31,6 +31,42 @@
     display: none;
   }
 
+  /* NBA page content: keep the dashboard cards and game area visibly inside
+   * the phone viewport, matching the contained MLB mobile treatment. */
+  #main-content nav[aria-label="NBA sections"] + div {
+    padding-left: 16px !important;
+    padding-right: 16px !important;
+    box-sizing: border-box !important;
+  }
+  #main-content nav[aria-label="NBA sections"] + div > * {
+    max-width: 100% !important;
+  }
+  #main-content nav[aria-label="NBA sections"] + div .grid {
+    min-width: 0 !important;
+  }
+
+  /* Best Plays: retain the star background edge-to-edge, but pull all real
+   * content farther into the viewport so cards do not feel flush to the edge. */
+  #main-content > div:has(.bp-stars) {
+    padding-left: 20px !important;
+    padding-right: 20px !important;
+    box-sizing: border-box !important;
+  }
+  #main-content > div:has(.bp-stars) > .relative.z-10 {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+  }
+  #main-content > div:has(.bp-stars) > .relative.z-10 > div.rounded-2xl {
+    border-radius: 14px !important;
+    max-width: 100% !important;
+  }
+  #main-content > div:has(.bp-stars) > .relative.z-10 > div.rounded-2xl > .p-2 {
+    padding-left: 6px !important;
+    padding-right: 6px !important;
+  }
+
   /* MLB secondary tabs: First-Inning Value / Home Runs */
   #main-content nav[aria-label="MLB sections"] {
     width: 100vw !important;
