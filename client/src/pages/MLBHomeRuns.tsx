@@ -1,5 +1,6 @@
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Activity, Clock3, Crosshair, Flame, RefreshCw, ShieldCheck, ThermometerSun, Wind } from 'lucide-react';
+import { Activity, Clock3, Crosshair, Flame, RefreshCw, ShieldCheck, ThermometerSun, Wind, X } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -79,12 +80,12 @@ function PlayerHeadshot({ row, size = 'lg' }: { row: Candidate; size?: 'lg' | 's
   </div>;
 }
 
-function ConfirmedRow({ row }: { row: Candidate }) {
+function ConfirmedRow({ row, onOpen }: { row: Candidate; onOpen: (row: Candidate) => void }) {
   return <div className="grid grid-cols-[auto_minmax(0,1fr)_110px] items-center gap-3 border-b border-border/45 px-4 py-3.5 last:border-b-0">
     <PlayerHeadshot row={row} size="lg" />
     <div className="min-w-0">
       <div className="flex flex-wrap items-center gap-2">
-        <div className="truncate text-[15px] font-bold">{row.player}</div>
+        <button type="button" onClick={() => onOpen(row)} className="truncate text-left text-[15px] font-bold underline-offset-4 hover:text-primary hover:underline focus:outline-none focus-visible:underline">{row.player}</button>
         {row.battingOrder !== null && <Badge variant="outline" className="h-5 border-emerald-500/25 bg-emerald-500/10 px-1.5 text-[9px] text-emerald-600">#{row.battingOrder}</Badge>}
       </div>
       <div className="mt-0.5 text-[10px] text-muted-foreground">{row.team} vs {row.opponent} · {time(row.gameTime)}</div>
@@ -101,11 +102,11 @@ function ConfirmedRow({ row }: { row: Candidate }) {
   </div>;
 }
 
-function WatchRow({ row }: { row: Candidate }) {
+function WatchRow({ row, onOpen }: { row: Candidate; onOpen: (row: Candidate) => void }) {
   return <div className="grid grid-cols-[auto_minmax(0,1fr)_90px] items-center gap-3 border-b border-border/45 px-4 py-3 last:border-b-0">
     <PlayerHeadshot row={row} size="sm" />
     <div className="min-w-0">
-      <div className="truncate text-sm font-bold">{row.player}</div>
+      <button type="button" onClick={() => onOpen(row)} className="truncate text-left text-sm font-bold underline-offset-4 hover:text-primary hover:underline focus:outline-none focus-visible:underline">{row.player}</button>
       <div className="mt-0.5 text-[10px] text-muted-foreground">{row.team} vs {row.opponent} · {time(row.gameTime)}</div>
       <div className="mt-1.5 flex items-center gap-2">
         <Badge variant="outline" className={`text-[8px] ${tierClass(row)}`}>EARLY WATCH</Badge>
@@ -119,6 +120,69 @@ function WatchRow({ row }: { row: Candidate }) {
   </div>;
 }
 
+function DetailMetric({ label, value, sub }: { label: string; value: string; sub?: string }) {
+  return <div className="rounded-lg border bg-muted/20 p-3">
+    <div className="text-[8px] uppercase tracking-[.13em] text-muted-foreground">{label}</div>
+    <div className="mt-1 font-mono text-lg font-black">{value}</div>
+    {sub && <div className="mt-0.5 text-[9px] text-muted-foreground">{sub}</div>}
+  </div>;
+}
+
+function PlayerDetailModal({ row, onClose }: { row: Candidate; onClose: () => void }) {
+  return <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/65 p-4 backdrop-blur-sm" onMouseDown={e => { if (e.currentTarget === e.target) onClose(); }}>
+    <div role="dialog" aria-modal="true" aria-label={`${row.player} home run model details`} className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border bg-card shadow-2xl">
+      <div className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b bg-card/95 px-5 py-4 backdrop-blur">
+        <div className="flex min-w-0 items-center gap-3">
+          <PlayerHeadshot row={row} size="lg" />
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2"><h3 className="truncate text-xl font-black">{row.player}</h3><Badge variant="outline" className={`text-[8px] ${tierClass(row)}`}>{tierLabel(row)}</Badge></div>
+            <div className="mt-1 text-xs text-muted-foreground">{row.team} vs {row.opponent} · {time(row.gameTime)}</div>
+            <div className="mt-1 text-[10px] text-muted-foreground">{row.lineupConfirmed ? `Confirmed batting order${row.battingOrder ? ` #${row.battingOrder}` : ''}` : 'Lineup pending · early watchlist'}</div>
+          </div>
+        </div>
+        <Button variant="ghost" size="icon" className="shrink-0" onClick={onClose}><X className="h-4 w-4" /></Button>
+      </div>
+
+      <div className="space-y-5 p-5">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <DetailMetric label="HR Probability" value={`${row.probability.toFixed(1)}%`} sub={`${row.confidence}% confidence`} />
+          <DetailMetric label="Season Power" value={`${row.season.homeRuns} HR`} sub={`${row.season.plateAppearances} PA · ${row.season.homeRunRate.toFixed(1)}%`} />
+          <DetailMetric label="Last 14 Days" value={`${row.recent.homeRuns} HR`} sub={`${row.recent.plateAppearances} PA${row.recent.homeRunRate !== null ? ` · ${row.recent.homeRunRate.toFixed(1)}%` : ''}`} />
+          <DetailMetric label="Pitcher HR Allowed" value={`${row.pitcher.homeRunsAllowed} HR`} sub={`${row.pitcher.battersFaced} BF${row.pitcher.homeRunRateAllowed !== null ? ` · ${row.pitcher.homeRunRateAllowed.toFixed(1)}%` : ''}`} />
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="rounded-xl border bg-muted/15 p-4">
+            <div className="flex items-center gap-2 text-sm font-bold"><Wind className="h-4 w-4 text-cyan-500" />Ballpark & atmosphere</div>
+            <div className="mt-3 space-y-1.5 text-[11px] text-muted-foreground">
+              <div>{row.venue ?? 'Venue pending'} · park multiplier {row.environment.parkFactor.toFixed(3)}x</div>
+              <div>{row.environment.temperatureF !== null ? `${row.environment.temperatureF}°F` : 'Temperature pending'} · weather multiplier {row.environment.weatherFactor.toFixed(3)}x</div>
+              <div>{row.environment.windDirection ?? 'Wind data pending'}{row.environment.windMph !== null ? ` · ${row.environment.windMph} mph` : ''}</div>
+            </div>
+          </div>
+          <div className="rounded-xl border bg-muted/15 p-4">
+            <div className="flex items-center gap-2 text-sm font-bold"><Crosshair className="h-4 w-4 text-emerald-500" />Matchup controls</div>
+            <div className="mt-3 space-y-1.5 text-[11px] text-muted-foreground">
+              <div>Probable pitcher: <span className="font-medium text-foreground">{row.probablePitcher ?? 'Pending'}</span></div>
+              <div>{row.lineupConfirmed ? `Batting order #${row.battingOrder ?? '—'} is included in expected plate appearances.` : 'Neutral plate-appearance assumption is used until the official order posts.'}</div>
+              <div>Season and recent samples are regressed toward league average to reduce small-sample overreaction.</div>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div className="mb-2 text-xs font-bold">Why the model ranks this player</div>
+          <div className="space-y-2">
+            {row.factors.map((factor, index) => <div key={index} className="rounded-lg border bg-muted/10 px-3 py-2 text-[10px] leading-relaxed text-muted-foreground">• {factor}</div>)}
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-yellow-500/20 bg-yellow-500/[.06] p-3 text-[9px] leading-relaxed text-muted-foreground">Model probability only. No verified home-run sportsbook price is connected yet, so PreziTools does not display invented odds, edge, or EV.</div>
+      </div>
+    </div>
+  </div>;
+}
+
 function FactorCard({ icon, title, children }: { icon: React.ReactNode; title: string; children: React.ReactNode }) {
   return <div className="min-w-0 border-border/45 px-3 py-2.5 md:border-r md:last:border-r-0">
     <div className="flex items-center gap-2 text-xs font-semibold">{icon}<span>{title}</span></div>
@@ -127,6 +191,7 @@ function FactorCard({ icon, title, children }: { icon: React.ReactNode; title: s
 }
 
 export default function MLBHomeRuns() {
+  const [selectedPlayer, setSelectedPlayer] = useState<Candidate | null>(null);
   const { data, isLoading, isFetching, error, refetch } = useQuery<Payload>({
     queryKey: ['/api/mlb/home-runs'],
     staleTime: 60_000,
@@ -146,6 +211,8 @@ export default function MLBHomeRuns() {
       : 'Waiting for usable MLB hitter data';
 
   return <div className="space-y-5 pb-3">
+    {selectedPlayer && <PlayerDetailModal row={selectedPlayer} onClose={() => setSelectedPlayer(null)} />}
+
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div>
         <div className="flex items-center gap-2"><Flame className="h-5 w-5 text-orange-500" /><h1 className="text-xl font-bold">Prezi HR Power</h1></div>
@@ -173,20 +240,20 @@ export default function MLBHomeRuns() {
         <section className="min-w-0">
           <div className="mb-2">
             <h2 className="text-sm font-bold">Confirmed HR Plays</h2>
-            <p className="mt-0.5 text-[10px] text-muted-foreground">Official lineup is posted and the hitter cleared the model threshold.</p>
+            <p className="mt-0.5 text-[10px] text-muted-foreground">Official lineup is posted and the hitter cleared the model threshold. Click a player name for the full breakdown.</p>
           </div>
           <div className="overflow-hidden rounded-xl border bg-card/75 shadow-sm">
-            {confirmedRows.length ? confirmedRows.slice(0,5).map(row => <ConfirmedRow key={`${row.gamePk}-${row.playerId}`} row={row} />) : <div className="px-5 py-12 text-center"><Clock3 className="mx-auto h-7 w-7 text-muted-foreground/35" /><div className="mt-2 text-sm font-semibold">No confirmed HR plays yet</div><div className="mt-1 text-[10px] text-muted-foreground">Watchlist players upgrade automatically when lineups post and the model still supports them.</div></div>}
+            {confirmedRows.length ? confirmedRows.slice(0,5).map(row => <ConfirmedRow key={`${row.gamePk}-${row.playerId}`} row={row} onOpen={setSelectedPlayer} />) : <div className="px-5 py-12 text-center"><Clock3 className="mx-auto h-7 w-7 text-muted-foreground/35" /><div className="mt-2 text-sm font-semibold">No confirmed HR plays yet</div><div className="mt-1 text-[10px] text-muted-foreground">Watchlist players upgrade automatically when lineups post and the model still supports them.</div></div>}
           </div>
         </section>
 
         <section className="min-w-0">
           <div className="mb-2">
             <h2 className="text-sm font-bold">Early HR Watchlist</h2>
-            <p className="mt-0.5 text-[10px] text-muted-foreground">Best pre-lineup power profiles. These are not final plays yet.</p>
+            <p className="mt-0.5 text-[10px] text-muted-foreground">Best pre-lineup power profiles. Click a player name to see the detailed model card.</p>
           </div>
           <div className="overflow-hidden rounded-xl border bg-card/75 shadow-sm">
-            {watchRows.length ? watchRows.slice(0,7).map(row => <WatchRow key={`${row.gamePk}-${row.playerId}`} row={row} />) : <div className="px-5 py-12 text-center"><Activity className="mx-auto h-7 w-7 text-muted-foreground/35" /><div className="mt-2 text-sm font-semibold">No early watchlist candidates</div><div className="mt-1 text-[10px] text-muted-foreground">The model is waiting for enough usable hitter and matchup data.</div></div>}
+            {watchRows.length ? watchRows.slice(0,7).map(row => <WatchRow key={`${row.gamePk}-${row.playerId}`} row={row} onOpen={setSelectedPlayer} />) : <div className="px-5 py-12 text-center"><Activity className="mx-auto h-7 w-7 text-muted-foreground/35" /><div className="mt-2 text-sm font-semibold">No early watchlist candidates</div><div className="mt-1 text-[10px] text-muted-foreground">The model is waiting for enough usable hitter and matchup data.</div></div>}
           </div>
         </section>
       </div>
