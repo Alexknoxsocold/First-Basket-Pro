@@ -14,6 +14,12 @@
   inset: -12vh -12vw !important;
 }
 
+/* WNBA player props stay on the dedicated WNBA Props tab rather than being
+   promoted into the cross-sport Best Plays feed or its outcome list. */
+body:has(.bp-stars) a[href="/wnba/props"] {
+  display: none !important;
+}
+
 /* Keep the animation behind the interactive Best Plays content while allowing
    the fixed layers to paint across the full screen. */
 body:has(.bp-stars) {
