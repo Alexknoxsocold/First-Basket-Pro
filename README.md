@@ -8,7 +8,7 @@ The goal is broader than a single prediction market: Prezi Tools is designed as 
 
 ## Live product
 
-- Production app: https://first-basket-pro.onrender.com
+- Production app: https://prezitools.com
 - Current sports coverage: WNBA / NBA first-basket analytics and MLB NRFI / YRFI analytics
 
 ## What this project demonstrates
@@ -121,6 +121,8 @@ Some candidate model improvements were intentionally rejected after failing to h
 The basketball side of the product tracks player and team context used to estimate first-basket probabilities and rank candidates.
 
 The application also records completed outcomes so future model changes can be evaluated against real historical evidence rather than anecdotal results.
+
+WNBA live market value currently uses the ParlayAPI adapter when a real first-basket board is available. If no verified sportsbook price is returned, the application leaves market value unavailable rather than fabricating odds.
 
 ## Best Plays philosophy
 
