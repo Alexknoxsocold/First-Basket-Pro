@@ -23,8 +23,7 @@
   display: none !important;
 }
 #main-content:has(button[role="switch"][aria-checked]) .mb-5.flex.flex-wrap.items-end.justify-between > button {
-  margin-left: auto;
-  margin-bottom: 1rem;
+  display: none !important;
 }
 
 /* Dashboard cards: mirror NBA's 2-up mobile / 4-up desktop structure, but keep
