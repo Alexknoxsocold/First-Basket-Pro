@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Activity, Clock3, Crosshair, Flame, RefreshCw, ShieldCheck, ThermometerSun, Wind, X } from 'lucide-react';
+import { Activity, Clock3, Crosshair, Flame, ShieldCheck, ThermometerSun, Wind, X } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -197,7 +197,7 @@ function FactorCard({ icon, title, children }: { icon: React.ReactNode; title: s
 
 export default function MLBHomeRuns() {
   const [selectedPlayer, setSelectedPlayer] = useState<Candidate | null>(null);
-  const { data, isLoading, isFetching, error, refetch } = useQuery<Payload>({
+  const { data, isLoading, error } = useQuery<Payload>({
     queryKey: ['/api/mlb/home-runs'],
     staleTime: 60_000,
     refetchInterval: 5 * 60_000,
@@ -212,7 +212,7 @@ export default function MLBHomeRuns() {
   const statusTitle = confirmedRows.length
     ? `${confirmedRows.length} confirmed HR play${confirmedRows.length === 1 ? '' : 's'} live`
     : watchRows.length
-      ? 'Lineups are still pending — early watchlist is live'
+      ? 'Early Watchlist'
       : 'Waiting for usable MLB hitter data';
 
   return <div className="space-y-5 pb-3">
@@ -220,13 +220,10 @@ export default function MLBHomeRuns() {
 
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div>
-        <div className="flex items-center gap-2"><Flame className="h-5 w-5 text-orange-500" /><h1 className="text-xl font-bold">Prezi HR Power</h1></div>
+        <div className="flex items-center gap-2"><Flame className="h-5 w-5 text-orange-500" /><h1 className="text-xl font-bold">Homeruns</h1></div>
         <p className="mt-1 max-w-3xl text-xs text-muted-foreground">Advanced home-run probability using MLB performance, lineup role, pitcher vulnerability, ballpark carry, temperature, wind, and opportunity.</p>
       </div>
-      <div className="text-right">
-        <Button variant="outline" size="sm" className="gap-2" onClick={() => refetch()} disabled={isFetching}><RefreshCw className={`h-3.5 w-3.5 ${isFetching ? 'animate-spin' : ''}`} />Refresh</Button>
-        {updatedTime(data?.updatedAt) && <div className="mt-2 text-[9px] text-muted-foreground">Last updated: {updatedTime(data?.updatedAt)}</div>}
-      </div>
+      {updatedTime(data?.updatedAt) && <div className="text-right text-[9px] text-muted-foreground">Last updated: {updatedTime(data?.updatedAt)}</div>}
     </div>
 
     {error ? <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-5 text-sm text-destructive">MLB home-run data could not be loaded right now.</div> : <>
@@ -238,7 +235,6 @@ export default function MLBHomeRuns() {
 
       <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/[.07] px-4 py-3">
         <div className="flex items-center gap-2 text-sm font-semibold"><ShieldCheck className="h-4 w-4 text-emerald-500" />{statusTitle}</div>
-        <p className="mt-1 text-[10px] text-muted-foreground">{data?.note}</p>
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[1.12fr_.88fr]">
