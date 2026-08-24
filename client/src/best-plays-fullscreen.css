@@ -20,44 +20,51 @@ body:has(.bp-stars) a[href="/wnba/props"] {
   display: none !important;
 }
 
-/* Keep the animation behind the interactive Best Plays content while allowing
-   the fixed layers to paint across the full screen. */
-body:has(.bp-stars) {
+/* Dark mode keeps the full deep-space treatment. */
+.dark body:has(.bp-stars) {
   background: rgb(10 18 32);
 }
 
-/* In light mode, keep the interface itself light while preserving the same
-   deep-blue starfield feel used by dark mode. Best Plays renders its space
-   backdrop as the first div inside the page shell, so override only that
-   decorative layer and leave cards, controls, tables, badges, etc. on the
-   normal light-theme tokens. */
+/* Light mode should read as a true light theme — no green cast, no blue wash,
+   and no dark-space bleed around the centered app shell. */
+:root:not(.dark) body:has(.bp-stars) {
+  background: hsl(var(--background)) !important;
+}
+
 :root:not(.dark) body:has(.bp-stars) div:has(> .bp-stars) > div:first-of-type {
-  background: linear-gradient(
-    180deg,
-    rgb(19 42 76) 0%,
-    rgb(12 29 55) 34%,
-    rgb(8 18 36) 72%,
-    rgb(7 13 27) 100%
-  ) !important;
+  background: hsl(var(--background)) !important;
 }
 
+/* Remove the colored nebula / shooting-star tint entirely in light mode. */
+:root:not(.dark) body:has(.bp-stars) .bp-nebula,
+:root:not(.dark) body:has(.bp-stars) .bp-shoot {
+  display: none !important;
+}
+
+/* Keep only a very subtle neutral star texture so the page still has some
+   personality without introducing blue or green into white mode. */
 :root:not(.dark) body:has(.bp-stars) .bp-stars {
-  opacity: .56 !important;
+  opacity: .18 !important;
+  background-image:
+    radial-gradient(circle, rgba(71,85,105,.30) 0 1px, transparent 1.2px),
+    radial-gradient(circle, rgba(100,116,139,.20) 0 1px, transparent 1.2px) !important;
 }
 
-:root:not(.dark) body:has(.bp-stars) .bp-nebula {
-  opacity: .48 !important;
+/* Neutralize the decorative blue hairline at the top of the Best Plays panel
+   in light mode while keeping borders/cards themselves unchanged. */
+:root:not(.dark) body:has(.bp-stars) .relative.rounded-2xl > .pointer-events-none.absolute.inset-x-0.top-0.h-px {
+  background: linear-gradient(90deg, transparent, rgba(100,116,139,.28), transparent) !important;
 }
 
-/* The page title sits directly on the starfield; keep just that small header
-   readable while the play list remains fully light-mode styled. */
+/* Use normal light-theme text colors instead of the dark-space white/blue
+   overrides that were previously required for the starfield background. */
 :root:not(.dark) body:has(.bp-stars) div:has(> .bp-stars) h1 {
-  color: rgb(248 250 252);
-  text-shadow: 0 1px 12px rgba(15, 23, 42, .45);
+  color: hsl(var(--foreground)) !important;
+  text-shadow: none !important;
 }
 
 :root:not(.dark) body:has(.bp-stars) div:has(> .bp-stars) > .relative > div:first-child p {
-  color: rgb(203 213 225);
+  color: hsl(var(--muted-foreground)) !important;
 }
 
 @media (max-width: 767px) {
