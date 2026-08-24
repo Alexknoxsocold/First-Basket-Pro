@@ -26,6 +26,37 @@ export default function MLB() {
         .mlb-first-inning-shell [class*="md:grid-cols-3"][class*="mb-8"] span.text-xs { font-size: 7px !important; line-height: 1.15 !important; }
         .mlb-first-inning-shell article[data-testid^="card-nrfi-"] { max-width: 100% !important; }
       }
+
+      @media (min-width: 641px) {
+        nav[aria-label="MLB sections"] {
+          width: 100vw !important;
+          max-width: none !important;
+          margin-left: calc(50% - 50vw) !important;
+          margin-right: calc(50% - 50vw) !important;
+          box-sizing: border-box !important;
+        }
+        nav[aria-label="MLB sections"] > div {
+          width: 100% !important;
+          max-width: 80rem !important;
+          margin-left: auto !important;
+          margin-right: auto !important;
+          box-sizing: border-box !important;
+        }
+        .mlb-first-inning-shell > div > nav {
+          width: 100vw !important;
+          max-width: none !important;
+          margin-left: calc(50% - 50vw) !important;
+          margin-right: calc(50% - 50vw) !important;
+          box-sizing: border-box !important;
+        }
+        .mlb-first-inning-shell > div > nav > div {
+          width: 100% !important;
+          max-width: 80rem !important;
+          margin-left: auto !important;
+          margin-right: auto !important;
+          box-sizing: border-box !important;
+        }
+      }
     `}</style>
     <nav className="border-b bg-card" aria-label="MLB sections">
       <div className="max-w-7xl mx-auto px-0 md:px-6 lg:px-8">
