@@ -57,6 +57,19 @@ export default function MLB() {
           box-sizing: border-box !important;
         }
       }
+
+      .mlb-home-runs-shell > div > div.flex.flex-wrap.items-start.justify-between h1 {
+        font-size: 0 !important;
+      }
+      .mlb-home-runs-shell > div > div.flex.flex-wrap.items-start.justify-between h1::after {
+        content: "Homeruns";
+        font-size: 1.25rem;
+        line-height: 1.75rem;
+        font-weight: 700;
+      }
+      .mlb-home-runs-shell > div > div.flex.flex-wrap.items-start.justify-between > div.text-right > button {
+        display: none !important;
+      }
     `}</style>
     <nav className="border-b bg-card" aria-label="MLB sections">
       <div className="max-w-7xl mx-auto px-0 md:px-6 lg:px-8">
@@ -72,7 +85,7 @@ export default function MLB() {
     </nav>
 
     {homeRuns
-      ? <div className="max-w-7xl mx-auto px-0 md:px-6 lg:px-8 py-8"><MLBHomeRuns /></div>
+      ? <div className="mlb-home-runs-shell max-w-7xl mx-auto px-0 md:px-6 lg:px-8 py-8"><MLBHomeRuns /></div>
       : <div className="mlb-first-inning-shell px-4 pt-8 md:px-0"><NRFIPro /></div>}
   </div>;
 }
