@@ -1,3 +1,8 @@
+/* WNBA props are no longer part of the public site. Keep only the First Basket model sections. */
+#main-content > div:has(> .border-b.bg-card button .lucide-target) > .border-b.bg-card button:has(.lucide-trending-up) {
+  display: none !important;
+}
+
 /* Mobile-only full-width section navigation fixes.
  * Keep page/card content inside its safe gutters while allowing the navigation
  * strips themselves to span the entire phone viewport. */
@@ -129,7 +134,7 @@
     display: none;
   }
 
-  /* WNBA secondary tabs: First Baskets / Strongest Play / Props / History. */
+  /* WNBA secondary tabs: First Baskets / Strongest Play / History. */
   #main-content > div:has(> .border-b.bg-card button .lucide-target) > .border-b.bg-card {
     width: 100vw !important;
     max-width: none !important;
