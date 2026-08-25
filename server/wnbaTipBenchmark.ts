@@ -4,6 +4,8 @@ import ws from 'ws';
 neonConfig.webSocketConstructor = ws;
 const pool = process.env.DATABASE_URL ? new Pool({ connectionString: process.env.DATABASE_URL }) : null;
 
+export const DEFAULT_WNBA_TIP_COMPETITOR = 'TPB_FirstBasketBets';
+
 export type CompetitorTipProjection = {
   source:string;
   gameDate:string;
@@ -24,8 +26,19 @@ export type CompetitorCalibration = {
   calibrationWeight:number;
 };
 
-function team(v:string){const k=v.toUpperCase().trim();return({WAS:'WSH',WSH:'WSH',PHO:'PHX',PHX:'PHX',NYL:'NY',NY:'NY',GSV:'GS',GS:'GS',LVA:'LV',LV:'LV',LAS:'LA',LA:'LA'} as Record<string,string>)[k]||k}
+type TipSignalLike={
+  awayTipPct:number|null;
+  homeTipPct:number|null;
+  projectedFirstPossessionTeam:string|null;
+  confidence:'insufficient'|'emerging'|'usable';
+};
+
+type SlateGameLike={date:string;awayTeam:string;homeTeam:string;tipSignal:TipSignalLike};
+type SlateLike={games:SlateGameLike[]};
+
+function team(v:string){const k=String(v||'').toUpperCase().trim();return({WAS:'WSH',WSH:'WSH',PHO:'PHX',PHX:'PHX',NYL:'NY',NY:'NY',GSV:'GS',GS:'GS',LVA:'LV',LV:'LV',LAS:'LA',LA:'LA'} as Record<string,string>)[k]||k}
 function pct(v:number){return Math.max(1,Math.min(99,Number(v)||50))}
+function isoDate(v:string){const raw=String(v||'');const m=raw.match(/^(\d{4}-\d{2}-\d{2})/);return m?.[1]||raw}
 
 export async function ensureWnbaTipBenchmarkSchema(){
   if(!pool)return;
@@ -49,6 +62,8 @@ export async function ensureWnbaTipBenchmarkSchema(){
       ON wnba_tip_competitor_predictions(source,game_date,upper(away_team),upper(home_team));
     CREATE INDEX IF NOT EXISTS wnba_tip_comp_graded_idx
       ON wnba_tip_competitor_predictions(source,graded_at DESC);
+    CREATE INDEX IF NOT EXISTS wnba_tip_comp_date_idx
+      ON wnba_tip_competitor_predictions(game_date DESC);
   `);
 }
 
@@ -64,15 +79,44 @@ export async function saveCompetitorTipProjection(p:CompetitorTipProjection){
       away_jumper=EXCLUDED.away_jumper,home_jumper=EXCLUDED.home_jumper,
       away_pct=EXCLUDED.away_pct,home_pct=EXCLUDED.home_pct,captured_at=EXCLUDED.captured_at
     WHERE wnba_tip_competitor_predictions.graded_at IS NULL
-  `,[p.source,p.gameDate,team(p.awayTeam),team(p.homeTeam),p.awayJumper,p.homeJumper,away,home,p.capturedAt||null]);
+  `,[p.source.trim()||DEFAULT_WNBA_TIP_COMPETITOR,isoDate(p.gameDate),team(p.awayTeam),team(p.homeTeam),p.awayJumper,p.homeJumper,away,home,p.capturedAt||null]);
   return true;
+}
+
+export async function saveCompetitorTipProjections(items:CompetitorTipProjection[]){
+  let saved=0;
+  for(const item of items)if(await saveCompetitorTipProjection(item))saved++;
+  return{saved};
 }
 
 export async function gradeCompetitorTipProjections(gameDate:string,awayTeam:string,homeTeam:string,winnerTeam:string){
   if(!pool)return 0;
   await ensureWnbaTipBenchmarkSchema();
-  const r=await pool.query(`UPDATE wnba_tip_competitor_predictions SET actual_winner_team=$4,graded_at=now() WHERE game_date=$1 AND upper(away_team)=upper($2) AND upper(home_team)=upper($3) AND graded_at IS NULL RETURNING id`,[gameDate,team(awayTeam),team(homeTeam),team(winnerTeam)]);
+  const r=await pool.query(`UPDATE wnba_tip_competitor_predictions SET actual_winner_team=$4,graded_at=now() WHERE game_date=$1 AND upper(away_team)=upper($2) AND upper(home_team)=upper($3) AND graded_at IS NULL RETURNING id`,[isoDate(gameDate),team(awayTeam),team(homeTeam),team(winnerTeam)]);
   return r.rowCount||0;
+}
+
+// Grades any previously captured competitor rows against our already-verified
+// opening-tip evidence. This also catches projections entered after our normal
+// game tracker has already processed the game.
+export async function gradePendingCompetitorTipProjections(){
+  if(!pool)return{graded:0};
+  await ensureWnbaTipBenchmarkSchema();
+  const r=await pool.query(`
+    UPDATE wnba_tip_competitor_predictions c
+    SET actual_winner_team=upper(e.tip_winner_team),graded_at=now()
+    FROM wnba_opening_evidence e
+    WHERE c.graded_at IS NULL
+      AND e.confidence='verified'
+      AND e.tip_winner_team IS NOT NULL
+      AND c.game_date=e.game_date
+      AND (
+        (upper(c.away_team)=upper(e.team_a) AND upper(c.home_team)=upper(e.team_b)) OR
+        (upper(c.away_team)=upper(e.team_b) AND upper(c.home_team)=upper(e.team_a))
+      )
+    RETURNING c.id
+  `);
+  return{graded:r.rowCount||0};
 }
 
 export async function getCompetitorCalibration(source:string):Promise<CompetitorCalibration>{
@@ -93,18 +137,61 @@ export async function getCompetitorCalibration(source:string):Promise<Competitor
   return{source,gradedGames:rows.length,brier:Math.round(brier*10000)/10000,accuracy:Math.round(accuracy*1000)/10,calibrationWeight};
 }
 
-export async function getCompetitorProjection(gameDate:string,awayTeam:string,homeTeam:string,source='TPB_FirstBasketBets'){
+export async function getCompetitorProjection(gameDate:string,awayTeam:string,homeTeam:string,source=DEFAULT_WNBA_TIP_COMPETITOR){
   if(!pool)return null;
   await ensureWnbaTipBenchmarkSchema();
-  const r=await pool.query(`SELECT source,away_jumper,home_jumper,away_pct,home_pct,captured_at FROM wnba_tip_competitor_predictions WHERE source=$1 AND game_date=$2 AND upper(away_team)=upper($3) AND upper(home_team)=upper($4) ORDER BY captured_at DESC LIMIT 1`,[source,gameDate,team(awayTeam),team(homeTeam)]);
+  const r=await pool.query(`SELECT source,away_jumper,home_jumper,away_pct,home_pct,captured_at FROM wnba_tip_competitor_predictions WHERE source=$1 AND game_date=$2 AND upper(away_team)=upper($3) AND upper(home_team)=upper($4) ORDER BY captured_at DESC LIMIT 1`,[source,isoDate(gameDate),team(awayTeam),team(homeTeam)]);
   if(!r.rows.length)return null;
   const x=r.rows[0];return{source:x.source,awayJumper:x.away_jumper,homeJumper:x.home_jumper,awayPct:Number(x.away_pct),homePct:Number(x.home_pct),capturedAt:x.captured_at};
 }
 
-export async function calibratedCompetitorBlend(ourAwayPct:number,gameDate:string,awayTeam:string,homeTeam:string,source='TPB_FirstBasketBets'){
+export async function calibratedCompetitorBlend(ourAwayPct:number,gameDate:string,awayTeam:string,homeTeam:string,source=DEFAULT_WNBA_TIP_COMPETITOR){
   const [projection,calibration]=await Promise.all([getCompetitorProjection(gameDate,awayTeam,homeTeam,source),getCompetitorCalibration(source)]);
   if(!projection||calibration.calibrationWeight<=0)return{awayPct:ourAwayPct,homePct:100-ourAwayPct,weight:0,calibration,projection};
   const w=calibration.calibrationWeight;
   const away=Math.max(15,Math.min(85,ourAwayPct*(1-w)+projection.awayPct*w));
   return{awayPct:Math.round(away*10)/10,homePct:Math.round((100-away)*10)/10,weight:w,calibration,projection};
+}
+
+// This is deliberately a post-model calibration layer. It never changes our
+// jumper selection or evidence confidence, and it is mathematically inert until
+// the competitor has earned a non-zero weight from at least 30 graded games.
+export async function applyCompetitorCalibrationToSlate<T extends SlateLike>(slate:T,source=DEFAULT_WNBA_TIP_COMPETITOR):Promise<T>{
+  const games=await Promise.all(slate.games.map(async game=>{
+    const signal=game.tipSignal;
+    if(signal.awayTipPct===null||signal.homeTipPct===null)return game;
+    const blended=await calibratedCompetitorBlend(signal.awayTipPct,isoDate(game.date),game.awayTeam,game.homeTeam,source);
+    if(blended.weight<=0)return game;
+    const edge=Math.abs(blended.awayPct-blended.homePct);
+    const projected=signal.confidence!=='insufficient'&&edge>=3?(blended.awayPct>blended.homePct?game.awayTeam:game.homeTeam):null;
+    console.log('[WNBA Competitor Calibration]',`${game.awayTeam}@${game.homeTeam}`,{source,gradedGames:blended.calibration.gradedGames,weight:blended.weight,ourAway:signal.awayTipPct,competitorAway:blended.projection?.awayPct??null,finalAway:blended.awayPct});
+    return{...game,tipSignal:{...signal,awayTipPct:blended.awayPct,homeTipPct:blended.homePct,projectedFirstPossessionTeam:projected}};
+  }));
+  return{...slate,games};
+}
+
+export async function getCompetitorBenchmarkSummary(source=DEFAULT_WNBA_TIP_COMPETITOR,days=180){
+  const calibration=await getCompetitorCalibration(source);
+  if(!pool)return{source,calibration,predictions:[]};
+  await ensureWnbaTipBenchmarkSchema();
+  const safeDays=Math.max(1,Math.min(730,Math.round(days)||180));
+  const r=await pool.query(`
+    SELECT game_date,away_team,home_team,away_jumper,home_jumper,away_pct,home_pct,captured_at,actual_winner_team,graded_at
+    FROM wnba_tip_competitor_predictions
+    WHERE source=$1 AND game_date>=current_date-$2::int
+    ORDER BY game_date DESC,captured_at DESC
+    LIMIT 500
+  `,[source,safeDays]);
+  return{source,calibration,predictions:r.rows.map(x=>({gameDate:String(x.game_date).slice(0,10),awayTeam:x.away_team,homeTeam:x.home_team,awayJumper:x.away_jumper,homeJumper:x.home_jumper,awayPct:Number(x.away_pct),homePct:Number(x.home_pct),capturedAt:x.captured_at,actualWinnerTeam:x.actual_winner_team,gradedAt:x.graded_at}))};
+}
+
+// First preserved observation supplied from the competitor's Aug. 25 post.
+// These are benchmark records only. With fewer than 30 graded rows they have
+// exactly 0% influence on the public WNBA probabilities.
+export async function seedInitialCompetitorTipObservations(){
+  return saveCompetitorTipProjections([
+    {source:DEFAULT_WNBA_TIP_COMPETITOR,gameDate:'2026-08-25',awayTeam:'CHI',homeTeam:'CON',awayJumper:'K. Cardoso',homeJumper:'O. Nelson-Ododa',awayPct:49,homePct:51,capturedAt:'2026-08-25T13:01:00Z'},
+    {source:DEFAULT_WNBA_TIP_COMPETITOR,gameDate:'2026-08-25',awayTeam:'POR',homeTeam:'DAL',awayJumper:'M. Dileo',homeJumper:'A. Smith',awayPct:44,homePct:56,capturedAt:'2026-08-25T13:01:00Z'},
+    {source:DEFAULT_WNBA_TIP_COMPETITOR,gameDate:'2026-08-25',awayTeam:'WSH',homeTeam:'PHX',awayJumper:'S. Austin',homeJumper:'N. Mack',awayPct:41,homePct:59,capturedAt:'2026-08-25T13:01:00Z'},
+  ]);
 }
