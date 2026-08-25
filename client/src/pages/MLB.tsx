@@ -58,6 +58,10 @@ export default function MLB() {
         }
       }
 
+      .mlb-first-inning-shell article[data-testid^="card-nrfi-"] .mt-4.space-y-1 {
+        display: none !important;
+      }
+
       .mlb-home-runs-shell > div > div.flex.flex-wrap.items-start.justify-between h1 {
         font-size: 0 !important;
       }
