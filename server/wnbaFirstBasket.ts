@@ -74,11 +74,11 @@ async function fetchPlayerStats(id:string,season:number){const d=await fetchJson
 async function latestProjectedStarters(team:string):Promise<Starter[]>{
   const key=normalizeTeam(team),cached=projectionCache.get(key);
   if(cached&&Date.now()-cached.at<PROJECTION_TTL_MS)return cached.starters;
-  const roster=await fetchRoster(key);
+  const roster:any[]=await fetchRoster(key);
   if(!roster.length){projectionCache.set(key,{at:Date.now(),starters:[]});return[]}
 
-  const availableRoster=roster.filter((x:any)=>!isUnavailableRosterPlayer(x)&&String(x?.displayName||'').trim());
-  const availableByName=new Map(availableRoster.map((x:any)=>[normalizeName(String(x.displayName)),x]));
+  const availableRoster:any[]=roster.filter((x:any)=>!isUnavailableRosterPlayer(x)&&String(x?.displayName||'').trim());
+  const availableByName=new Map<string,any>(availableRoster.map((x:any)=>[normalizeName(String(x.displayName)),x]));
   const recentFrequency=new Map<string,{name:string;count:number;recency:number}>();
 
   for(let day=1;day<=14;day++){
@@ -106,17 +106,16 @@ async function latestProjectedStarters(team:string):Promise<Starter[]>{
 
   if(chosen.length<5){
     const season=currentSeason();
-    const remaining=availableRoster.filter((x:any)=>!chosen.includes(normalizeName(String(x.displayName))));
-    const ranked=await Promise.all(remaining.map(async(x:any)=>({
-      norm:normalizeName(String(x.displayName)),
-      starts:Number((await fetchPlayerStats(String(x.id||''),season))?.starts||0),
-      minutes:Number((await fetchPlayerStats(String(x.id||''),season))?.minutes||0),
-    })));
+    const remaining:any[]=availableRoster.filter((x:any)=>!chosen.includes(normalizeName(String(x.displayName))));
+    const ranked=await Promise.all(remaining.map(async(x:any)=>{
+      const stats=await fetchPlayerStats(String(x.id||''),season);
+      return {norm:normalizeName(String(x.displayName)),starts:Number(stats?.starts||0),minutes:Number(stats?.minutes||0)};
+    }));
     ranked.sort((a,b)=>b.starts-a.starts||b.minutes-a.minutes);
     for(const x of ranked){if(chosen.length>=5)break;if(!chosen.includes(x.norm))chosen.push(x.norm)}
   }
 
-  const starters=chosen.slice(0,5).map(norm=>({name:String(availableByName.get(norm)?.displayName||recentFrequency.get(norm)?.name||norm),team:key}));
+  const starters:Starter[]=chosen.slice(0,5).map(norm=>({name:String(availableByName.get(norm)?.displayName||recentFrequency.get(norm)?.name||norm),team:key}));
   projectionCache.set(key,{at:Date.now(),starters});
   return starters;
 }
