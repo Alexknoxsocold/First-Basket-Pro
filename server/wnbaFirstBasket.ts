@@ -71,12 +71,60 @@ function isUnavailableRosterPlayer(player:any){const text=rosterStatusText(playe
 
 async function fetchPlayerStats(id:string,season:number){const d=await fetchJson(`https://sports.core.api.espn.com/v2/sports/basketball/leagues/wnba/seasons/${season}/types/2/athletes/${id}/statistics/0`);const cats=d?.splits?.categories;if(!cats)return null;const all=(cats||[]).flatMap((c:any)=>c?.stats||[]);const n=(names:string[])=>{for(const name of names){const s=all.find((x:any)=>String(x?.name||'').toLowerCase()===name.toLowerCase());if(s){const v=Number.parseFloat(String(s?.value??s?.displayValue??'0').replace(/[^0-9.-]/g,''));if(Number.isFinite(v))return v}}return 0};return{games:n(['gamesPlayed','games']),starts:n(['gamesStarted','starts']),points:n(['avgPoints','pointsPerGame']),fga:n(['avgFieldGoalsAttempted','fieldGoalsAttemptedPerGame']),fg:n(['fieldGoalPct','fieldGoalPercentage']),minutes:n(['avgMinutes','minutesPerGame'])}}
 
-async function latestProjectedStarters(team:string):Promise<Starter[]>{const key=normalizeTeam(team),cached=projectionCache.get(key);if(cached&&Date.now()-cached.at<PROJECTION_TTL_MS)return cached.starters;const roster=await fetchRoster(key);if(!roster.length){projectionCache.set(key,{at:Date.now(),starters:[]});return[]}const available=new Set(roster.filter((x:any)=>!isUnavailableRosterPlayer(x)).map((x:any)=>normalizeName(String(x?.displayName||''))).filter(Boolean));for(let day=1;day<=14;day++){const date=new Date(Date.now()-day*86400000);const events=await fetchScoreboard(compactDate(date));for(const e of events.filter((x:any)=>x?.status?.type?.completed===true)){const comp=e?.competitions?.[0];const has=(comp?.competitors||[]).some((c:any)=>normalizeTeam(String(c?.team?.abbreviation||''))===key);if(!has)continue;const s=extractStarters(await fetchSummary(String(e.id))).filter(x=>x.team===key);if(s.length===5){const valid=s.every(x=>available.has(normalizeName(x.name)));const starters=valid?s:[];projectionCache.set(key,{at:Date.now(),starters});return starters}}}projectionCache.set(key,{at:Date.now(),starters:[]});return[]}
+async function latestProjectedStarters(team:string):Promise<Starter[]>{
+  const key=normalizeTeam(team),cached=projectionCache.get(key);
+  if(cached&&Date.now()-cached.at<PROJECTION_TTL_MS)return cached.starters;
+  const roster=await fetchRoster(key);
+  if(!roster.length){projectionCache.set(key,{at:Date.now(),starters:[]});return[]}
+
+  const availableRoster=roster.filter((x:any)=>!isUnavailableRosterPlayer(x)&&String(x?.displayName||'').trim());
+  const availableByName=new Map(availableRoster.map((x:any)=>[normalizeName(String(x.displayName)),x]));
+  const recentFrequency=new Map<string,{name:string;count:number;recency:number}>();
+
+  for(let day=1;day<=14;day++){
+    const date=new Date(Date.now()-day*86400000);
+    const events=await fetchScoreboard(compactDate(date));
+    for(const e of events.filter((x:any)=>x?.status?.type?.completed===true)){
+      const comp=e?.competitions?.[0];
+      const has=(comp?.competitors||[]).some((c:any)=>normalizeTeam(String(c?.team?.abbreviation||''))===key);
+      if(!has)continue;
+      const recent=extractStarters(await fetchSummary(String(e.id))).filter(x=>x.team===key);
+      for(const s of recent){
+        const norm=normalizeName(s.name);
+        if(!availableByName.has(norm))continue;
+        const prev=recentFrequency.get(norm);
+        recentFrequency.set(norm,{name:s.name,count:(prev?.count||0)+1,recency:Math.min(prev?.recency??day,day)});
+      }
+    }
+  }
+
+  const chosen:string[]=[];
+  const recentRanked=[...recentFrequency.entries()]
+    .sort((a,b)=>b[1].count-a[1].count||a[1].recency-b[1].recency)
+    .map(([norm])=>norm);
+  for(const norm of recentRanked){if(chosen.length>=5)break;if(!chosen.includes(norm))chosen.push(norm)}
+
+  if(chosen.length<5){
+    const season=currentSeason();
+    const remaining=availableRoster.filter((x:any)=>!chosen.includes(normalizeName(String(x.displayName))));
+    const ranked=await Promise.all(remaining.map(async(x:any)=>({
+      norm:normalizeName(String(x.displayName)),
+      starts:Number((await fetchPlayerStats(String(x.id||''),season))?.starts||0),
+      minutes:Number((await fetchPlayerStats(String(x.id||''),season))?.minutes||0),
+    })));
+    ranked.sort((a,b)=>b.starts-a.starts||b.minutes-a.minutes);
+    for(const x of ranked){if(chosen.length>=5)break;if(!chosen.includes(x.norm))chosen.push(x.norm)}
+  }
+
+  const starters=chosen.slice(0,5).map(norm=>({name:String(availableByName.get(norm)?.displayName||recentFrequency.get(norm)?.name||norm),team:key}));
+  projectionCache.set(key,{at:Date.now(),starters});
+  return starters;
+}
 
 function opportunityProbability(stats:any,position:string,openingRate:number|null){if(!stats)return 4;let score=(stats.fga/75)*38+(stats.points/35)*8+((stats.fg-42)/30)*4+(Math.min(stats.minutes,36)/36)*3;if(position==='C')score*=1.10;else if(position==='PG')score*=1.04;if(openingRate!==null)score=score*0.9+Math.min(openingRate,35)*0.1;return Math.max(2,Math.min(32,score))}
 function blend(model:number,prev:HistoryRow|undefined,cur:HistoryRow|undefined){let num=model*12,den=12;if(prev?.gamesTracked){const n=Math.min(prev.gamesTracked,12);num+=(prev.fbScored/prev.gamesTracked*100)*n;den+=n}if(cur?.gamesTracked){const n=Math.min(cur.gamesTracked,20);num+=(cur.fbScored/cur.gamesTracked*100)*n;den+=n}return Math.round(Math.max(1,Math.min(35,num/den))*10)/10}
 
-async function modelStarters(starters:Starter[],season:number):Promise<WnbaCandidate[]>{if(starters.length!==10)return[];const[current,previous,opening]=await Promise.all([getHistory(season),getHistory(season-1),getOpeningPlayerStats(season)]);const teams=[...new Set(starters.map(s=>s.team))],rosters=new Map<string,any[]>();await Promise.all(teams.map(async t=>rosters.set(t,await fetchRoster(t))));const out:WnbaCandidate[]=[];for(const s of starters){const roster=rosters.get(s.team)||[],norm=normalizeName(s.name);let p=roster.find((x:any)=>normalizeName(String(x?.displayName||''))===norm);if(!p){const last=norm.split(' ').at(-1);p=roster.find((x:any)=>normalizeName(String(x?.displayName||'')).split(' ').at(-1)===last)}if(!p?.id||isUnavailableRosterPlayer(p))continue;const stats=await fetchPlayerStats(String(p.id),season),position=String(p?.position?.abbreviation||'G'),key=`${norm}|${s.team}`,cur=current.get(key),prev=previous.get(key),op=opening.get(norm),verifiedStarts=cur?.gamesTracked||0,openingRate=verifiedStarts>0?Math.round(((op?.firstShots||0)/verifiedStarts)*1000)/10:null,openingFg=(op?.firstShots||0)>0?Math.round(((op?.firstMakes||0)/(op?.firstShots||1))*1000)/10:null;out.push({name:s.name,team:s.team,position,headshot:p?.headshot?.href||null,seasonStarts:Math.round(stats?.starts||0),avgPoints:Math.round((stats?.points||0)*10)/10,avgFga:Math.round((stats?.fga||0)*10)/10,fgPct:Math.round((stats?.fg||0)*10)/10,avgMinutes:Math.round((stats?.minutes||0)*10)/10,currentFirstBaskets:cur?.fbScored||0,currentGamesTracked:verifiedStarts,previousFirstBaskets:prev?.fbScored||0,previousGamesTracked:prev?.gamesTracked||0,openingFirstShots:op?.firstShots||0,openingFirstShotRate:openingRate,openingShotFgPct:openingFg,probability:blend(opportunityProbability(stats,position,openingRate),prev,cur),rank:0})}out.sort((a,b)=>b.probability-a.probability).forEach((p,i)=>p.rank=i+1);return out}
+async function modelStarters(starters:Starter[],season:number):Promise<WnbaCandidate[]>{if(starters.length!==10)return[];const[current,previous,opening]=await Promise.all([getHistory(season),getHistory(season-1),getOpeningPlayerStats(season)]);const teams=[...new Set(starters.map(s=>s.team))],rosters=new Map<string,any[]>();await Promise.all(teams.map(async t=>rosters.set(t,await fetchRoster(t))));const out:WnbaCandidate[]=[];for(const s of starters){const roster=rosters.get(s.team)||[],norm=normalizeName(s.name);let p=roster.find((x:any)=>normalizeName(String(x?.displayName||''))===norm);if(!p){const last=norm.split(' ').at(-1);p=roster.find((x:any)=>normalizeName(String(x?.displayName||'')).split(' ').at(-1)===last)}const stats=p?.id?await fetchPlayerStats(String(p.id),season):null,position=String(p?.position?.abbreviation||'G'),key=`${norm}|${s.team}`,cur=current.get(key),prev=previous.get(key),op=opening.get(norm),verifiedStarts=cur?.gamesTracked||0,openingRate=verifiedStarts>0?Math.round(((op?.firstShots||0)/verifiedStarts)*1000)/10:null,openingFg=(op?.firstShots||0)>0?Math.round(((op?.firstMakes||0)/(op?.firstShots||1))*1000)/10:null;out.push({name:s.name,team:s.team,position,headshot:p?.headshot?.href||null,seasonStarts:Math.round(stats?.starts||0),avgPoints:Math.round((stats?.points||0)*10)/10,avgFga:Math.round((stats?.fga||0)*10)/10,fgPct:Math.round((stats?.fg||0)*10)/10,avgMinutes:Math.round((stats?.minutes||0)*10)/10,currentFirstBaskets:cur?.fbScored||0,currentGamesTracked:verifiedStarts,previousFirstBaskets:prev?.fbScored||0,previousGamesTracked:prev?.gamesTracked||0,openingFirstShots:op?.firstShots||0,openingFirstShotRate:openingRate,openingShotFgPct:openingFg,probability:blend(opportunityProbability(stats,position,openingRate),prev,cur),rank:0})}out.sort((a,b)=>b.probability-a.probability).forEach((p,i)=>p.rank=i+1);return out}
 
 function eventTeams(event:any){const c=event?.competitions?.[0];return{away:c?.competitors?.find((x:any)=>x.homeAway==='away'),home:c?.competitors?.find((x:any)=>x.homeAway==='home')}}
 function frontcourtRank(position:string){const p=position.toUpperCase();if(p==='C')return 4;if(p==='F-C'||p==='C-F')return 3;if(p==='PF'||p==='F')return 2;return 0}
