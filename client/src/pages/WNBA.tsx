@@ -194,7 +194,7 @@ function CandidateRow({ p, projected }: { p: Candidate; projected: boolean }) {
                 Edge {m.edgePoints >= 0 ? '+' : ''}{m.edgePoints.toFixed(1)} pts · EV {m.expectedValue >= 0 ? '+' : ''}{(m.expectedValue * 100).toFixed(0)}%
               </span>
             </div>
-          ) : <div className="mt-1 text-[9px] text-muted-foreground/60">No fresh FanDuel/DraftKings first-basket price available</div>}
+          ) : null}
         </div>
         <div className="flex items-center gap-2">
           <div className="text-right">
