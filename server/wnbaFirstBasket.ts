@@ -43,7 +43,15 @@ function normalizeTeam(v:string){return v.toUpperCase().trim()}
 function currentSeason(date=new Date()){return date.getUTCFullYear()}
 function etDate(date=new Date()){const p=new Intl.DateTimeFormat('en-US',{timeZone:'America/New_York',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(date);return `${p.find(x=>x.type==='year')?.value}${p.find(x=>x.type==='month')?.value}${p.find(x=>x.type==='day')?.value}`}
 function compactDate(date:Date){return date.toISOString().slice(0,10).replace(/-/g,'')}
+function offsetCompactDate(date:string,days:number){const y=Number(date.slice(0,4)),m=Number(date.slice(4,6)),d=Number(date.slice(6,8));return compactDate(new Date(Date.UTC(y,m-1,d+days,12)))}
 async function fetchJson(url:string):Promise<any|null>{try{const r=await fetch(url,{headers:{'User-Agent':'Mozilla/5.0'},signal:AbortSignal.timeout(8000)});return r.ok?await r.json():null}catch{return null}}
+async function fetchScoreboard(date=etDate()){
+  const buckets=[offsetCompactDate(date,-1),date,offsetCompactDate(date,1)];
+  const payloads=await Promise.all(buckets.map(d=>fetchJson(`https://site.api.espn.com/apis/site/v2/sports/basketball/wnba/scoreboard?dates=${d}`)));
+  const merged=payloads.flatMap(d=>d?.events||[]);
+  const unique=[...new Map(merged.map((event:any)=>[String(event?.id||`${event?.date}-${event?.shortName}`),event])).values()];
+  return unique.filter((event:any)=>event?.date&&etDate(new Date(event.date))===date).sort((a:any,b:any)=>new Date(a.date).getTime()-new Date(b.date).getTime());
+}
 
 export async function ensureWnbaSchema(){if(!pool)return;await pool.query(`
   CREATE TABLE IF NOT EXISTS wnba_fb_tracking(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),player_name text NOT NULL,team text NOT NULL,season integer NOT NULL,fb_scored integer NOT NULL DEFAULT 0,games_tracked integer NOT NULL DEFAULT 0,last_updated timestamptz NOT NULL DEFAULT now());
@@ -56,7 +64,6 @@ export async function ensureWnbaSchema(){if(!pool)return;await pool.query(`
 `)}
 async function getHistory(season:number){const out=new Map<string,HistoryRow>();if(!pool)return out;await ensureWnbaSchema();const r=await pool.query('SELECT player_name,team,fb_scored,games_tracked FROM wnba_fb_tracking WHERE season=$1',[season]);for(const x of r.rows)out.set(`${normalizeName(x.player_name)}|${normalizeTeam(x.team)}`,{fbScored:Number(x.fb_scored),gamesTracked:Number(x.games_tracked)});return out}
 async function fetchTeams(){const d=await fetchJson('https://site.api.espn.com/apis/site/v2/sports/basketball/wnba/teams?limit=50');return(d?.sports?.[0]?.leagues?.[0]?.teams||[]).map((e:any)=>({abbreviation:String(e?.team?.abbreviation||'').toUpperCase(),name:String(e?.team?.displayName||'')})).filter((t:any)=>t.abbreviation&&t.name)}
-async function fetchScoreboard(date=etDate()){const d=await fetchJson(`https://site.api.espn.com/apis/site/v2/sports/basketball/wnba/scoreboard?dates=${date}`);return d?.events||[]}
 async function fetchSummary(id:string){return fetchJson(`https://site.api.espn.com/apis/site/v2/sports/basketball/wnba/summary?event=${id}`)}
 function extractStarters(summary:any):Starter[]{const out:Starter[]=[];for(const b of summary?.boxscore?.players||[]){const team=normalizeTeam(String(b?.team?.abbreviation||''));for(const g of b?.statistics||[])for(const row of g?.athletes||[]){if(row?.starter!==true||row?.didNotPlay===true)continue;const name=String(row?.athlete?.displayName||'').trim();if(name&&team)out.push({name,team})}}return[...new Map(out.map(s=>[`${normalizeName(s.name)}|${s.team}`,s])).values()]}
 async function fetchRoster(team:string){const d=await fetchJson(`https://site.api.espn.com/apis/site/v2/sports/basketball/wnba/teams/${team}/roster`);return d?.athletes||[]}
