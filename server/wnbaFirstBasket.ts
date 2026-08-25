@@ -59,7 +59,7 @@ export async function ensureWnbaSchema(){if(!pool)return;await pool.query(`
   CREATE INDEX IF NOT EXISTS wnba_fb_tracking_season_idx ON wnba_fb_tracking(season);
   CREATE TABLE IF NOT EXISTS wnba_processed_games(espn_game_id text PRIMARY KEY,game_date date,first_scorer text,first_scorer_team text,processed_at timestamptz NOT NULL DEFAULT now());
   CREATE TABLE IF NOT EXISTS wnba_prediction_ledger(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),espn_game_id text NOT NULL,season integer NOT NULL,game_start_at timestamptz NOT NULL,locked_at timestamptz NOT NULL,model_version text NOT NULL,player_name text NOT NULL,team text NOT NULL,model_probability numeric(5,2) NOT NULL,model_rank integer NOT NULL,is_top_pick boolean NOT NULL DEFAULT false,actual_first_scorer text,actual_first_scorer_team text,won boolean,graded_at timestamptz,CONSTRAINT wnba_fb_probability_check CHECK(model_probability>=0 AND model_probability<=100));
-  CREATE UNIQUE INDEX IF NOT EXISTS wnba_prediction_game_player_unique ON wnba_prediction_ledger(espn_game_id,lower(player_name),upper(team),season);
+  CREATE UNIQUE INDEX IF NOT EXISTS wnba_prediction_game_player_unique ON wnba_prediction_ledger(espn_game_id,lower(player_name),upper(team));
   CREATE INDEX IF NOT EXISTS wnba_prediction_locked_idx ON wnba_prediction_ledger(locked_at DESC);
 `)}
 async function getHistory(season:number){const out=new Map<string,HistoryRow>();if(!pool)return out;await ensureWnbaSchema();const r=await pool.query('SELECT player_name,team,fb_scored,games_tracked FROM wnba_fb_tracking WHERE season=$1',[season]);for(const x of r.rows)out.set(`${normalizeName(x.player_name)}|${normalizeTeam(x.team)}`,{fbScored:Number(x.fb_scored),gamesTracked:Number(x.games_tracked)});return out}
