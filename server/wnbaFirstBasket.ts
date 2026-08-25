@@ -1,7 +1,7 @@
 import { Pool, neonConfig } from '@neondatabase/serverless';
 import ws from 'ws';
 import { getOpeningPlayerStats, saveOpeningEvidence, verifyOpeningEvidence, type WnbaStarter } from './wnbaEvidence';
-import { attachWnbaFirstBasketMarkets, type WnbaFirstBasketMarket } from './odds/parlayWnba';
+import { attachWnbaFirstBasketMarkets, getWnbaFirstBasketMarket, type WnbaFirstBasketMarket } from './odds/parlayWnba';
 
 neonConfig.webSocketConstructor = ws;
 const pool = process.env.DATABASE_URL ? new Pool({ connectionString: process.env.DATABASE_URL }) : null;
@@ -68,6 +68,7 @@ function extractStarters(summary:any):Starter[]{const out:Starter[]=[];for(const
 async function fetchRoster(team:string){const d=await fetchJson(`https://site.api.espn.com/apis/site/v2/sports/basketball/wnba/teams/${team}/roster`);return d?.athletes||[]}
 function rosterStatusText(player:any){const injuries=Array.isArray(player?.injuries)?player.injuries:[];return [player?.status?.type,player?.status?.name,player?.status?.description,player?.status?.detail,...injuries.flatMap((x:any)=>[x?.status,x?.type,x?.details,x?.description])].filter(Boolean).join(' ').toLowerCase()}
 function isUnavailableRosterPlayer(player:any){const text=rosterStatusText(player);return /\b(out|inactive|suspended|waived|injured reserve|season[- ]ending|not with team)\b/.test(text)}
+function availabilityAdjustment(player:any){const text=rosterStatusText(player);if(/\bdoubtful\b/.test(text))return-30;if(/\bquestionable\b/.test(text))return-12;if(/\bprobable\b/.test(text))return 4;return 0}
 
 async function fetchPlayerStats(id:string,season:number){const d=await fetchJson(`https://sports.core.api.espn.com/v2/sports/basketball/leagues/wnba/seasons/${season}/types/2/athletes/${id}/statistics/0`);const cats=d?.splits?.categories;if(!cats)return null;const all=(cats||[]).flatMap((c:any)=>c?.stats||[]);const n=(names:string[])=>{for(const name of names){const s=all.find((x:any)=>String(x?.name||'').toLowerCase()===name.toLowerCase());if(s){const v=Number.parseFloat(String(s?.value??s?.displayValue??'0').replace(/[^0-9.-]/g,''));if(Number.isFinite(v))return v}}return 0};return{games:n(['gamesPlayed','games']),starts:n(['gamesStarted','starts']),points:n(['avgPoints','pointsPerGame']),fga:n(['avgFieldGoalsAttempted','fieldGoalsAttemptedPerGame']),fg:n(['fieldGoalPct','fieldGoalPercentage']),minutes:n(['avgMinutes','minutesPerGame'])}}
 
@@ -78,6 +79,8 @@ async function latestProjectedStarters(team:string):Promise<Starter[]>{
   if(!roster.length){projectionCache.set(key,{at:Date.now(),starters:[]});return[]}
 
   const availableRoster:any[]=roster.filter((x:any)=>!isUnavailableRosterPlayer(x)&&String(x?.displayName||'').trim());
+  if(availableRoster.length<5){projectionCache.set(key,{at:Date.now(),starters:[]});return[]}
+
   const availableByName=new Map<string,any>(availableRoster.map((x:any)=>[normalizeName(String(x.displayName)),x]));
   const recentFrequency=new Map<string,{name:string;count:number;recency:number}>();
 
@@ -98,24 +101,29 @@ async function latestProjectedStarters(team:string):Promise<Starter[]>{
     }
   }
 
-  const chosen:string[]=[];
-  const recentRanked=[...recentFrequency.entries()]
-    .sort((a,b)=>b[1].count-a[1].count||a[1].recency-b[1].recency)
-    .map(([norm])=>norm);
-  for(const norm of recentRanked){if(chosen.length>=5)break;if(!chosen.includes(norm))chosen.push(norm)}
+  const season=currentSeason();
+  const ranked=await Promise.all(availableRoster.map(async(player:any)=>{
+    const name=String(player.displayName);
+    const norm=normalizeName(name);
+    const [stats,market]=await Promise.all([
+      player?.id?fetchPlayerStats(String(player.id),season):Promise.resolve(null),
+      getWnbaFirstBasketMarket(name,10,1).catch(()=>null),
+    ]);
+    const recent=recentFrequency.get(norm);
+    const games=Math.max(0,Number(stats?.games||0));
+    const starts=Math.max(0,Number(stats?.starts||0));
+    const minutes=Math.max(0,Number(stats?.minutes||0));
+    const startRate=games>0?Math.min(1,starts/games):0;
+    const recentStarts=recent?.count||0;
+    const recencyBonus=recent?Math.max(0,14-recent.recency)*1.5:0;
+    const marketBoost=market?35:0;
+    const score=(startRate*90)+(recentStarts*8)+(starts*0.5)+(minutes*1.2)+recencyBonus+marketBoost+availabilityAdjustment(player);
+    return {norm,name,score,startRate,recentStarts,starts,minutes,hasMarket:Boolean(market)};
+  }));
 
-  if(chosen.length<5){
-    const season=currentSeason();
-    const remaining:any[]=availableRoster.filter((x:any)=>!chosen.includes(normalizeName(String(x.displayName))));
-    const ranked=await Promise.all(remaining.map(async(x:any)=>{
-      const stats=await fetchPlayerStats(String(x.id||''),season);
-      return {norm:normalizeName(String(x.displayName)),starts:Number(stats?.starts||0),minutes:Number(stats?.minutes||0)};
-    }));
-    ranked.sort((a,b)=>b.starts-a.starts||b.minutes-a.minutes);
-    for(const x of ranked){if(chosen.length>=5)break;if(!chosen.includes(x.norm))chosen.push(x.norm)}
-  }
-
-  const starters:Starter[]=chosen.slice(0,5).map(norm=>({name:String(availableByName.get(norm)?.displayName||recentFrequency.get(norm)?.name||norm),team:key}));
+  ranked.sort((a,b)=>b.score-a.score||b.startRate-a.startRate||b.recentStarts-a.recentStarts||b.starts-a.starts||b.minutes-a.minutes);
+  const starters:Starter[]=ranked.slice(0,5).map(x=>({name:x.name,team:key}));
+  console.log('[WNBA Projection]',key,ranked.slice(0,8).map(x=>({name:x.name,score:Math.round(x.score*10)/10,startRate:Math.round(x.startRate*100),recentStarts:x.recentStarts,hasMarket:x.hasMarket})));
   projectionCache.set(key,{at:Date.now(),starters});
   return starters;
 }
@@ -133,7 +141,7 @@ async function playerTipStats(name:string,team:string,season:number){if(!pool)re
 async function selectJumper(candidates:WnbaCandidate[],team:string,season:number){const teamPlayers=candidates.filter(c=>c.team===team);if(!teamPlayers.length)return null;const enriched=await Promise.all(teamPlayers.map(async c=>({player:c,stats:await playerTipStats(c.name,team,season)})));const historical=enriched.filter(x=>x.stats.events>0).sort((a,b)=>b.stats.events-a.stats.events||frontcourtRank(b.player.position)-frontcourtRank(a.player.position)||b.player.avgMinutes-a.player.avgMinutes);if(historical.length)return historical[0];const frontcourt=enriched.filter(x=>frontcourtRank(x.player.position)>0).sort((a,b)=>frontcourtRank(b.player.position)-frontcourtRank(a.player.position)||b.player.avgMinutes-a.player.avgMinutes);return frontcourt[0]||null}
 async function tipSignal(away:string,home:string,candidates:WnbaCandidate[]):Promise<WnbaTipSignal>{const season=currentSeason(),[aj,hj]=await Promise.all([selectJumper(candidates,away,season),selectJumper(candidates,home,season)]),a=aj?.stats||{wins:0,events:0,pct:null},h=hj?.stats||{wins:0,events:0,pct:null},ap=a.pct,hp=h.pct,total=a.events+h.events,confidence=total>=20?'usable':total>=8?'emerging':'insufficient';let projected:string|null=null;if(confidence!=='insufficient'&&ap!==null&&hp!==null&&Math.abs(ap-hp)>=5)projected=ap>hp?away:home;return{awayJumper:aj?.player.name||null,homeJumper:hj?.player.name||null,awayTipWins:a.wins,awayTipEvents:a.events,awayTipPct:ap,homeTipWins:h.wins,homeTipEvents:h.events,homeTipPct:hp,projectedFirstPossessionTeam:projected,confidence}}
 
-export async function getWnbaSlate(force=false):Promise<WnbaSlate>{if(!force&&slateCache&&Date.now()-slateCache.at<CACHE_TTL_MS)return slateCache.value;await ensureWnbaSchema();const season=currentSeason(),[teams,events]=await Promise.all([fetchTeams(),fetchScoreboard()]),games:WnbaGame[]=[];for(const event of events){const{away,home}=eventTeams(event);if(!away||!home)continue;const awayTeam=normalizeTeam(away.team.abbreviation),homeTeam=normalizeTeam(home.team.abbreviation),summary=await fetchSummary(String(event.id)),confirmed=summary?extractStarters(summary):[];let starters=confirmed,lineupStatus:WnbaGame['lineupStatus']='waiting';if(confirmed.length===10){lineupStatus='confirmed'}else{const[a,h]=await Promise.all([latestProjectedStarters(awayTeam),latestProjectedStarters(homeTeam)]);starters=[...a,...h];if(starters.length===10)lineupStatus='projected'}let candidates=starters.length===10?await modelStarters(starters,season):[];if(candidates.length!==10&&lineupStatus==='projected'){starters=[];lineupStatus='waiting'}if(lineupStatus!=='waiting'&&candidates.length){candidates=await attachWnbaFirstBasketMarkets(candidates)}games.push({id:String(event.id),date:event.date,shortName:event.shortName||`${awayTeam} @ ${homeTeam}`,awayTeam,homeTeam,awayName:away.team.displayName,homeName:home.team.displayName,status:event?.status?.type?.description||event?.status?.type?.state||'Scheduled',lineupStatus,starters,candidates:lineupStatus==='waiting'?[]:candidates,topPick:lineupStatus==='waiting'?null:candidates[0]||null,tipSignal:await tipSignal(awayTeam,homeTeam,lineupStatus==='waiting'?[]:candidates)})}const value={season,updatedAt:new Date().toISOString(),teams,games,source:'ESPN WNBA schedule/roster/boxscore/play-by-play + verified PreziBaskets opening evidence + ParlayAPI FanDuel/DraftKings first-basket market prices when available',modelVersion:MODEL_VERSION};slateCache={at:Date.now(),value};return value}
+export async function getWnbaSlate(force=false):Promise<WnbaSlate>{if(!force&&slateCache&&Date.now()-slateCache.at<CACHE_TTL_MS)return slateCache.value;await ensureWnbaSchema();const season=currentSeason(),[teams,events]=await Promise.all([fetchTeams(),fetchScoreboard()]),games:WnbaGame[]=[];for(const event of events){const{away,home}=eventTeams(event);if(!away||!home)continue;const awayTeam=normalizeTeam(away.team.abbreviation),homeTeam=normalizeTeam(home.team.abbreviation),summary=await fetchSummary(String(event.id)),confirmed=summary?extractStarters(summary):[];let starters=confirmed,lineupStatus:WnbaGame['lineupStatus']='waiting';if(confirmed.length===10){lineupStatus='confirmed'}else{const[a,h]=await Promise.all([latestProjectedStarters(awayTeam),latestProjectedStarters(homeTeam)]);starters=[...a,...h];if(starters.length===10)lineupStatus='projected'}let candidates=starters.length===10?await modelStarters(starters,season):[];if(candidates.length!==10&&lineupStatus==='projected'){starters=[];lineupStatus='waiting'}if(lineupStatus!=='waiting'&&candidates.length){candidates=await attachWnbaFirstBasketMarkets(candidates)}games.push({id:String(event.id),date:event.date,shortName:event.shortName||`${awayTeam} @ ${homeTeam}`,awayTeam,homeTeam,awayName:away.team.displayName,homeName:home.team.displayName,status:event?.status?.type?.description||event?.status?.type?.state||'Scheduled',lineupStatus,starters,candidates:lineupStatus==='waiting'?[]:candidates,topPick:lineupStatus==='waiting'?null:candidates[0]||null,tipSignal:await tipSignal(awayTeam,homeTeam,lineupStatus==='waiting'?[]:candidates)})}const value={season,updatedAt:new Date().toISOString(),teams,games,source:'ESPN WNBA schedule/roster/boxscore/play-by-play + active roster/injury status + recent starter history + season usage + first-basket market availability + verified PreziBaskets opening evidence',modelVersion:MODEL_VERSION};slateCache={at:Date.now(),value};return value}
 
 async function recordVerifiedGame(gameId:string,gameDate:string,starters:Starter[],scorer:Starter,season:number){if(!pool||starters.length!==10)return;await ensureWnbaSchema();const c=await pool.connect();try{await c.query('BEGIN');const ex=await c.query('SELECT 1 FROM wnba_processed_games WHERE espn_game_id=$1',[gameId]);if(ex.rows.length){await c.query('ROLLBACK');return}for(const s of starters){const won=normalizeName(s.name)===normalizeName(scorer.name)&&normalizeTeam(s.team)===normalizeTeam(scorer.team);await c.query(`INSERT INTO wnba_fb_tracking(player_name,team,season,fb_scored,games_tracked,last_updated) VALUES($1,$2,$3,$4,1,now()) ON CONFLICT(lower(player_name),upper(team),season) DO UPDATE SET fb_scored=wnba_fb_tracking.fb_scored+EXCLUDED.fb_scored,games_tracked=wnba_fb_tracking.games_tracked+1,last_updated=now()`,[s.name,s.team,season,won?1:0])}await c.query('INSERT INTO wnba_processed_games(espn_game_id,game_date,first_scorer,first_scorer_team) VALUES($1,$2,$3,$4)',[gameId,gameDate,scorer.name,scorer.team]);await c.query(`UPDATE wnba_prediction_ledger SET actual_first_scorer=$2,actual_first_scorer_team=$3,won=(lower(player_name)=lower($2) AND upper(team)=upper($3)),graded_at=now() WHERE espn_game_id=$1 AND graded_at IS NULL`,[gameId,scorer.name,scorer.team]);await c.query('COMMIT')}catch(e){await c.query('ROLLBACK');throw e}finally{c.release()}slateCache=null}
 
