@@ -1,30 +1,25 @@
 import { useEffect, useState } from "react";
 import { Check, Crown, Sparkles, X } from "lucide-react";
-import { useBilling } from "@/context/BillingContext";
+import { useAuth } from "@/context/AuthContext";
+import { useLocation } from "wouter";
 
 const CHOICE_KEY = "prezitools-plan-welcome-v2";
 const WHOP_PRO_URL = "https://whop.com/prezitools/prezitools-pro/";
 
 export default function PlanWelcome() {
-  const { pro, isLoading: billingLoading } = useBilling();
+  const { user } = useAuth();
+  const [, setLocation] = useLocation();
   const [open, setOpen] = useState(false);
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
-    if (billingLoading || pro || window.localStorage.getItem(CHOICE_KEY)) return;
+    if (window.localStorage.getItem(CHOICE_KEY)) return;
     const show = window.setTimeout(() => {
       setOpen(true);
       requestAnimationFrame(() => setVisible(true));
     }, 850);
     return () => window.clearTimeout(show);
-  }, [billingLoading, pro]);
-
-  useEffect(() => {
-    if (!pro || !open) return;
-    setVisible(false);
-    const timer = window.setTimeout(() => setOpen(false), 260);
-    return () => window.clearTimeout(timer);
-  }, [pro, open]);
+  }, []);
 
   const close = (choice: "free") => {
     window.localStorage.setItem(CHOICE_KEY, choice);
@@ -33,10 +28,18 @@ export default function PlanWelcome() {
   };
 
   const upgrade = () => {
+    if (!user) {
+      setVisible(false);
+      window.setTimeout(() => {
+        setOpen(false);
+        setLocation("/signup?next=pro");
+      }, 180);
+      return;
+    }
     window.location.assign(WHOP_PRO_URL);
   };
 
-  if (!open || pro) return null;
+  if (!open) return null;
 
   return (
     <div className={`fixed inset-0 z-[9998] flex items-center justify-center p-4 transition-all duration-300 ${visible ? "bg-black/32 opacity-100" : "bg-black/0 opacity-0"}`} role="dialog" aria-modal="true" aria-labelledby="plan-title">
@@ -68,7 +71,8 @@ export default function PlanWelcome() {
               <div className="mt-2.5 space-y-1.5 text-[9px]">
                 {["Pro model insights", "Strong & elite plays", "Deeper analytics"].map(x => <div key={x} className="flex items-center gap-1.5"><Check className="h-2.5 w-2.5 text-primary" />{x}</div>)}
               </div>
-              <button onClick={upgrade} className="mt-3 h-8 w-full rounded-lg bg-primary text-[10px] font-black text-primary-foreground shadow-md shadow-primary/15 transition hover:brightness-105">Upgrade to Pro — $11/mo</button>
+              <button onClick={upgrade} className="mt-3 h-8 w-full rounded-lg bg-primary text-[10px] font-black text-primary-foreground shadow-md shadow-primary/15 transition hover:brightness-105">{user ? "Upgrade to Pro — $11/mo" : "Create account to get Pro"}</button>
+              {!user && <div className="mt-1.5 text-center text-[7.5px] text-muted-foreground">Already have an account? You can sign in on the next screen.</div>}
             </div>
           </div>
 
