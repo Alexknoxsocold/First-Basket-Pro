@@ -1,0 +1,42 @@
+/* Reliable arena-photo fallbacks for WNBA game cards.
+   The WNBA page already renders a venue backdrop from its team map. These
+   selectors cover expansion-team aliases and replace arena URLs that may be
+   missing upstream, while keeping the image soft enough for model data to
+   remain readable. */
+
+article.relative.isolate:has(.justify-end img[alt="SEA logo"])::before,
+article.relative.isolate:has(.justify-end img[alt="TOR logo"])::before,
+article.relative.isolate:has(.justify-end img[alt="TTO logo"])::before,
+article.relative.isolate:has(.justify-end img[alt="TEM logo"])::before,
+article.relative.isolate:has(.justify-end img[alt="POR logo"])::before,
+article.relative.isolate:has(.justify-end img[alt="PDX logo"])::before {
+  content: "";
+  position: absolute;
+  inset: -18px;
+  z-index: 0;
+  pointer-events: none;
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
+  filter: blur(7px) saturate(.8);
+  opacity: .18;
+  transform: scale(1.06);
+}
+
+/* Seattle Storm — Climate Pledge Arena, basketball configuration. */
+article.relative.isolate:has(.justify-end img[alt="SEA logo"])::before {
+  background-image: url("https://commons.wikimedia.org/wiki/Special:FilePath/Seattle%20Storm%20vs%20Atlanta%20Dream%20at%20Climate%20Pledge%20Arena%20%28July%202022%29%20-%2002.jpg");
+}
+
+/* Toronto Tempo — Coca-Cola Coliseum. */
+article.relative.isolate:has(.justify-end img[alt="TOR logo"])::before,
+article.relative.isolate:has(.justify-end img[alt="TTO logo"])::before,
+article.relative.isolate:has(.justify-end img[alt="TEM logo"])::before {
+  background-image: url("https://commons.wikimedia.org/wiki/Special:FilePath/Coca-Cola%20Coliseum%2C%20Exhibition%20Place%2C%20Toronto%2C%20Ontario%20%2829901775271%29.jpg");
+}
+
+/* Portland Fire / Portland expansion aliases — Moda Center. */
+article.relative.isolate:has(.justify-end img[alt="POR logo"])::before,
+article.relative.isolate:has(.justify-end img[alt="PDX logo"])::before {
+  background-image: url("https://commons.wikimedia.org/wiki/Special:FilePath/Moda%20Center%20at%20the%20Rose%20Quarter.jpg");
+}
