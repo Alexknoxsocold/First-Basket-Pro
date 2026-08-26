@@ -1,6 +1,7 @@
 const PROPLINE_BASE = 'https://api.prop-line.com/v1';
 const CACHE_MS = 10 * 60 * 1000;
 const PLAYER_PROP_LOOKAHEAD_MS = 5 * 24 * 60 * 60 * 1000;
+const SPORT_KEYS = ['football_nfl', 'americanfootball_nfl'] as const;
 
 export type NflBookQuote = {
   bookmaker: string;
@@ -58,6 +59,14 @@ type PropOdds = {
   bookmakers?: PropBook[];
 };
 
+type PropEvent = {
+  id?: string | number;
+  event_id?: string | number;
+  home_team?: string;
+  away_team?: string;
+  commence_time?: string;
+};
+
 let cache: { expiresAt: number; value: NflMarketFeed } | null = null;
 
 const NFL_TEAM_META: Record<string, { abbreviation: string; espnKey: string }> = {
@@ -108,16 +117,22 @@ function oddsRows(payload: unknown): PropOdds[] {
   if (Array.isArray(payload)) return payload as PropOdds[];
   if (payload && typeof payload === 'object') {
     const row = payload as Record<string, unknown>;
-    if (Array.isArray(row.events)) return row.events as PropOdds[];
-    if (Array.isArray(row.data)) return row.data as PropOdds[];
+    for (const key of ['events', 'data', 'odds']) {
+      if (Array.isArray(row[key])) return row[key] as PropOdds[];
+    }
     if (row.data && typeof row.data === 'object') {
       const nested = row.data as Record<string, unknown>;
-      if (Array.isArray(nested.events)) return nested.events as PropOdds[];
-      if (Array.isArray(nested.data)) return nested.data as PropOdds[];
+      for (const key of ['events', 'data', 'odds']) {
+        if (Array.isArray(nested[key])) return nested[key] as PropOdds[];
+      }
     }
     if ('bookmakers' in row || 'home_team' in row || 'away_team' in row) return [payload as PropOdds];
   }
   return [];
+}
+
+function eventRows(payload: unknown): PropEvent[] {
+  return oddsRows(payload) as PropEvent[];
 }
 
 async function propFetch<T>(path: string, apiKey: string): Promise<T> {
@@ -127,16 +142,34 @@ async function propFetch<T>(path: string, apiKey: string): Promise<T> {
     const separator = path.includes('?') ? '&' : '?';
     const response = await fetch(`${PROPLINE_BASE}${path}${separator}apiKey=${encodeURIComponent(apiKey)}`, {
       signal: controller.signal,
-      headers: { 'User-Agent': 'PreziTools/1.0' },
+      headers: {
+        'X-API-Key': apiKey,
+        'Authorization': `Bearer ${apiKey}`,
+        'User-Agent': 'PreziTools/1.0',
+      },
     });
     if (!response.ok) {
       const detail = await response.text().catch(() => '');
-      throw new Error(`PropLine ${response.status}${detail ? `: ${detail.slice(0, 180)}` : ''}`);
+      throw new Error(`PropLine ${response.status}${detail ? `: ${detail.slice(0, 220)}` : ''}`);
     }
     return await response.json() as T;
   } finally {
     clearTimeout(timer);
   }
+}
+
+async function fetchFirstWorking<T>(paths: string[], apiKey: string): Promise<{ payload: T; path: string }> {
+  let lastError: unknown = null;
+  for (const path of paths) {
+    try {
+      const payload = await propFetch<T>(path, apiKey);
+      return { payload, path };
+    } catch (error) {
+      lastError = error;
+      console.warn(`[NFL Markets] PropLine path failed ${path}:`, error);
+    }
+  }
+  throw lastError ?? new Error('No PropLine NFL endpoint succeeded');
 }
 
 function teamMeta(name: string): { abbreviation: string; logo: string | null } {
@@ -233,7 +266,7 @@ function buildMoneyline(row: PropOdds, awayName: string, homeName: string): NflM
   return { away: side(awayName, awayQuotes, avgAway), home: side(homeName, homeQuotes, avgHome) };
 }
 
-function gameFromBulkRow(row: PropOdds): NflMarketGame | null {
+function gameFromRow(row: PropOdds | PropEvent): NflMarketGame | null {
   const id = String(row.id ?? row.event_id ?? '').trim();
   const date = String(row.commence_time ?? '').trim();
   const awayName = String(row.away_team ?? '').trim();
@@ -241,7 +274,7 @@ function gameFromBulkRow(row: PropOdds): NflMarketGame | null {
   if (!id || !date || !awayName || !homeName) return null;
   const awayMeta = teamMeta(awayName);
   const homeMeta = teamMeta(homeName);
-  const moneyline = buildMoneyline(row, awayName, homeName);
+  const moneyline = 'bookmakers' in row ? buildMoneyline(row as PropOdds, awayName, homeName) : null;
   return {
     id,
     date,
@@ -255,29 +288,58 @@ function gameFromBulkRow(row: PropOdds): NflMarketGame | null {
   };
 }
 
+function sameGame(a: NflMarketGame, b: NflMarketGame): boolean {
+  return normalize(a.away.name) === normalize(b.away.name) && normalize(a.home.name) === normalize(b.home.name);
+}
+
 export async function fetchNflMarkets(): Promise<NflMarketFeed> {
   if (cache && cache.expiresAt > Date.now()) return cache.value;
   const apiKey = process.env.PROPLINE_API_KEY?.trim();
   if (!apiKey) return { source: 'PropLine', marketStatus: 'disabled', updatedAt: new Date().toISOString(), games: [] };
 
   try {
-    // PropLine documents NFL game lines as live year-round. Use the bulk h2h payload
-    // itself as the upcoming slate so Week 1 moneylines can populate even before props.
-    const bulkPayload = await propFetch<unknown>('/sports/football_nfl/odds?markets=h2h', apiKey);
-    const games = oddsRows(bulkPayload)
-      .map(gameFromBulkRow)
+    const bulkPaths = SPORT_KEYS.map(key => `/sports/${key}/odds?markets=h2h`);
+    const eventsPaths = SPORT_KEYS.map(key => `/sports/${key}/events`);
+
+    let bulkRows: PropOdds[] = [];
+    try {
+      const { payload, path } = await fetchFirstWorking<unknown>(bulkPaths, apiKey);
+      bulkRows = oddsRows(payload);
+      console.log(`[NFL Markets] Bulk endpoint ${path} returned ${bulkRows.length} rows.`);
+    } catch (error) {
+      console.warn('[NFL Markets] Bulk moneyline feed unavailable:', error);
+    }
+
+    let eventRowsFound: PropEvent[] = [];
+    if (!bulkRows.length) {
+      const { payload, path } = await fetchFirstWorking<unknown>(eventsPaths, apiKey);
+      eventRowsFound = eventRows(payload);
+      console.log(`[NFL Markets] Events endpoint ${path} returned ${eventRowsFound.length} rows.`);
+    }
+
+    const now = Date.now();
+    const games = [...bulkRows.map(gameFromRow), ...eventRowsFound.map(gameFromRow)]
       .filter((game): game is NflMarketGame => Boolean(game))
-      .filter(game => new Date(game.date).getTime() > Date.now() - 60 * 60 * 1000)
+      .filter(game => {
+        const t = new Date(game.date).getTime();
+        return Number.isFinite(t) && t > now - 60 * 60 * 1000;
+      })
+      .reduce<NflMarketGame[]>((list, game) => {
+        if (!list.some(existing => existing.id === game.id || sameGame(existing, game))) list.push(game);
+        return list;
+      }, [])
       .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
-    // Current PropLine docs say NFL player props activate with the regular season.
-    // Only ask for them near kickoff so we preserve API credits while still filling
-    // Anytime TD and First TD automatically as soon as books post those markets.
+    if (!games.length) {
+      console.warn(`[NFL Markets] PropLine responded successfully but produced 0 upcoming games. bulkRows=${bulkRows.length}, eventRows=${eventRowsFound.length}`);
+    }
+
     await Promise.all(games.map(async game => {
       const startsIn = new Date(game.date).getTime() - Date.now();
       if (!Number.isFinite(startsIn) || startsIn < 0 || startsIn > PLAYER_PROP_LOOKAHEAD_MS) return;
+      const propPaths = SPORT_KEYS.map(key => `/sports/${key}/events/${encodeURIComponent(game.id)}/odds?markets=player_anytime_td,player_1st_td`);
       try {
-        const payload = await propFetch<unknown>(`/sports/football_nfl/events/${encodeURIComponent(game.id)}/odds?markets=player_anytime_td,player_1st_td`, apiKey);
+        const { payload } = await fetchFirstWorking<unknown>(propPaths, apiKey);
         game.anytimeTd = buildPlayerMarkets(payload, 'player_anytime_td');
         game.firstTd = buildPlayerMarkets(payload, 'player_1st_td');
         if (game.anytimeTd.length || game.firstTd.length) game.marketStatus = 'available';
