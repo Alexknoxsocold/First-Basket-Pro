@@ -20,6 +20,30 @@ interface EspnPlayerStat {
   headshot?: string;
   injuryStatus?: string;
   isStarter?: boolean;
+  projectionSource?: "live" | "historical";
+}
+
+interface StoredPlayerStat {
+  id?: string;
+  player: string;
+  team: string;
+  position?: string;
+  gamesPlayed?: number;
+  firstBaskets?: number;
+  percentage?: number;
+  avgTipWin?: number;
+  q1FgaRate?: number | null;
+  injuryStatus?: string | null;
+  odds?: string | null;
+  season?: string;
+  lastUpdated?: string | null;
+}
+
+function activeNbaSeasonLabel(date = new Date()) {
+  const year = date.getFullYear();
+  const month = date.getMonth() + 1;
+  const start = month >= 7 ? year : year - 1;
+  return `${start}–${String(start + 1).slice(-2)}`;
 }
 
 function isUnavailable(player: EspnPlayerStat) {
@@ -27,13 +51,75 @@ function isUnavailable(player: EspnPlayerStat) {
   return status.includes("out") || status.includes("suspend") || status === "inactive";
 }
 
+function seasonNumber(value?: string) {
+  const nums = (value ?? "").match(/\d{4}/g)?.map(Number) ?? [];
+  return nums.length ? Math.max(...nums) : 0;
+}
+
+function normalizeStoredPlayers(rows: StoredPlayerStat[]): EspnPlayerStat[] {
+  const latest = new Map<string, StoredPlayerStat>();
+  for (const row of rows) {
+    if (!row.player || !row.team) continue;
+    const key = `${row.team.toUpperCase()}|${row.player.toLowerCase().trim()}`;
+    const existing = latest.get(key);
+    if (!existing || seasonNumber(row.season) > seasonNumber(existing.season)) latest.set(key, row);
+  }
+
+  return [...latest.values()].map((row) => ({
+    player: row.player,
+    team: row.team.toUpperCase(),
+    espnId: row.id ?? `${row.team}-${row.player}`,
+    position: row.position,
+    gamesPlayed: row.gamesPlayed ?? 0,
+    firstBasketPct: row.percentage ?? 0,
+    firstBasketsScored: row.firstBaskets ?? 0,
+    injuryStatus: row.injuryStatus ?? undefined,
+    isStarter: false,
+    projectionSource: "historical" as const,
+  }));
+}
+
 function projectionScore(player: EspnPlayerStat) {
-  // Official starter flags win when available. During the offseason, minutes
-  // and role provide a stable fallback without hard-coding a depth chart.
-  return (player.isStarter ? 10_000 : 0)
-    + (player.avgMinutes ?? 0) * 100
-    + (player.avgPoints ?? 0) * 2
-    + (player.gamesPlayed ?? 0) / 100;
+  if (player.projectionSource === "live") {
+    return (player.isStarter ? 100_000 : 0)
+      + (player.avgMinutes ?? 0) * 100
+      + (player.avgPoints ?? 0) * 2
+      + (player.gamesPlayed ?? 0) / 100;
+  }
+  // Offseason fallback: previous-season participation is a safer role proxy than
+  // first-basket percentage. Position balance is handled separately below.
+  return (player.gamesPlayed ?? 0) * 100 + Math.min(player.firstBasketPct ?? 0, 35);
+}
+
+function positionBucket(position?: string) {
+  const p = (position ?? "").toUpperCase();
+  if (p === "C") return "C";
+  if (p === "PF" || p === "SF" || p === "F") return "F";
+  return "G";
+}
+
+function selectProjectedFive(players: EspnPlayerStat[]) {
+  const sorted = [...players].filter((p) => !isUnavailable(p)).sort((a, b) => projectionScore(b) - projectionScore(a));
+  if (sorted.length <= 5) return sorted;
+
+  // Keep the lineup basketball-shaped in historical fallback mode instead of
+  // blindly selecting five guards or five bigs by games played.
+  const chosen: EspnPlayerStat[] = [];
+  const addBest = (bucket: "G" | "F" | "C") => {
+    const player = sorted.find((p) => positionBucket(p.position) === bucket && !chosen.includes(p));
+    if (player) chosen.push(player);
+  };
+
+  addBest("G");
+  addBest("G");
+  addBest("F");
+  addBest("F");
+  addBest("C");
+  for (const player of sorted) {
+    if (chosen.length >= 5) break;
+    if (!chosen.includes(player)) chosen.push(player);
+  }
+  return chosen.slice(0, 5).sort((a, b) => projectionScore(b) - projectionScore(a));
 }
 
 function TeamLogo({ team }: { team: string }) {
@@ -47,6 +133,7 @@ function TeamLogo({ team }: { team: string }) {
 
 function PlayerRow({ player, index }: { player: EspnPlayerStat; index: number }) {
   const initials = player.player.split(" ").map((part) => part[0]).join("").slice(0, 2).toUpperCase();
+  const hasRoleStats = player.avgMinutes !== undefined || player.avgPoints !== undefined;
   return (
     <div className="flex items-center gap-3 px-3 py-2.5 border-t border-border/50">
       <span className="w-4 text-[10px] font-bold text-muted-foreground">{index + 1}</span>
@@ -61,7 +148,8 @@ function PlayerRow({ player, index }: { player: EspnPlayerStat; index: number })
           {player.isStarter && <Badge className="h-4 px-1 text-[8px]">LAST STARTER</Badge>}
         </div>
         <p className="text-[10px] text-muted-foreground">
-          {player.position || "—"} · {(player.avgMinutes ?? 0).toFixed(0)} MIN · {(player.avgPoints ?? 0).toFixed(1)} PPG
+          {player.position || "—"}
+          {hasRoleStats ? ` · ${(player.avgMinutes ?? 0).toFixed(0)} MIN · ${(player.avgPoints ?? 0).toFixed(1)} PPG` : ` · ${player.gamesPlayed ?? 0} previous-season GP`}
         </p>
       </div>
       <div className="text-right shrink-0">
@@ -74,29 +162,45 @@ function PlayerRow({ player, index }: { player: EspnPlayerStat; index: number })
 
 export default function ProjectedLineups() {
   const [search, setSearch] = useState("");
-  const { data: stats, isLoading, error } = useQuery<EspnPlayerStat[]>({
+  const liveQuery = useQuery<EspnPlayerStat[]>({
     queryKey: ["/api/espn-player-stats"],
     staleTime: 5 * 60_000,
   });
+  const storedQuery = useQuery<StoredPlayerStat[]>({
+    queryKey: ["/api/player-stats", "projected-lineup-fallback"],
+    queryFn: async () => {
+      const response = await fetch("/api/player-stats");
+      if (!response.ok) throw new Error("Historical player feed unavailable");
+      return response.json() as Promise<StoredPlayerStat[]>;
+    },
+    staleTime: 30 * 60_000,
+  });
+
+  const liveStats = useMemo(() => (liveQuery.data ?? []).map((p) => ({ ...p, projectionSource: "live" as const })), [liveQuery.data]);
+  const historicalStats = useMemo(() => normalizeStoredPlayers(storedQuery.data ?? []), [storedQuery.data]);
+  const usingLiveFeed = liveStats.length > 0;
+  const stats = usingLiveFeed ? liveStats : historicalStats;
 
   const teams = useMemo(() => {
     const grouped = new Map<string, EspnPlayerStat[]>();
-    for (const player of stats ?? []) {
+    for (const player of stats) {
       if (!player.team || isUnavailable(player)) continue;
-      const list = grouped.get(player.team) ?? [];
+      const team = player.team.toUpperCase();
+      const list = grouped.get(team) ?? [];
       list.push(player);
-      grouped.set(player.team, list);
+      grouped.set(team, list);
     }
 
     const q = search.trim().toLowerCase();
     return Array.from(grouped.entries())
-      .map(([team, players]) => ({
-        team,
-        players: [...players].sort((a, b) => projectionScore(b) - projectionScore(a)).slice(0, 5),
-      }))
+      .map(([team, players]) => ({ team, players: selectProjectedFive(players) }))
       .filter(({ team, players }) => !q || team.toLowerCase().includes(q) || players.some((p) => p.player.toLowerCase().includes(q)))
       .sort((a, b) => a.team.localeCompare(b.team));
   }, [stats, search]);
+
+  const isLoading = liveQuery.isLoading || (!usingLiveFeed && storedQuery.isLoading);
+  const hardError = !usingLiveFeed && historicalStats.length === 0 && liveQuery.isError && storedQuery.isError;
+  const season = activeNbaSeasonLabel();
 
   if (isLoading) {
     return <div className="p-6 max-w-7xl mx-auto space-y-4"><Skeleton className="h-20 w-full" /><div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">{Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-72" />)}</div></div>;
@@ -106,13 +210,14 @@ export default function ProjectedLineups() {
     <div className="p-6 max-w-7xl mx-auto space-y-5">
       <div className="rounded-lg border bg-card p-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <Users className="w-5 h-5 text-primary" />
-            <h1 className="text-lg font-bold">2026–27 Projected NBA Lineups</h1>
+            <h1 className="text-lg font-bold">{season} Projected NBA Lineups</h1>
             <Badge variant="outline" className="text-[9px]">OFFSEASON</Badge>
+            <Badge variant="secondary" className="text-[9px]">{usingLiveFeed ? "CURRENT FEED" : "HISTORICAL BASELINE"}</Badge>
           </div>
           <p className="text-xs text-muted-foreground mt-1 max-w-3xl">
-            Projected five are generated from the current player feed, prioritizing official starter flags and recent role/minutes. They automatically give way to live starter data when the season returns.
+            Projected fives use current starter/role data when available and automatically fall back to the latest stored NBA season during the offseason. Live confirmed starters take priority when games return.
           </p>
         </div>
         <div className="relative shrink-0">
@@ -125,14 +230,16 @@ export default function ProjectedLineups() {
         <ShieldCheck className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
         <div>
           <p className="text-xs font-semibold">Projection mode — no First Basket locks</p>
-          <p className="text-[11px] text-muted-foreground mt-0.5">Historical FB rate is shown for research only. Projected lineups cannot create a lock, Value play, or live betting recommendation. Current-season FB counts remain zero until official 2026–27 games begin.</p>
+          <p className="text-[11px] text-muted-foreground mt-0.5">Historical first-basket information remains research context only. Current-season first-basket counts stay at zero until official {season} games begin.</p>
         </div>
       </div>
 
-      {error ? (
-        <div className="rounded-md border border-destructive/30 bg-destructive/5 p-6 text-sm text-destructive">Could not load the NBA player feed.</div>
+      {hardError ? (
+        <div className="rounded-md border border-destructive/30 bg-destructive/5 p-6 text-sm text-destructive">Could not load either NBA player source.</div>
       ) : teams.length === 0 ? (
-        <div className="rounded-md border bg-card p-8 text-center text-sm text-muted-foreground">No projected lineups match this search.</div>
+        <div className="rounded-md border bg-card p-8 text-center text-sm text-muted-foreground">
+          {search ? "No projected lineups match this search." : "NBA projection data is refreshing. Try Refresh shortly."}
+        </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {teams.map(({ team, players }) => (
