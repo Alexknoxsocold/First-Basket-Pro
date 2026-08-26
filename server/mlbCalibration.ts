@@ -135,7 +135,7 @@ type LedgerGame = {
   id?: string | number; gameId?: string | number; shortName?: string; matchup?: string; date?: string; gameStartAt?: Date | string | null;
   recommendation?: "NRFI" | "YRFI" | "NO_PLAY"; nrfiProbability?: number; probability?: number; confidence?: string | null;
   outcome?: "won" | "lost" | "pending" | "NRFI" | "YRFI" | null; firstInningScore?: string | null; lockedAt?: Date | string | null;
-  modelVersion?: string | null; marketValue?: MlbMarketValue | null;
+  modelVersion?: string | null; marketValue?: any;
 };
 type LedgerResponse = { date: string; games: LedgerGame[] };
 function normalizeOutcome(game: LedgerGame): "NRFI" | "YRFI" | null { if (game.outcome === "NRFI" || game.outcome === "YRFI") return game.outcome; if (game.outcome !== "won" && game.outcome !== "lost") return null; if (game.recommendation !== "NRFI" && game.recommendation !== "YRFI") return null; return game.outcome === "won" ? game.recommendation : game.recommendation === "NRFI" ? "YRFI" : "NRFI"; }
