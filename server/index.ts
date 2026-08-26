@@ -22,6 +22,7 @@ import { getMlbLockFunnel } from "./mlbLockFunnel";
 import { registerMlbV4PublicRoutes } from "./mlbPublicV4Routes";
 import { registerProductionCleanupRoutes } from "./productionCleanupRoutes";
 import { fetchNflMarkets } from "./nflMarkets";
+import { registerWhopBillingRoutes } from "./whopBilling";
 
 const app = express();
 app.set('trust proxy', 1);
@@ -69,6 +70,7 @@ app.use(express.json({ limit: '1mb', verify: (req, _res, buf) => { req.rawBody =
 app.use(express.urlencoded({ extended: false, limit: '1mb' }));
 app.use(sessionMiddleware);
 app.use(authMiddleware);
+registerWhopBillingRoutes(app);
 
 app.use((req, res, next) => {
   const start = Date.now();
@@ -136,8 +138,6 @@ app.use('/api/mlb/nrfi', (req, res, next) => {
 
     if (!quotes.length || !body?.games) {
       void fetchMlbRfiMarkets().catch(error => log('[MLB Odds] Background refresh failed:', error));
-      // fetchNrfiData already attaches PropLine first-inning pricing. Never downgrade
-      // that live market just because the optional secondary adapter has no cache.
       return originalJson({ ...body, marketStatus: hasBuiltInMarket || body?.marketStatus === 'live' ? 'live' : 'unavailable' });
     }
 
@@ -145,8 +145,6 @@ app.use('/api/mlb/nrfi', (req, res, next) => {
       const side = game.recommendation === 'NRFI' ? 'NRFI' : 'YRFI';
       const modelProbability = side === 'NRFI' ? game.nrfiProbability / 100 : (100 - game.nrfiProbability) / 100;
       const market = valueFromCachedQuotesForTeams(game.away?.name ?? '', game.home?.name ?? '', side, modelProbability);
-      // The secondary verified adapter is an enrichment layer only. If it has no
-      // quote for this game, preserve the PropLine price already attached upstream.
       if (!market) return game;
       const edge = market.edge ?? 0;
       const ev = market.ev ?? 0;
