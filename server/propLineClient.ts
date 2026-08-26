@@ -72,7 +72,7 @@ export async function propLineGet<T>(
   const existing = inflight.get(cacheKey);
   if (existing) return await existing as T;
 
-  const request = (async () => {
+  const request: Promise<T> = (async (): Promise<T> => {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
@@ -88,13 +88,13 @@ export async function propLineGet<T>(
       if (response.status === 429) {
         blockedUntil = Date.now() + retryDelayMs(response.headers);
         const detail = await response.text().catch(() => '');
-        if (cached) return cached.value;
+        if (cached) return cached.value as T;
         throw new Error(`PropLine 429${detail ? `: ${detail.slice(0, 220)}` : ''}`);
       }
 
       if (!response.ok) {
         const detail = await response.text().catch(() => '');
-        if (cached) return cached.value;
+        if (cached) return cached.value as T;
         throw new Error(`PropLine ${response.status}${detail ? `: ${detail.slice(0, 220)}` : ''}`);
       }
 
