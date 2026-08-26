@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Check, Crown, Sparkles, X } from "lucide-react";
 
 const CHOICE_KEY = "prezitools-plan-welcome-v2";
+const WHOP_PRO_URL = "https://whop.com/prezitools/prezitools-pro/";
 
 export default function PlanWelcome() {
   const [open, setOpen] = useState(false);
@@ -16,10 +17,14 @@ export default function PlanWelcome() {
     return () => window.clearTimeout(show);
   }, []);
 
-  const close = (choice: "free" | "pro-preview") => {
+  const close = (choice: "free") => {
     window.localStorage.setItem(CHOICE_KEY, choice);
     setVisible(false);
     window.setTimeout(() => setOpen(false), 260);
+  };
+
+  const upgrade = () => {
+    window.location.assign(WHOP_PRO_URL);
   };
 
   if (!open) return null;
@@ -36,7 +41,7 @@ export default function PlanWelcome() {
             <div className="mx-auto mb-2 flex h-8 w-8 items-center justify-center rounded-xl border border-primary/25 bg-primary/10"><Sparkles className="h-3.5 w-3.5 text-primary" /></div>
             <div className="text-[8px] font-black uppercase tracking-[.24em] text-primary">Welcome to PreziTools</div>
             <h2 id="plan-title" className="mt-1 text-lg font-black tracking-tight sm:text-xl">See the board. Choose your access.</h2>
-            <p className="mx-auto mt-1 max-w-sm text-[10px] leading-4 text-muted-foreground">Your Best Plays are already behind this window. Continue free, or preview Pro for deeper model access.</p>
+            <p className="mx-auto mt-1 max-w-sm text-[10px] leading-4 text-muted-foreground">Your Best Plays are already behind this window. Continue free, or upgrade to Pro for deeper model access.</p>
           </div>
 
           <div className="mt-4 grid gap-2.5 sm:grid-cols-2">
@@ -54,11 +59,11 @@ export default function PlanWelcome() {
               <div className="mt-2.5 space-y-1.5 text-[9px]">
                 {["Pro model insights", "Strong & elite plays", "Deeper analytics"].map(x => <div key={x} className="flex items-center gap-1.5"><Check className="h-2.5 w-2.5 text-primary" />{x}</div>)}
               </div>
-              <button onClick={() => close("pro-preview")} className="mt-3 h-8 w-full rounded-lg bg-primary text-[10px] font-black text-primary-foreground shadow-md shadow-primary/15 transition hover:brightness-105">Preview Pro — $11/mo</button>
+              <button onClick={upgrade} className="mt-3 h-8 w-full rounded-lg bg-primary text-[10px] font-black text-primary-foreground shadow-md shadow-primary/15 transition hover:brightness-105">Upgrade to Pro — $11/mo</button>
             </div>
           </div>
 
-          <div className="mt-2.5 text-center text-[7.5px] text-muted-foreground">Preview only · no payment is collected yet</div>
+          <div className="mt-2.5 text-center text-[7.5px] text-muted-foreground">Secure checkout is handled by Whop.</div>
         </div>
       </div>
     </div>
