@@ -5,6 +5,7 @@ export default function WNBAHiddenHistory() {
     <>
       <style>{`
         button:has(> svg.lucide-history) { display: none !important; }
+        button:has(> svg.lucide-refresh-cw) { display: none !important; }
         @media (max-width: 640px) {
           .wnba-mobile-nav-fix nav {
             padding-top: 4px !important;
