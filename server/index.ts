@@ -32,12 +32,8 @@ const production = process.env.NODE_ENV === 'production';
 const configuredSessionSecret = process.env.SESSION_SECRET?.trim();
 const databaseUrl = process.env.DATABASE_URL?.trim();
 
-if (production && !configuredSessionSecret) {
-  throw new Error('SESSION_SECRET is required in production. Refusing to start with an ephemeral secret.');
-}
-if (production && !databaseUrl) {
-  throw new Error('DATABASE_URL is required in production. Refusing to start without persistent storage.');
-}
+if (production && !configuredSessionSecret) throw new Error('SESSION_SECRET is required in production. Refusing to start with an ephemeral secret.');
+if (production && !databaseUrl) throw new Error('DATABASE_URL is required in production. Refusing to start without persistent storage.');
 
 const sessionSecret = configuredSessionSecret || 'development-only-session-secret';
 const appDbPool = databaseUrl ? new Pool({ connectionString: databaseUrl }) : null;
@@ -51,16 +47,9 @@ const sessionMiddleware = session({
   secret: sessionSecret,
   resave: false,
   saveUninitialized: false,
-  cookie: {
-    secure: production,
-    httpOnly: true,
-    maxAge: 30 * 24 * 60 * 60 * 1000,
-    sameSite: 'lax',
-  },
+  cookie: { secure: production, httpOnly: true, maxAge: 30 * 24 * 60 * 60 * 1000, sameSite: 'lax' },
 });
 
-// Baseline browser hardening without a restrictive CSP that could break the
-// existing Vite bundle or third-party image assets.
 app.use((req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'DENY');
@@ -81,8 +70,6 @@ app.use(express.urlencoded({ extended: false, limit: '1mb' }));
 app.use(sessionMiddleware);
 app.use(authMiddleware);
 
-// Log request metadata only. Never serialize API response bodies into production
-// logs because auth/admin responses may contain account or operational details.
 app.use((req, res, next) => {
   const start = Date.now();
   const path = req.path;
@@ -101,10 +88,7 @@ async function databaseHealthy(): Promise<boolean> {
   const now = Date.now();
   if (lastDbHealth && now - lastDbHealth.checkedAt < 10_000) return lastDbHealth.ok;
   try {
-    await Promise.race([
-      appDbPool.query('SELECT 1'),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('database health timeout')), 2000)),
-    ]);
+    await Promise.race([appDbPool.query('SELECT 1'), new Promise((_, reject) => setTimeout(() => reject(new Error('database health timeout')), 2000))]);
     lastDbHealth = { checkedAt: now, ok: true };
   } catch (error) {
     console.error('[Health] Database check failed:', error);
@@ -117,63 +101,25 @@ app.get('/api/health', async (_req, res) => {
   const dbOk = await databaseHealthy();
   const ok = !production || dbOk;
   res.setHeader('Cache-Control', 'no-store');
-  return res.status(ok ? 200 : 503).json({
-    status: ok ? 'ok' : 'degraded',
-    database: dbOk ? 'ok' : 'unavailable',
-    modelVersion: 'v4-live',
-    generatedAt: new Date().toISOString(),
-  });
+  return res.status(ok ? 200 : 503).json({ status: ok ? 'ok' : 'degraded', database: dbOk ? 'ok' : 'unavailable', modelVersion: 'v4-live', generatedAt: new Date().toISOString() });
 });
 
 app.get('/api/admin/mlb/diagnostics', requireAdmin, async (_req, res) => {
   try {
     const quotes = getCachedMlbRfiQuotes();
-    const quoteTimes = quotes
-      .map((quote: any) => quote.updatedAt ? new Date(quote.updatedAt).getTime() : Number.NaN)
-      .filter((value: number) => Number.isFinite(value));
+    const quoteTimes = quotes.map((quote: any) => quote.updatedAt ? new Date(quote.updatedAt).getTime() : Number.NaN).filter((value: number) => Number.isFinite(value));
     const newestQuoteAt = quoteTimes.length ? new Date(Math.max(...quoteTimes)).toISOString() : null;
-    const [history, performance, closingLine, integrity, lockFunnel] = await Promise.all([
-      getPredictionHistory(30),
-      getCalibrationSummary(30),
-      getMlbClosingLineSummary(30),
-      getMlbIntegritySummary(30),
-      getMlbLockFunnel(),
-    ]);
+    const [history, performance, closingLine, integrity, lockFunnel] = await Promise.all([getPredictionHistory(30), getCalibrationSummary(30), getMlbClosingLineSummary(30), getMlbIntegritySummary(30), getMlbLockFunnel()]);
     const locked = history.filter(row => row.lockedAt).length;
     const graded = history.filter(row => row.lockedAt && row.outcome).length;
     res.setHeader('Cache-Control', 'no-store');
     return res.json({
-      generatedAt: new Date().toISOString(),
-      modelVersion: 'v4-live',
-      environment: production ? 'production' : 'development',
-      configuration: {
-        database: Boolean(databaseUrl),
-        sessionSecret: Boolean(configuredSessionSecret),
-        adminPassword: Boolean(process.env.ADMIN_PASSWORD?.trim()),
-        oddsApiKey: Boolean(process.env.THE_ODDS_API_KEY?.trim()),
-      },
-      autoGrade: getMlbAutoGradeStatus(),
-      market: {
-        quoteCount: quotes.length,
-        newestQuoteAt,
-        status: quotes.length ? 'live' : 'unavailable',
-      },
-      ledger: {
-        windowDays: 30,
-        snapshots: history.length,
-        locked,
-        graded,
-      },
-      lockFunnel,
-      performance: {
-        sampleSize: performance.sampleSize,
-        gradedPredictions: performance.gradedPredictions,
-        brierScore: performance.brierScore,
-        logLoss: performance.logLoss,
-        expectedCalibrationError: performance.expectedCalibrationError,
-      },
-      closingLine,
-      integrity,
+      generatedAt: new Date().toISOString(), modelVersion: 'v4-live', environment: production ? 'production' : 'development',
+      configuration: { database: Boolean(databaseUrl), sessionSecret: Boolean(configuredSessionSecret), adminPassword: Boolean(process.env.ADMIN_PASSWORD?.trim()), oddsApiKey: Boolean(process.env.THE_ODDS_API_KEY?.trim()) },
+      autoGrade: getMlbAutoGradeStatus(), market: { quoteCount: quotes.length, newestQuoteAt, status: quotes.length ? 'live' : 'unavailable' },
+      ledger: { windowDays: 30, snapshots: history.length, locked, graded }, lockFunnel,
+      performance: { sampleSize: performance.sampleSize, gradedPredictions: performance.gradedPredictions, brierScore: performance.brierScore, logLoss: performance.logLoss, expectedCalibrationError: performance.expectedCalibrationError },
+      closingLine, integrity,
     });
   } catch (error) {
     console.error('[MLB Diagnostics] Error:', error);
@@ -186,15 +132,22 @@ app.use('/api/mlb/nrfi', (req, res, next) => {
   const originalJson = res.json.bind(res);
   res.json = ((body: any) => {
     const quotes = getCachedMlbRfiQuotes();
+    const hasBuiltInMarket = Boolean(body?.games?.some((game: any) => game.marketValue?.available));
+
     if (!quotes.length || !body?.games) {
       void fetchMlbRfiMarkets().catch(error => log('[MLB Odds] Background refresh failed:', error));
-      return originalJson({ ...body, marketStatus: 'unavailable' });
+      // fetchNrfiData already attaches PropLine first-inning pricing. Never downgrade
+      // that live market just because the optional secondary adapter has no cache.
+      return originalJson({ ...body, marketStatus: hasBuiltInMarket || body?.marketStatus === 'live' ? 'live' : 'unavailable' });
     }
+
     const games = body.games.map((game: any) => {
       const side = game.recommendation === 'NRFI' ? 'NRFI' : 'YRFI';
       const modelProbability = side === 'NRFI' ? game.nrfiProbability / 100 : (100 - game.nrfiProbability) / 100;
       const market = valueFromCachedQuotesForTeams(game.away?.name ?? '', game.home?.name ?? '', side, modelProbability);
-      if (!market) return { ...game, marketValue: null };
+      // The secondary verified adapter is an enrichment layer only. If it has no
+      // quote for this game, preserve the PropLine price already attached upstream.
+      if (!market) return game;
       const edge = market.edge ?? 0;
       const ev = market.ev ?? 0;
       const marketPlayStatus = ev >= 0.08 && edge >= 0.05 ? 'BEST_PLAY' : ev >= 0.04 && edge >= 0.03 ? 'PLAY' : ev >= 0.02 && edge >= 0.015 ? 'LEAN' : 'NO_PLAY';
@@ -205,21 +158,17 @@ app.use('/api/mlb/nrfi', (req, res, next) => {
         modelPlayStatus: game.playStatus,
         marketPlayStatus,
         marketValue: {
-          available: true,
-          book: market.book,
-          selection: market.selection,
-          price: market.price,
+          available: true, book: market.book, selection: market.selection, price: market.price,
           impliedProbability: market.impliedProbability === null ? null : Math.round(market.impliedProbability * 1000) / 10,
           noVigProbability: market.noVigProbability === null ? null : Math.round(market.noVigProbability * 1000) / 10,
-          edge: Math.round(edge * 1000) / 10,
-          ev: Math.round(ev * 1000) / 10,
-          updatedAt: market.updatedAt,
+          edge: Math.round(edge * 1000) / 10, ev: Math.round(ev * 1000) / 10, updatedAt: market.updatedAt,
           ageSeconds: market.ageSeconds === null || market.ageSeconds === undefined ? null : Math.round(market.ageSeconds),
         },
         factors: [...(game.factors ?? []), marketFactor],
       };
     });
     const valueGames = games.filter((g: any) => g.playStatus === 'BEST_PLAY' || g.playStatus === 'PLAY');
+    const anyMarket = games.some((g: any) => g.marketValue?.available);
     return originalJson({
       ...body,
       games,
@@ -228,7 +177,7 @@ app.use('/api/mlb/nrfi', (req, res, next) => {
         const bScore = b.marketValue?.available ? (b.marketValue.ev ?? -Infinity) : b.modelEdge;
         return bScore - aScore;
       })[0] ?? null,
-      marketStatus: 'live',
+      marketStatus: anyMarket ? 'live' : (body?.marketStatus ?? 'unavailable'),
     });
   }) as typeof res.json;
   next();
@@ -246,10 +195,6 @@ app.get('/api/nfl/markets', async (_req, res) => {
 });
 
 registerProductionCleanupRoutes(app);
-
-// Register the authoritative V4-live public routes before the legacy route
-// definitions in registerRoutes(). The market middleware above still enriches
-// the primary endpoint, but page requests can no longer lock predictions.
 registerMlbV4PublicRoutes(app);
 
 app.get('/api/mlb/performance', async (req, res) => {
@@ -308,9 +253,7 @@ function isNbaSeason(): boolean {
     }
     void fetchMlbRfiMarkets().then(markets => log(`[Startup] MLB RFI odds warm: ${markets.size / 2} games priced.`)).catch(error => log('[Startup] MLB RFI odds warm failed:', error));
     startMlbAutoGradeScheduler();
-    const closingRun = () => void captureMlbClosingLines(20).then(result => {
-      if (result.captured > 0) log(`[MLB Closing] Captured ${result.captured}/${result.checked} closing lines.`);
-    }).catch(error => log('[MLB Closing] Capture failed:', error));
+    const closingRun = () => void captureMlbClosingLines(20).then(result => { if (result.captured > 0) log(`[MLB Closing] Captured ${result.captured}/${result.checked} closing lines.`); }).catch(error => log('[MLB Closing] Capture failed:', error));
     closingRun();
     const closingTimer = setInterval(closingRun, 5 * 60 * 1000);
     if (typeof closingTimer.unref === 'function') closingTimer.unref();
@@ -325,16 +268,12 @@ function isNbaSeason(): boolean {
         const startupSyncService = createDailySyncService(storage);
         await startupSyncService.runDailySync();
         log('[Startup] Initial NBA sync complete');
-      } catch (error) {
-        log('[Startup] Initial NBA sync failed:', error);
-      }
+      } catch (error) { log('[Startup] Initial NBA sync failed:', error); }
       try {
         const { populateTodayStarters } = await import('./populate-player-stats.js');
         await populateTodayStarters(storage);
         log('[Startup] Player stats populated successfully');
-      } catch (error) {
-        log('[Startup] Failed to populate player stats:', error);
-      }
+      } catch (error) { log('[Startup] Failed to populate player stats:', error); }
       try {
         const { warmFirstBasketCache } = await import('./firstBasketHistory.js');
         const games = await storage.getGames();
@@ -345,9 +284,7 @@ function isNbaSeason(): boolean {
           warmFirstBasketCache(teams as string[]);
           log(`[Startup] Warming FB history cache for: ${teams.join(', ')}`);
         }
-      } catch (error) {
-        log('[Startup] FB history warm skipped:', error);
-      }
+      } catch (error) { log('[Startup] FB history warm skipped:', error); }
     })();
   });
 })();
