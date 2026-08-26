@@ -13,6 +13,11 @@ export type HomeRunMarket = {
   bestOdds: number;
   bestBook: string;
   impliedProbability: number;
+  consensusImpliedProbability: number;
+  quoteCount: number;
+  trustedQuoteCount: number;
+  outlierQuoteCount: number;
+  priceVerified: boolean;
   quotes: HomeRunBookQuote[];
   capturedAt: string;
 };
@@ -27,7 +32,7 @@ export type HomeRunMarketFeed = {
 
 type GameInput = { gamePk: number; gameTime: string; awayName: string; homeName: string };
 type PropLineEvent = { id?: string | number; event_id?: string | number; home_team?: string; away_team?: string; commence_time?: string };
-type PropLineOutcome = { name?: string; description?: string; price?: number; book_updated_at?: string; last_change_at?: string };
+type PropLineOutcome = { name?: string; description?: string; price?: number; point?: number | null; book_updated_at?: string; last_change_at?: string };
 type PropLineMarket = { key?: string; outcomes?: PropLineOutcome[] };
 type PropLineBookmaker = { key?: string; title?: string; last_update?: string; markets?: PropLineMarket[] };
 type PropLineOdds = { id?: string | number; event_id?: string | number; home_team?: string; away_team?: string; bookmakers?: PropLineBookmaker[] };
@@ -45,6 +50,13 @@ export function normalizeHomeRunPlayer(value: string): string {
 function americanImplied(odds: number): number {
   if (!Number.isFinite(odds) || odds === 0) return NaN;
   return odds > 0 ? 100 / (odds + 100) : Math.abs(odds) / (Math.abs(odds) + 100);
+}
+
+function median(values: number[]): number {
+  if (!values.length) return NaN;
+  const sorted = [...values].sort((a,b)=>a-b);
+  const middle = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
 }
 
 async function propLineFetch<T>(path: string, apiKey: string, timeoutMs = 8000): Promise<T> {
@@ -105,17 +117,25 @@ function buildPlayerMarkets(payload: unknown): Map<string, HomeRunMarket> {
         if (market.key !== 'batter_home_runs') continue;
         for (const outcome of market.outcomes ?? []) {
           if ((outcome.name ?? '').toLowerCase() !== 'yes') continue;
+          // PropLine may also carry alternate/milestone home-run rungs under this market.
+          // The main anytime-HR YES outcome has no point (or occasionally 0.5).
+          if (outcome.point !== undefined && outcome.point !== null && outcome.point !== 0.5) continue;
           const player = String(outcome.description ?? '').trim();
           const americanOdds = Number(outcome.price);
           if (!player || !Number.isFinite(americanOdds) || americanOdds === 0) continue;
           const key = normalizeHomeRunPlayer(player);
           const entry = quotesByPlayer.get(key) ?? { player, quotes: [] };
-          entry.quotes.push({
+          const quote: HomeRunBookQuote = {
             bookmaker: String(book.title ?? book.key ?? 'Sportsbook'),
             bookmakerKey: String(book.key ?? '').trim(),
             americanOdds,
             updatedAt: outcome.book_updated_at ?? outcome.last_change_at ?? book.last_update ?? null,
-          });
+          };
+          // Keep one anytime-HR quote per book. If duplicates arrive, keep the more conservative price.
+          const existingIndex = entry.quotes.findIndex(q => q.bookmakerKey && q.bookmakerKey === quote.bookmakerKey);
+          if (existingIndex >= 0) {
+            if (americanImplied(quote.americanOdds) > americanImplied(entry.quotes[existingIndex].americanOdds)) entry.quotes[existingIndex] = quote;
+          } else entry.quotes.push(quote);
           quotesByPlayer.set(key, entry);
         }
       }
@@ -126,14 +146,43 @@ function buildPlayerMarkets(payload: unknown): Map<string, HomeRunMarket> {
   const out = new Map<string, HomeRunMarket>();
   for (const [key, entry] of quotesByPlayer) {
     entry.quotes.sort((a, b) => b.americanOdds - a.americanOdds);
-    const best = entry.quotes[0];
+    const probabilities = entry.quotes.map(q => americanImplied(q.americanOdds)).filter(Number.isFinite);
+    const consensus = median(probabilities);
+    if (!Number.isFinite(consensus)) continue;
+
+    // Reject isolated prices that are wildly different from the rest of the market.
+    // This prevents one stale/alternate quote from creating fake +200% EV plays.
+    let trustedQuotes = entry.quotes.filter(q => {
+      const p = americanImplied(q.americanOdds);
+      if (!Number.isFinite(p)) return false;
+      if (entry.quotes.length < 3) return true;
+      return Math.abs(p - consensus) / Math.max(consensus, 0.01) <= 0.45;
+    });
+    let priceVerified = trustedQuotes.length >= 2;
+
+    if (entry.quotes.length === 2) {
+      const p0 = americanImplied(entry.quotes[0].americanOdds), p1 = americanImplied(entry.quotes[1].americanOdds);
+      const relGap = Math.abs(p0 - p1) / Math.max((p0 + p1) / 2, 0.01);
+      priceVerified = relGap <= 0.45;
+      if (!priceVerified) trustedQuotes = [...entry.quotes].sort((a,b)=>americanImplied(b.americanOdds)-americanImplied(a.americanOdds)).slice(0,1);
+    }
+    if (!trustedQuotes.length) trustedQuotes = [...entry.quotes].sort((a,b)=>americanImplied(b.americanOdds)-americanImplied(a.americanOdds)).slice(0,1);
+
+    trustedQuotes.sort((a,b)=>b.americanOdds-a.americanOdds);
+    const best = trustedQuotes[0];
     const impliedProbability = americanImplied(best.americanOdds);
     if (!Number.isFinite(impliedProbability)) continue;
+
     out.set(key, {
       player: entry.player,
       bestOdds: best.americanOdds,
       bestBook: best.bookmaker,
       impliedProbability,
+      consensusImpliedProbability: consensus,
+      quoteCount: entry.quotes.length,
+      trustedQuoteCount: trustedQuotes.length,
+      outlierQuoteCount: Math.max(0, entry.quotes.length - trustedQuotes.length),
+      priceVerified,
       quotes: entry.quotes,
       capturedAt,
     });
