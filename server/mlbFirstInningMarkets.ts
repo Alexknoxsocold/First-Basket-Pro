@@ -1,241 +1,30 @@
-const PROPLINE_BASE = 'https://api.prop-line.com/v1';
-const MARKET_CACHE_MS = 5 * 60 * 1000;
-
-export type FirstInningBookQuote = {
-  bookmaker: string;
-  bookmakerKey: string;
-  selection: 'NRFI' | 'YRFI';
-  americanOdds: number;
-  impliedProbability: number;
-  updatedAt: string | null;
-};
-
-export type FirstInningMarket = {
-  selection: 'NRFI' | 'YRFI';
-  price: number;
-  book: string;
-  impliedProbability: number;
-  noVigProbability: number;
-  edge: number;
-  ev: number;
-  quotes: FirstInningBookQuote[];
-  quoteCount: number;
-  capturedAt: string;
-};
-
-export type FirstInningMarketFeed = {
-  status: 'live' | 'unavailable' | 'disabled';
-  source: 'PropLine';
-  gamesMatched: number;
-  markets: Map<string, { NRFI?: FirstInningMarket; YRFI?: FirstInningMarket }>;
-};
-
-type GameInput = {
-  id: string;
-  gameTime: string;
-  awayName: string;
-  homeName: string;
-  nrfiProbability: number;
-};
-
-type PropLineEvent = {
-  id?: string | number;
-  event_id?: string | number;
-  home_team?: string;
-  away_team?: string;
-  commence_time?: string;
-};
-
-type PropLineOutcome = {
-  name?: string;
-  price?: number;
-  point?: number | null;
-  book_updated_at?: string | null;
-  last_change_at?: string | null;
-};
-
-type PropLineMarket = {
-  key?: string;
-  period?: string | null;
-  team?: string | null;
-  outcomes?: PropLineOutcome[];
-};
-
-type PropLineBookmaker = {
-  key?: string;
-  title?: string;
-  last_update?: string | null;
-  markets?: PropLineMarket[];
-};
-
-type PropLineOdds = {
-  id?: string | number;
-  event_id?: string | number;
-  bookmakers?: PropLineBookmaker[];
-};
-
-let cache: { key: string; expiresAt: number; value: FirstInningMarketFeed } | null = null;
-
-function normalize(value: string): string {
-  return value.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
-}
-
-function americanImplied(odds: number): number {
-  if (!Number.isFinite(odds) || odds === 0) return NaN;
-  return odds > 0 ? 100 / (odds + 100) : Math.abs(odds) / (Math.abs(odds) + 100);
-}
-
-function expectedValue(probability: number, odds: number): number {
-  if (!Number.isFinite(probability) || !Number.isFinite(odds) || odds === 0) return NaN;
-  const profit = odds > 0 ? odds / 100 : 100 / Math.abs(odds);
-  return (probability * profit - (1 - probability)) * 100;
-}
-
-function median(values: number[]): number {
-  if (!values.length) return NaN;
-  const sorted = [...values].sort((a, b) => a - b);
-  const middle = Math.floor(sorted.length / 2);
-  return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
-}
-
-async function propLineFetch<T>(path: string, apiKey: string, timeoutMs = 8000): Promise<T> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const response = await fetch(`${PROPLINE_BASE}${path}`, {
-      signal: controller.signal,
-      headers: { 'X-API-Key': apiKey, 'User-Agent': 'PreziTools/1.0' },
-    });
-    if (!response.ok) throw new Error(`PropLine ${response.status}`);
-    return await response.json() as T;
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
-function asEvents(payload: unknown): PropLineEvent[] {
-  if (Array.isArray(payload)) return payload as PropLineEvent[];
-  if (payload && typeof payload === 'object') {
-    const row = payload as Record<string, unknown>;
-    if (Array.isArray(row.events)) return row.events as PropLineEvent[];
-    if (Array.isArray(row.data)) return row.data as PropLineEvent[];
-  }
-  return [];
-}
-
-function asOdds(payload: unknown): PropLineOdds[] {
-  if (Array.isArray(payload)) return payload as PropLineOdds[];
-  if (payload && typeof payload === 'object') {
-    const row = payload as Record<string, unknown>;
-    if (Array.isArray(row.events)) return row.events as PropLineOdds[];
-    if (Array.isArray(row.data)) return row.data as PropLineOdds[];
-    return [payload as PropLineOdds];
-  }
-  return [];
-}
-
-function eventMatches(game: GameInput, event: PropLineEvent): boolean {
-  const home = normalize(event.home_team ?? '');
-  const away = normalize(event.away_team ?? '');
-  const gameHome = normalize(game.homeName);
-  const gameAway = normalize(game.awayName);
-  if (!home || !away || !gameHome || !gameAway) return false;
-  const teamsMatch = (home === gameHome || home.includes(gameHome) || gameHome.includes(home)) && (away === gameAway || away.includes(gameAway) || gameAway.includes(away));
-  if (!teamsMatch) return false;
-  if (!event.commence_time) return true;
-  const eventTime = new Date(event.commence_time).getTime();
-  const gameTime = new Date(game.gameTime).getTime();
-  return !Number.isFinite(eventTime) || !Number.isFinite(gameTime) || Math.abs(eventTime - gameTime) <= 3 * 60 * 60 * 1000;
-}
-
-function readQuotes(payload: unknown): { NRFI: FirstInningBookQuote[]; YRFI: FirstInningBookQuote[] } {
-  const result: { NRFI: FirstInningBookQuote[]; YRFI: FirstInningBookQuote[] } = { NRFI: [], YRFI: [] };
-  for (const event of asOdds(payload)) {
-    for (const book of event.bookmakers ?? []) {
-      for (const market of book.markets ?? []) {
-        if (market.key !== 'totals' || market.period !== 'i1' || market.team) continue;
-        for (const outcome of market.outcomes ?? []) {
-          const point = Number(outcome.point);
-          if (!Number.isFinite(point) || Math.abs(point - 0.5) > 0.001) continue;
-          const name = String(outcome.name ?? '').toLowerCase();
-          const selection: 'NRFI' | 'YRFI' | null = name === 'under' ? 'NRFI' : name === 'over' ? 'YRFI' : null;
-          const americanOdds = Number(outcome.price);
-          if (!selection || !Number.isFinite(americanOdds) || americanOdds === 0) continue;
-          const impliedProbability = americanImplied(americanOdds);
-          if (!Number.isFinite(impliedProbability)) continue;
-          result[selection].push({
-            bookmaker: String(book.title ?? book.key ?? 'Sportsbook'),
-            bookmakerKey: String(book.key ?? ''),
-            selection,
-            americanOdds,
-            impliedProbability,
-            updatedAt: outcome.book_updated_at ?? outcome.last_change_at ?? book.last_update ?? null,
-          });
-        }
-      }
-    }
-  }
-  return result;
-}
-
-function buildSideMarket(selection: 'NRFI' | 'YRFI', quotes: FirstInningBookQuote[], oppositeQuotes: FirstInningBookQuote[], modelProbabilityPct: number): FirstInningMarket | undefined {
-  if (!quotes.length) return undefined;
-  const best = [...quotes].sort((a, b) => b.americanOdds - a.americanOdds)[0];
-  const sideConsensus = median(quotes.map(q => q.impliedProbability));
-  const oppositeConsensus = median(oppositeQuotes.map(q => q.impliedProbability));
-  let noVig = sideConsensus;
-  if (Number.isFinite(sideConsensus) && Number.isFinite(oppositeConsensus) && sideConsensus + oppositeConsensus > 0) noVig = sideConsensus / (sideConsensus + oppositeConsensus);
-  const modelProbability = Math.max(0, Math.min(1, modelProbabilityPct / 100));
-  const edge = (modelProbability - noVig) * 100;
-  const ev = expectedValue(modelProbability, best.americanOdds);
-  return {
-    selection,
-    price: best.americanOdds,
-    book: best.bookmaker,
-    impliedProbability: best.impliedProbability * 100,
-    noVigProbability: noVig * 100,
-    edge,
-    ev,
-    quotes: [...quotes].sort((a, b) => b.americanOdds - a.americanOdds),
-    quoteCount: quotes.length,
-    capturedAt: new Date().toISOString(),
-  };
-}
-
-export async function fetchFirstInningMarkets(games: GameInput[]): Promise<FirstInningMarketFeed> {
-  const apiKey = process.env.PROPLINE_API_KEY?.trim();
-  if (!apiKey) return { status: 'disabled', source: 'PropLine', gamesMatched: 0, markets: new Map() };
-  if (!games.length) return { status: 'live', source: 'PropLine', gamesMatched: 0, markets: new Map() };
-
-  const cacheKey = games.map(g => `${g.id}:${g.gameTime}:${g.nrfiProbability}`).sort().join('|');
-  if (cache && cache.key === cacheKey && cache.expiresAt > Date.now()) return cache.value;
-
-  try {
-    const events = asEvents(await propLineFetch<unknown>('/sports/baseball_mlb/events', apiKey));
-    const pairs = games.map(game => ({ game, event: events.find(event => eventMatches(game, event)) })).filter((x): x is { game: GameInput; event: PropLineEvent } => Boolean(x.event));
-    const markets = new Map<string, { NRFI?: FirstInningMarket; YRFI?: FirstInningMarket }>();
-
-    await Promise.all(pairs.map(async ({ game, event }) => {
-      const eventId = event.id ?? event.event_id;
-      if (eventId === undefined || eventId === null) return;
-      try {
-        const payload = await propLineFetch<unknown>(`/sports/baseball_mlb/events/${encodeURIComponent(String(eventId))}/odds?markets=totals&period=i1`, apiKey);
-        const quotes = readQuotes(payload);
-        const nrfi = buildSideMarket('NRFI', quotes.NRFI, quotes.YRFI, game.nrfiProbability);
-        const yrfi = buildSideMarket('YRFI', quotes.YRFI, quotes.NRFI, 100 - game.nrfiProbability);
-        if (nrfi || yrfi) markets.set(game.id, { NRFI: nrfi, YRFI: yrfi });
-      } catch (error) {
-        console.warn(`[MLB NRFI] PropLine first-inning odds unavailable for ${game.id}:`, error);
-      }
-    }));
-
-    const value: FirstInningMarketFeed = { status: markets.size ? 'live' : 'unavailable', source: 'PropLine', gamesMatched: pairs.length, markets };
-    cache = { key: cacheKey, expiresAt: Date.now() + MARKET_CACHE_MS, value };
-    return value;
-  } catch (error) {
-    console.warn('[MLB NRFI] PropLine market feed unavailable:', error);
-    const value: FirstInningMarketFeed = { status: 'unavailable', source: 'PropLine', gamesMatched: 0, markets: new Map() };
-    cache = { key: cacheKey, expiresAt: Date.now() + 60_000, value };
-    return value;
-  }
-}
+const PROPLINE_BASE='https://api.prop-line.com/v1';
+const MARKET_CACHE_MS=5*60*1000;
+export type FirstInningBookQuote={bookmaker:string;bookmakerKey:string;selection:'NRFI'|'YRFI';americanOdds:number;impliedProbability:number;updatedAt:string|null};
+export type FirstInningMarket={selection:'NRFI'|'YRFI';price:number;book:string;impliedProbability:number;noVigProbability:number;edge:number;ev:number;quotes:FirstInningBookQuote[];quoteCount:number;capturedAt:string};
+export type FirstInningMarketFeed={status:'live'|'unavailable'|'disabled';source:'PropLine';gamesMatched:number;markets:Map<string,{NRFI?:FirstInningMarket;YRFI?:FirstInningMarket}>};
+type GameInput={id:string;gameTime:string;awayName:string;homeName:string;nrfiProbability:number};
+type PropLineEvent={id?:string|number;event_id?:string|number;home_team?:string;away_team?:string;commence_time?:string;bookmakers?:PropLineBookmaker[]};
+type PropLineOutcome={name?:string;description?:string;price?:number;point?:number|null;book_updated_at?:string|null;last_change_at?:string|null};
+type PropLineMarket={key?:string;period?:string|null;team?:string|null;outcomes?:PropLineOutcome[]};
+type PropLineBookmaker={key?:string;title?:string;last_update?:string|null;markets?:PropLineMarket[]};
+let cache:{key:string;expiresAt:number;value:FirstInningMarketFeed}|null=null;
+function normalize(v:string){return v.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]/g,'');}
+function americanImplied(o:number){if(!Number.isFinite(o)||o===0)return NaN;return o>0?100/(o+100):Math.abs(o)/(Math.abs(o)+100);}
+function expectedValue(p:number,o:number){const profit=o>0?o/100:100/Math.abs(o);return(p*profit-(1-p))*100;}
+function median(values:number[]){if(!values.length)return NaN;const s=[...values].sort((a,b)=>a-b),m=Math.floor(s.length/2);return s.length%2?s[m]:(s[m-1]+s[m])/2;}
+function rows(payload:unknown):PropLineEvent[]{if(Array.isArray(payload))return payload as PropLineEvent[];if(payload&&typeof payload==='object'){const row=payload as Record<string,unknown>;for(const k of ['events','data','odds'])if(Array.isArray(row[k]))return row[k] as PropLineEvent[];if(row.data&&typeof row.data==='object'){const nested=row.data as Record<string,unknown>;for(const k of ['events','data','odds'])if(Array.isArray(nested[k]))return nested[k] as PropLineEvent[];}if('bookmakers'in row||'home_team'in row||'away_team'in row)return[payload as PropLineEvent];}return[];}
+async function propLineFetch<T>(path:string,key:string,timeoutMs=9000):Promise<T>{const c=new AbortController();const t=setTimeout(()=>c.abort(),timeoutMs);try{const sep=path.includes('?')?'&':'?';const r=await fetch(`${PROPLINE_BASE}${path}${sep}apiKey=${encodeURIComponent(key)}`,{signal:c.signal,headers:{'X-API-Key':key,'Authorization':`Bearer ${key}`,'User-Agent':'PreziTools/1.0'}});if(!r.ok){const text=await r.text().catch(()=>'');throw new Error(`PropLine ${r.status}${text?`: ${text.slice(0,180)}`:''}`);}return await r.json() as T;}finally{clearTimeout(t);}}
+function eventMatches(game:GameInput,event:PropLineEvent){const h=normalize(event.home_team??''),a=normalize(event.away_team??''),gh=normalize(game.homeName),ga=normalize(game.awayName);if(!h||!a)return false;const teams=(h===gh||h.includes(gh)||gh.includes(h))&&(a===ga||a.includes(ga)||ga.includes(a));if(!teams)return false;if(!event.commence_time)return true;const x=new Date(event.commence_time).getTime(),y=new Date(game.gameTime).getTime();return!Number.isFinite(x)||!Number.isFinite(y)||Math.abs(x-y)<=4*60*60*1000;}
+function marketIsFirstInning(m:PropLineMarket){const key=(m.key??'').toLowerCase(),period=(m.period??'').toLowerCase();return(!m.team)&&(period==='i1'||period==='1st' || key.includes('i1')||key.includes('first'))&&key.includes('total');}
+function readQuotes(payload:unknown){const out:{NRFI:FirstInningBookQuote[];YRFI:FirstInningBookQuote[]}={NRFI:[],YRFI:[]};for(const e of rows(payload))for(const book of e.bookmakers??[])for(const market of book.markets??[]){if(!marketIsFirstInning(market))continue;for(const outcome of market.outcomes??[]){const point=Number(outcome.point);if(Number.isFinite(point)&&Math.abs(point-.5)>.001)continue;const name=String(outcome.name??outcome.description??'').toLowerCase();const selection:name extends never?never:'NRFI'|'YRFI'|null=name.includes('under')||name==='no'?'NRFI':name.includes('over')||name==='yes'?'YRFI':null;const americanOdds=Number(outcome.price);if(!selection||!Number.isFinite(americanOdds)||americanOdds===0)continue;const implied=americanImplied(americanOdds);if(!Number.isFinite(implied))continue;out[selection].push({bookmaker:String(book.title??book.key??'Sportsbook'),bookmakerKey:String(book.key??''),selection,americanOdds,impliedProbability:implied,updatedAt:outcome.book_updated_at??outcome.last_change_at??book.last_update??null});}}return out;}
+function buildSide(selection:'NRFI'|'YRFI',quotes:FirstInningBookQuote[],opposite:FirstInningBookQuote[],modelPct:number){if(!quotes.length)return undefined;const sorted=[...quotes].sort((a,b)=>b.americanOdds-a.americanOdds),best=sorted[0];const a=median(quotes.map(q=>q.impliedProbability)),b=median(opposite.map(q=>q.impliedProbability));const noVig=Number.isFinite(a)&&Number.isFinite(b)&&a+b>0?a/(a+b):a;const p=Math.max(0,Math.min(1,modelPct/100));return{selection,price:best.americanOdds,book:best.bookmaker,impliedProbability:best.impliedProbability*100,noVigProbability:noVig*100,edge:(p-noVig)*100,ev:expectedValue(p,best.americanOdds),quotes:sorted,quoteCount:sorted.length,capturedAt:new Date().toISOString()} satisfies FirstInningMarket;}
+function attachMarket(map:Map<string,{NRFI?:FirstInningMarket;YRFI?:FirstInningMarket}>,game:GameInput,payload:unknown){const q=readQuotes(payload);const nrfi=buildSide('NRFI',q.NRFI,q.YRFI,game.nrfiProbability),yrfi=buildSide('YRFI',q.YRFI,q.NRFI,100-game.nrfiProbability);if(nrfi||yrfi)map.set(game.id,{NRFI:nrfi,YRFI:yrfi});}
+export async function fetchFirstInningMarkets(games:GameInput[]):Promise<FirstInningMarketFeed>{const apiKey=process.env.PROPLINE_API_KEY?.trim();if(!apiKey)return{status:'disabled',source:'PropLine',gamesMatched:0,markets:new Map()};if(!games.length)return{status:'live',source:'PropLine',gamesMatched:0,markets:new Map()};const cacheKey=games.map(g=>`${g.id}:${g.gameTime}:${g.nrfiProbability}`).sort().join('|');if(cache&&cache.key===cacheKey&&cache.expiresAt>Date.now())return cache.value;const markets=new Map<string,{NRFI?:FirstInningMarket;YRFI?:FirstInningMarket}>();let matched=0;
+try{
+  // Fast path: bulk first-inning totals. This avoids losing prices when the events endpoint shape changes.
+  try{const bulk=await propLineFetch<unknown>('/sports/baseball_mlb/odds?markets=totals&period=i1',apiKey);const bulkRows=rows(bulk);for(const game of games){const row=bulkRows.find(r=>eventMatches(game,r));if(row){matched++;attachMarket(markets,game,row);}}}catch(error){console.warn('[MLB NRFI] PropLine bulk first-inning feed unavailable:',error);}
+  // Fallback: events list + event-specific odds.
+  if(markets.size<games.length){let events:PropLineEvent[]=[];try{events=rows(await propLineFetch<unknown>('/sports/baseball_mlb/events',apiKey));}catch(error){console.warn('[MLB NRFI] PropLine events feed unavailable:',error);}for(const game of games){if(markets.has(game.id))continue;const event=events.find(e=>eventMatches(game,e));const eventId=event?.id??event?.event_id;if(eventId===undefined||eventId===null)continue;matched++;try{const payload=await propLineFetch<unknown>(`/sports/baseball_mlb/events/${encodeURIComponent(String(eventId))}/odds?markets=totals&period=i1`,apiKey);attachMarket(markets,game,payload);}catch(error){console.warn(`[MLB NRFI] PropLine first-inning odds unavailable for ${game.id}:`,error);}}}
+  const value:FirstInningMarketFeed={status:markets.size?'live':'unavailable',source:'PropLine',gamesMatched:matched,markets};cache={key:cacheKey,expiresAt:Date.now()+MARKET_CACHE_MS,value};return value;
+}catch(error){console.warn('[MLB NRFI] PropLine market feed unavailable:',error);const value:FirstInningMarketFeed={status:'unavailable',source:'PropLine',gamesMatched:matched,markets};cache={key:cacheKey,expiresAt:Date.now()+60_000,value};return value;}}
