@@ -56,7 +56,7 @@ type HistoryPayload = {
   status: string; verifiedGames: number; coverageStart: string | null; coverageEnd: string | null; note: string;
 };
 
-type Section = 'props' | 'games' | 'strongest' | 'history';
+type Section = 'props' | 'games' | 'opening-tips' | 'strongest' | 'history';
 
 function time(v: string) {
   const d = new Date(v);
@@ -462,9 +462,9 @@ export default function WNBA() {
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-2 px-4 md:px-6 lg:px-8">
           <div className="flex overflow-x-auto">
             <button onClick={() => setSection('games')} className={`flex items-center gap-1.5 whitespace-nowrap border-b-2 px-4 py-4 text-xs ${section === 'games' ? 'border-primary font-semibold' : 'border-transparent text-muted-foreground'}`}><Target className="h-3.5 w-3.5" />First Baskets</button>
+            <button onClick={() => setSection('opening-tips')} className={`flex items-center gap-1.5 whitespace-nowrap border-b-2 px-4 py-4 text-xs ${section === 'opening-tips' ? 'border-primary font-semibold' : 'border-transparent text-muted-foreground'}`}><CircleDot className="h-3.5 w-3.5" />Opening Tips</button>
             <button onClick={() => setSection('strongest')} className={`flex items-center gap-1.5 whitespace-nowrap border-b-2 px-4 py-4 text-xs ${section === 'strongest' ? 'border-primary font-semibold' : 'border-transparent text-muted-foreground'}`}><Sparkles className="h-3.5 w-3.5" />Strongest Play</button>
             <button onClick={() => setSection('props')} className={`flex items-center gap-1.5 whitespace-nowrap border-b-2 px-4 py-4 text-xs ${section === 'props' ? 'border-primary font-semibold' : 'border-transparent text-muted-foreground'}`}><TrendingUp className="h-3.5 w-3.5" />WNBA Props</button>
-            <button onClick={() => setSection('history')} className={`flex items-center gap-1.5 whitespace-nowrap border-b-2 px-4 py-4 text-xs ${section === 'history' ? 'border-primary font-semibold' : 'border-transparent text-muted-foreground'}`}><History className="h-3.5 w-3.5" />FB History</button>
           </div>
           <Button variant="outline" size="sm" onClick={() => { slate.refetch(); history.refetch(); }} className="shrink-0 gap-2"><RefreshCw className={`h-3.5 w-3.5 ${(slate.isFetching || history.isFetching) ? 'animate-spin' : ''}`} />Refresh</Button>
         </div>
@@ -477,7 +477,29 @@ export default function WNBA() {
             {section === 'games' ? <button type="button" role="switch" aria-checked={showAll} onClick={() => setShowAll(v => !v)} className="hidden items-center gap-2 rounded-full border bg-card px-3 py-2 text-xs font-medium shadow-sm transition-colors hover:bg-muted/40 md:flex"><span>Expand rankings</span><span className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${showAll ? 'bg-emerald-500' : 'bg-muted-foreground/30'}`}><span className={`inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${showAll ? 'translate-x-4' : 'translate-x-0.5'}`} /></span></button> : null}
           </div>
 
-          {section === 'games' ? <>
+          {section === 'opening-tips' ? <>
+            <div className="mb-4 rounded-xl border bg-card p-4 shadow-sm">
+              <div className="flex items-center gap-2"><CircleDot className="h-4 w-4 text-primary" /><div className="text-sm font-semibold">WNBA Opening Tips</div></div>
+              <div className="mt-1 text-[10px] text-muted-foreground">Jump-ball matchups, verified tip rates, projected first possession, and confidence from the same opening-tip data used by the First Basket model.</div>
+            </div>
+            <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
+              {games.map(game => (
+                <article key={`tip-${game.id}`} className="relative isolate overflow-hidden rounded-2xl border bg-card shadow-sm">
+                  <ArenaBackdrop homeTeam={game.homeTeam} />
+                  <div className="relative z-10">
+                    <div className="border-b bg-background/55 p-4 backdrop-blur-[2px]">
+                      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
+                        <div className="flex items-center gap-3"><TeamLogo team={game.awayTeam} size="md" /><div><div className="text-sm font-black">{game.awayTeam}</div><div className="max-w-[130px] truncate text-[9px] text-muted-foreground">{game.awayName}</div></div></div>
+                        <div className="text-center"><div className="text-[9px] font-bold uppercase tracking-[.14em] text-muted-foreground">Opening Tip</div><div className="mt-1 flex items-center justify-center gap-1 text-[10px] text-muted-foreground"><Clock className="h-3 w-3" />{time(game.date)}</div></div>
+                        <div className="flex items-center justify-end gap-3 text-right"><div><div className="text-sm font-black">{game.homeTeam}</div><div className="max-w-[130px] truncate text-[9px] text-muted-foreground">{game.homeName}</div></div><TeamLogo team={game.homeTeam} size="md" /></div>
+                      </div>
+                    </div>
+                    <div className="bg-background/48 p-4 backdrop-blur-[2px]"><TipCard game={game} /></div>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </> : section === 'games' ? <>
             <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
               <SummaryCard icon={<Activity className="h-4 w-4 text-primary" />} value={`${games.length}`} label="Today's Games" detail="Every matchup on the current WNBA slate." />
               <SummaryCard icon={<Target className="h-4 w-4 text-emerald-500" />} value={avgTopProbability === null ? '—' : `${avgTopProbability.toFixed(1)}%`} label="Avg #1 Probability" detail="Average model probability for each game's top-ranked scorer." />
