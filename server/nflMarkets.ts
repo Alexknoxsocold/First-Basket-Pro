@@ -1,6 +1,7 @@
-const PROPLINE_BASE = 'https://api.prop-line.com/v1';
+import { propLineGet } from './propLineClient.js';
+
 const ESPN_NFL_SCOREBOARD = 'https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard';
-const CACHE_MS = 10 * 60 * 1000;
+const CACHE_MS = 15 * 60 * 1000;
 const PLAYER_PROP_LOOKAHEAD_MS = 5 * 24 * 60 * 60 * 1000;
 const SPORT_KEYS = ['football_nfl', 'americanfootball_nfl'] as const;
 
@@ -42,7 +43,6 @@ function oddsRows(payload:unknown):PropOdds[]{
   return [];
 }
 async function fetchJson<T>(url:string,timeout=9000):Promise<T>{const c=new AbortController();const t=setTimeout(()=>c.abort(),timeout);try{const r=await fetch(url,{signal:c.signal,headers:{'User-Agent':'PreziTools/1.0'}});if(!r.ok)throw new Error(`HTTP ${r.status}`);return await r.json() as T;}finally{clearTimeout(t);}}
-async function propFetch<T>(path:string,key:string):Promise<T>{const sep=path.includes('?')?'&':'?';const c=new AbortController();const t=setTimeout(()=>c.abort(),9000);try{const r=await fetch(`${PROPLINE_BASE}${path}${sep}apiKey=${encodeURIComponent(key)}`,{signal:c.signal,headers:{'X-API-Key':key,'Authorization':`Bearer ${key}`,'User-Agent':'PreziTools/1.0'}});if(!r.ok){const text=await r.text().catch(()=>'');throw new Error(`PropLine ${r.status}${text?`: ${text.slice(0,180)}`:''}`);}return await r.json() as T;}finally{clearTimeout(t);}}
 function quote(book:PropBook,outcome:PropOutcome):NflBookQuote|null{const price=Number(outcome.price);if(!Number.isFinite(price)||price===0)return null;return{bookmaker:String(book.title??book.key??'Sportsbook'),bookmakerKey:String(book.key??''),americanOdds:price,updatedAt:outcome.book_updated_at??outcome.last_change_at??book.last_update??null};}
 function buildPlayerMarkets(payload:unknown,marketKey:string):NflPlayerMarket[]{const by=new Map<string,{player:string;quotes:NflBookQuote[]}>();for(const row of oddsRows(payload))for(const book of row.bookmakers??[])for(const market of book.markets??[]){if(market.key!==marketKey)continue;for(const o of market.outcomes??[]){const name=String(o.name??'').trim();const desc=String(o.description??'').trim();const player=desc&&!/^(yes|no)$/i.test(desc)?desc:name;if(!player||/^(yes|no)$/i.test(player)||/^no$/i.test(name))continue;const q=quote(book,o);if(!q)continue;const k=normalize(player);const e=by.get(k)??{player,quotes:[]};e.quotes.push(q);by.set(k,e);}}return[...by.values()].map(e=>{e.quotes.sort((a,b)=>b.americanOdds-a.americanOdds);const best=e.quotes[0];return{player:e.player,bestOdds:best.americanOdds,bestBook:best.bookmaker,impliedProbability:(americanImplied(best.americanOdds)??0)*100,quoteCount:e.quotes.length,quotes:e.quotes};}).sort((a,b)=>b.impliedProbability-a.impliedProbability).slice(0,20);}
 function buildMoneyline(row:PropOdds,game:NflMarketGame){const aq:NflBookQuote[]=[];const hq:NflBookQuote[]=[];const paired:{away:number;home:number}[]=[];const an=normalize(game.away.name),hn=normalize(game.home.name);for(const book of row.bookmakers??[])for(const market of book.markets??[]){if(market.key!=='h2h')continue;let ap:number|null=null,hp:number|null=null;for(const o of market.outcomes??[]){const n=normalize(String(o.name??o.description??''));const q=quote(book,o);if(!q)continue;if(n===an||n.includes(an)||an.includes(n)){aq.push(q);ap=q.americanOdds;}if(n===hn||n.includes(hn)||hn.includes(n)){hq.push(q);hp=q.americanOdds;}}if(ap!==null&&hp!==null){const a=americanImplied(ap),h=americanImplied(hp);if(a!==null&&h!==null&&a+h>0)paired.push({away:a/(a+h),home:h/(a+h)});}}if(!aq.length||!hq.length)return null;aq.sort((a,b)=>b.americanOdds-a.americanOdds);hq.sort((a,b)=>b.americanOdds-a.americanOdds);const avA=paired.length?paired.reduce((s,x)=>s+x.away,0)/paired.length:null;const avH=paired.length?paired.reduce((s,x)=>s+x.home,0)/paired.length:null;const side=(team:string,quotes:NflBookQuote[],nv:number|null):NflMoneylineSide=>({team,bestOdds:quotes[0]?.americanOdds??null,bestBook:quotes[0]?.bookmaker??null,impliedProbability:quotes[0]?(americanImplied(quotes[0].americanOdds)??0)*100:null,consensusNoVigProbability:nv===null?null:nv*100,quotes});return{away:side(game.away.name,aq,avA),home:side(game.home.name,hq,avH)};}
@@ -54,11 +54,39 @@ export async function fetchNflMarkets():Promise<NflMarketFeed>{
   let games:NflMarketGame[]=[];
   try{games=await fetchUpcomingEspnGames();}catch(error){console.warn('[NFL Markets] ESPN upcoming slate unavailable:',error);}
   const apiKey=process.env.PROPLINE_API_KEY?.trim();
-  if(!apiKey){const value:NflMarketFeed={source:'ESPN + PropLine',marketStatus:'disabled',updatedAt:new Date().toISOString(),games};cache={expiresAt:Date.now()+2*60*1000,value};return value;}
+  if(!apiKey){const value:NflMarketFeed={source:'ESPN + PropLine',marketStatus:'disabled',updatedAt:new Date().toISOString(),games};cache={expiresAt:Date.now()+5*60*1000,value};return value;}
+
   let propRows:PropOdds[]=[];
-  for(const sport of SPORT_KEYS){try{const payload=await propFetch<unknown>(`/sports/${sport}/odds?markets=h2h`,apiKey);const rows=oddsRows(payload);if(rows.length){propRows=rows;break;}}catch(error){console.warn(`[NFL Markets] ${sport} bulk h2h failed:`,error);}}
-  for(const game of games){const row=propRows.find(r=>sameTeams(game,r));if(row){game.moneyline=buildMoneyline(row,game);if(game.moneyline)game.marketStatus='available';const eventId=String(row.id??row.event_id??'');const startsIn=new Date(game.date).getTime()-Date.now();if(eventId&&startsIn>=0&&startsIn<=PLAYER_PROP_LOOKAHEAD_MS){for(const sport of SPORT_KEYS){try{const p=await propFetch<unknown>(`/sports/${sport}/events/${encodeURIComponent(eventId)}/odds?markets=player_anytime_td,player_1st_td`,apiKey);game.anytimeTd=buildPlayerMarkets(p,'player_anytime_td');game.firstTd=buildPlayerMarkets(p,'player_1st_td');if(game.anytimeTd.length||game.firstTd.length)game.marketStatus='available';break;}catch{}}}}
+  for(const sport of SPORT_KEYS){
+    try{
+      const payload=await propLineGet<unknown>(`/sports/${sport}/odds?markets=h2h`,{cacheMs:CACHE_MS});
+      const rows=oddsRows(payload);
+      if(rows.length){propRows=rows;break;}
+    }catch(error){console.warn(`[NFL Markets] ${sport} bulk h2h failed:`,error);}
   }
+
+  const propRowsByGame = new Map<string,PropOdds>();
+  for(const game of games){const row=propRows.find(r=>sameTeams(game,r));if(row)propRowsByGame.set(game.id,row);}
+
+  for(const game of games){
+    const row=propRowsByGame.get(game.id);
+    if(!row)continue;
+    game.moneyline=buildMoneyline(row,game);
+    if(game.moneyline)game.marketStatus='available';
+    const eventId=String(row.id??row.event_id??'');
+    const startsIn=new Date(game.date).getTime()-Date.now();
+    if(!eventId||startsIn<0||startsIn>PLAYER_PROP_LOOKAHEAD_MS)continue;
+    for(const sport of SPORT_KEYS){
+      try{
+        const p=await propLineGet<unknown>(`/sports/${sport}/events/${encodeURIComponent(eventId)}/odds?markets=player_anytime_td,player_1st_td`,{cacheMs:30*60*1000});
+        game.anytimeTd=buildPlayerMarkets(p,'player_anytime_td');
+        game.firstTd=buildPlayerMarkets(p,'player_1st_td');
+        if(game.anytimeTd.length||game.firstTd.length)game.marketStatus='available';
+        break;
+      }catch(error){console.warn(`[NFL Markets] TD props unavailable for ${eventId}:`,error);}
+    }
+  }
+
   const value:NflMarketFeed={source:'ESPN + PropLine',marketStatus:games.some(g=>g.marketStatus==='available')?'available':'unavailable',updatedAt:new Date().toISOString(),games};
   cache={expiresAt:Date.now()+CACHE_MS,value};return value;
 }
