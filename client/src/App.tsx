@@ -17,7 +17,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 const BestPlays = lazy(() => import("@/pages/BestPlaysHub"));
 const NBA = lazy(() => import("@/pages/NBA"));
-const WNBA = lazy(() => import("@/pages/WNBA"));
+const WNBA = lazy(() => import("@/pages/WNBAHiddenHistory"));
 const NFL = lazy(() => import("@/pages/NFL"));
 const OpeningTips = lazy(() => import("@/pages/OpeningTips"));
 const PlayerStats = lazy(() => import("@/pages/PlayerStats"));
