@@ -21,6 +21,7 @@ import { registerMlbHistoryRoutes } from "./mlbHistory";
 import { getMlbLockFunnel } from "./mlbLockFunnel";
 import { registerMlbV4PublicRoutes } from "./mlbPublicV4Routes";
 import { registerProductionCleanupRoutes } from "./productionCleanupRoutes";
+import { fetchNflMarkets } from "./nflMarkets";
 
 const app = express();
 app.set('trust proxy', 1);
@@ -231,6 +232,17 @@ app.use('/api/mlb/nrfi', (req, res, next) => {
     });
   }) as typeof res.json;
   next();
+});
+
+app.get('/api/nfl/markets', async (_req, res) => {
+  try {
+    const data = await fetchNflMarkets();
+    res.setHeader('Cache-Control', 'public, max-age=120, stale-while-revalidate=600');
+    return res.json(data);
+  } catch (error) {
+    console.error('[NFL Markets] Error:', error);
+    return res.status(502).json({ error: 'Unable to load NFL market data' });
+  }
 });
 
 registerProductionCleanupRoutes(app);
