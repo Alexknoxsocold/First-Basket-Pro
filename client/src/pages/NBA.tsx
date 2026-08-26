@@ -21,10 +21,6 @@ export default function NBA() {
               <LayoutGrid className={`w-3.5 h-3.5 ${section === "games" ? "text-primary" : ""}`} aria-hidden="true" />
               NBA
             </button>
-            <button type="button" onClick={() => setSection("projected-lineups")} className={tabClass(section === "projected-lineups")} aria-current={section === "projected-lineups" ? "page" : undefined} data-testid="tab-nba-projected-lineups">
-              <Users className={`w-3.5 h-3.5 ${section === "projected-lineups" ? "text-primary" : ""}`} aria-hidden="true" />
-              Projected Lineups
-            </button>
             <button type="button" onClick={() => setSection("player-stats")} className={tabClass(section === "player-stats")} aria-current={section === "player-stats" ? "page" : undefined} data-testid="tab-nba-player-fb-stats">
               <BarChart2 className={`w-3.5 h-3.5 ${section === "player-stats" ? "text-primary" : ""}`} aria-hidden="true" />
               Player FB Stats
@@ -33,15 +29,19 @@ export default function NBA() {
               <History className={`w-3.5 h-3.5 ${section === "fb-history" ? "text-primary" : ""}`} aria-hidden="true" />
               FB History
             </button>
+            <button type="button" onClick={() => setSection("projected-lineups")} className={tabClass(section === "projected-lineups")} aria-current={section === "projected-lineups" ? "page" : undefined} data-testid="tab-nba-projected-lineups">
+              <Users className={`w-3.5 h-3.5 ${section === "projected-lineups" ? "text-primary" : ""}`} aria-hidden="true" />
+              Projected Lineups
+            </button>
           </div>
         </div>
       </nav>
 
       <div className="pt-8">
         {section === "games" && <AllGames />}
-        {section === "projected-lineups" && <ProjectedLineups />}
         {section === "player-stats" && <PlayerStats />}
         {section === "fb-history" && <FirstBasketHistory />}
+        {section === "projected-lineups" && <ProjectedLineups />}
       </div>
     </div>
   );
