@@ -1,4 +1,4 @@
-import { Moon, Sun, LogIn, LogOut, User, UserPlus } from "lucide-react";
+import { Moon, Sun, LogIn, LogOut, User, UserPlus, Crown, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -10,33 +10,31 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useState, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
+import { useBilling } from "@/context/BillingContext";
 import { Link, useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
 import logoImage from "@assets/i5GAK_1775293448252.jpg";
 
+const WHOP_PRO_URL = "https://whop.com/prezitools/prezitools-pro/";
+
 function seasonLabel(sport: "NBA" | "WNBA" | "MLB" | "NFL", date = new Date()) {
   const year = date.getFullYear();
   const month = date.getMonth() + 1;
 
-  // NBA seasons cross calendar years. Roll the displayed season in July so
-  // offseason pages, roster projections, and the server's season logic agree.
   if (sport === "NBA") {
     const start = month >= 7 ? year : year - 1;
     return `${String(start).slice(-2)}/${String(start + 1).slice(-2)}`;
   }
 
-  // WNBA and MLB are calendar-year leagues.
   if (sport === "WNBA" || sport === "MLB") return String(year);
-
-  // NFL season is conventionally named for the year in which it begins.
-  // After the Super Bowl, show the upcoming/current season year automatically.
   const nflYear = month >= 3 ? year : year - 1;
   return String(nflYear);
 }
 
 export default function Header() {
   const { user, logout } = useAuth();
+  const { pro, isLoading: billingLoading, manageUrl } = useBilling();
   const { toast } = useToast();
   const [location, setLocation] = useLocation();
   const isMLB = location === "/mlb" || location.startsWith("/mlb/");
@@ -74,22 +72,40 @@ export default function Header() {
     <header className="border-b bg-card sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-4 md:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16 gap-4">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 min-w-0">
             <img src={logoImage} alt="Prezi Tools logo" className="w-14 h-14 rounded-md object-cover cursor-pointer" data-testid="img-logo" onClick={() => window.location.reload()} />
-            <div className="flex items-center gap-2">
-              <span className="text-base font-bold tracking-tight">{brand}</span>
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="text-base font-bold tracking-tight truncate">{brand}</span>
               {!isBestPlays && badge && (
                 <Badge variant="secondary" className="text-xs px-1.5 py-0 h-4 font-mono hidden sm:flex">{badge}</Badge>
+              )}
+              {user && !billingLoading && pro && (
+                <Badge className="hidden sm:inline-flex h-5 gap-1 border border-primary/30 bg-primary/10 px-2 text-[9px] font-black text-primary hover:bg-primary/10"><Crown className="h-3 w-3" />PRO</Badge>
               )}
             </div>
           </div>
 
           <div className="flex items-center gap-2">
+            {user && !billingLoading && !pro && (
+              <Button size="sm" className="hidden sm:flex h-8 gap-1.5 px-3 text-[10px] font-black" onClick={() => window.open(WHOP_PRO_URL, "_blank", "noopener,noreferrer")}>
+                <Crown className="h-3.5 w-3.5" />Upgrade Pro
+              </Button>
+            )}
+
             {user ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild><Button size="icon" variant="ghost" data-testid="button-user-menu"><User className="h-4 w-4" /></Button></DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuLabel className="text-xs">{user.email}</DropdownMenuLabel><DropdownMenuSeparator />
+                <DropdownMenuContent align="end" className="w-56">
+                  <DropdownMenuLabel className="text-xs">
+                    <div className="truncate">{user.email}</div>
+                    {!billingLoading && <div className={`mt-1 text-[9px] font-black uppercase tracking-wider ${pro ? "text-primary" : "text-muted-foreground"}`}>{pro ? "PreziTools Pro" : "Free plan"}</div>}
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  {!billingLoading && (pro ? (
+                    manageUrl ? <DropdownMenuItem onClick={() => window.open(manageUrl, "_blank", "noopener,noreferrer")}><ExternalLink className="mr-2 h-4 w-4" />Manage Pro</DropdownMenuItem> : null
+                  ) : (
+                    <DropdownMenuItem onClick={() => window.open(WHOP_PRO_URL, "_blank", "noopener,noreferrer")}><Crown className="mr-2 h-4 w-4 text-primary" />Upgrade to Pro</DropdownMenuItem>
+                  ))}
                   <DropdownMenuItem onClick={handleLogout} data-testid="button-logout"><LogOut className="mr-2 h-4 w-4" />Logout</DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
