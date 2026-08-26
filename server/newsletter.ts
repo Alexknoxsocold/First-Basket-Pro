@@ -96,7 +96,7 @@ async function sendResendEmail(to: string, subject: string, html: string) {
     body: JSON.stringify({
       from,
       to: [to],
-      reply_to: 'support@prezipicks.com',
+      reply_to: 'support@prezitools.com',
       subject,
       html,
       headers: { 'List-Unsubscribe': `<${unsubscribeUrlForHeaders(to)}>` },
@@ -180,7 +180,7 @@ function welcomeHtml(token: string) {
       <table role="presentation" cellspacing="0" cellpadding="0" style="margin-top:26px;"><tr><td bgcolor="${BRAND_GREEN}" style="border-radius:10px;">
         <a href="${siteUrl('/')}" style="display:inline-block;padding:13px 20px;color:#03110a;text-decoration:none;font-size:13px;font-weight:900;">Open today's board →</a>
       </td></tr></table>
-      <p style="margin:18px 0 0;font-size:11px;line-height:1.6;color:#71807b;">Tip: add <strong style="color:#aeb8b5;">support@prezipicks.com</strong> to your contacts so Daily Plays stays out of spam.</p>
+      <p style="margin:18px 0 0;font-size:11px;line-height:1.6;color:#71807b;">Tip: add <strong style="color:#aeb8b5;">support@prezitools.com</strong> to your contacts so Daily Plays stays out of spam.</p>
     </div>`;
   return emailShell(inner, token, 'Welcome to PreziTools Daily Plays — your sports analytics digest is ready.');
 }
@@ -196,7 +196,7 @@ async function sendWelcomeEmail(email: string, token: string) {
     body: JSON.stringify({
       from,
       to: [email],
-      reply_to: 'support@prezipicks.com',
+      reply_to: 'support@prezitools.com',
       subject: 'Welcome to PreziTools Daily Plays',
       html,
       headers: { 'List-Unsubscribe': `<${unsubscribeUrl(token)}>` },
@@ -343,7 +343,7 @@ export async function sendNewsletterDigest(force = false) {
         body: JSON.stringify({
           from,
           to: [sub.email],
-          reply_to: 'support@prezipicks.com',
+          reply_to: 'support@prezitools.com',
           subject: `PreziTools — Today's strongest plays`,
           html: digestHtml(plays, sub.unsubscribe_token),
           headers: { 'List-Unsubscribe': `<${unsubscribeUrl(sub.unsubscribe_token)}>` },
