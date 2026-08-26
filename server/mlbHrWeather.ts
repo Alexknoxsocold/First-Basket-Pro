@@ -77,7 +77,6 @@ async function fetchForecast(gameTime: string, venueName: string | null | undefi
   const gameMs = new Date(gameTime).getTime(); if (!Number.isFinite(gameMs)) return null;
   const cacheKey = `${venueName}:${Math.round(gameMs / 3600000)}`;
   const cached = weatherCache.get(cacheKey); if (cached && cached.expiresAt > Date.now()) return cached.value;
-
   for (let attempt = 0; attempt < 2; attempt++) {
     const controller = new AbortController(); const timer = setTimeout(() => controller.abort(), attempt === 0 ? 7000 : 9500);
     try {
@@ -118,5 +117,5 @@ export async function fetchGameHrWeather(gameTime: string, venueName: string | n
     windDirection: mlb.windDirection ?? forecast?.windDirection ?? null, windDegrees: forecast?.windDegrees ?? null,
     precipitationProbability: forecast?.precipitationProbability ?? null, condition: mlb.condition ?? forecast?.condition ?? null, source: 'MLB',
   };
-  return forecast ?? { tempF: null, windMph: null, windDirection: null, windDegrees: null, precipitationProbability: null, condition: null, source: 'unavailable' };
+  return forecast ?? { tempF: null, windMph: null, windDirection: null, windDegrees: null, precipitationProbability: null, condition: 'Forecast pending', source: 'unavailable' };
 }
