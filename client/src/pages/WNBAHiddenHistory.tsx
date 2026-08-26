@@ -1,6 +1,37 @@
+import { useEffect } from "react";
 import WNBA from "./WNBA";
 
+const STRONGEST_TITLE = "Strongest WNBA plays";
+const STRONGEST_COPY = "Only each game's #1 Best Play and #2 Strong Play appear when model probability is at least 10%. Market Value remains separate and only appears when real odds clear the edge/EV threshold.";
+
 export default function WNBAHiddenHistory() {
+  useEffect(() => {
+    const root = document.querySelector(".wnba-mobile-nav-fix");
+    if (!root) return;
+
+    const hideStrongestIntro = () => {
+      for (const el of Array.from(root.querySelectorAll("div,p,h1,h2,h3,h4"))) {
+        const text = el.textContent?.trim() ?? "";
+        if (text !== STRONGEST_TITLE && text !== STRONGEST_COPY) continue;
+
+        let block: HTMLElement | null = el as HTMLElement;
+        while (block && block !== root) {
+          const blockText = block.textContent?.trim() ?? "";
+          if (blockText.includes(STRONGEST_TITLE) && blockText.includes(STRONGEST_COPY) && blockText.length < 700) {
+            block.style.display = "none";
+            break;
+          }
+          block = block.parentElement;
+        }
+      }
+    };
+
+    hideStrongestIntro();
+    const observer = new MutationObserver(hideStrongestIntro);
+    observer.observe(root, { childList: true, subtree: true });
+    return () => observer.disconnect();
+  }, []);
+
   return (
     <>
       <style>{`
