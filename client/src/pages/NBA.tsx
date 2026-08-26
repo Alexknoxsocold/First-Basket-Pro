@@ -10,11 +10,11 @@ type NbaSection = "games" | "projected-lineups" | "player-stats" | "fb-history";
 export default function NBA() {
   const [section, setSection] = useState<NbaSection>("games");
 
-  const tabClass = (active: boolean) => `min-h-11 flex items-center gap-1.5 px-4 py-3 text-xs font-medium border-b-2 transition-colors whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset ${active ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/30"}`;
+  const tabClass = (active: boolean) => `min-h-12 flex items-center gap-1.5 px-4 pt-4 pb-3 text-xs font-medium border-b-2 transition-colors whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset ${active ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/30"}`;
 
   return (
     <div className="-mx-4 md:-mx-6 lg:-mx-8 -mt-8">
-      <nav className="border-b bg-card" aria-label="NBA sections">
+      <nav className="border-b bg-card pt-1" aria-label="NBA sections">
         <div className="max-w-7xl mx-auto px-4 md:px-6 lg:px-8">
           <div className="flex items-center gap-0 overflow-x-auto">
             <button type="button" onClick={() => setSection("games")} className={tabClass(section === "games")} aria-current={section === "games" ? "page" : undefined} data-testid="tab-nba-games">
