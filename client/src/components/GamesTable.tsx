@@ -1,4 +1,5 @@
 import GameRow from "./GameRow";
+import NbaArenaBackdrop from "./NbaArenaBackdrop";
 import type { Game } from "@shared/schema";
 
 interface EspnPick {
@@ -52,30 +53,34 @@ export default function GamesTable({
         const homeEspn = espnHomePicks[game.id] ?? null;
 
         return (
-          <GameRow
-            key={game.id}
-            awayTeam={game.awayTeam}
-            awayPlayer={game.awayPlayer}
-            awayTipCount={game.awayTipCount}
-            awayTipPercent={game.awayTipPercent}
-            awayScorePercent={game.awayScorePercent}
-            awayStarters={game.awayStarters ?? undefined}
-            homeTeam={game.homeTeam}
-            homePlayer={game.homePlayer}
-            homeTipCount={game.homeTipCount}
-            homeTipPercent={game.homeTipPercent}
-            homeScorePercent={game.homeScorePercent}
-            homeStarters={game.homeStarters ?? undefined}
-            h2h={game.h2h}
-            gameTime={game.gameTime ?? undefined}
-            status={game.status}
-            awayPlayerHeadshot={awayEspn?.headshot ?? headshotMap[game.awayPlayer]}
-            homePlayerHeadshot={homeEspn?.headshot ?? headshotMap[game.homePlayer]}
-            awayEspnPick={awayEspn}
-            homeEspnPick={homeEspn}
-            awayJumpBall={espnAwayJumpBall[game.id] ?? null}
-            homeJumpBall={espnHomeJumpBall[game.id] ?? null}
-          />
+          <div key={game.id} className="relative isolate overflow-hidden">
+            <NbaArenaBackdrop team={game.homeTeam} />
+            <div className="relative z-10">
+              <GameRow
+                awayTeam={game.awayTeam}
+                awayPlayer={game.awayPlayer}
+                awayTipCount={game.awayTipCount}
+                awayTipPercent={game.awayTipPercent}
+                awayScorePercent={game.awayScorePercent}
+                awayStarters={game.awayStarters ?? undefined}
+                homeTeam={game.homeTeam}
+                homePlayer={game.homePlayer}
+                homeTipCount={game.homeTipCount}
+                homeTipPercent={game.homeTipPercent}
+                homeScorePercent={game.homeScorePercent}
+                homeStarters={game.homeStarters ?? undefined}
+                h2h={game.h2h}
+                gameTime={game.gameTime ?? undefined}
+                status={game.status}
+                awayPlayerHeadshot={awayEspn?.headshot ?? headshotMap[game.awayPlayer]}
+                homePlayerHeadshot={homeEspn?.headshot ?? headshotMap[game.homePlayer]}
+                awayEspnPick={awayEspn}
+                homeEspnPick={homeEspn}
+                awayJumpBall={espnAwayJumpBall[game.id] ?? null}
+                homeJumpBall={espnHomeJumpBall[game.id] ?? null}
+              />
+            </div>
+          </div>
         );
       })}
     </div>
