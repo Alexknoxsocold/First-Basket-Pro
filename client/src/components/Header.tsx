@@ -19,9 +19,10 @@ function seasonLabel(sport: "NBA" | "WNBA" | "MLB" | "NFL", date = new Date()) {
   const year = date.getFullYear();
   const month = date.getMonth() + 1;
 
-  // NBA seasons cross calendar years and roll over around the fall preseason.
+  // NBA seasons cross calendar years. Roll the displayed season in July so
+  // offseason pages, roster projections, and the server's season logic agree.
   if (sport === "NBA") {
-    const start = month >= 9 ? year : year - 1;
+    const start = month >= 7 ? year : year - 1;
     return `${String(start).slice(-2)}/${String(start + 1).slice(-2)}`;
   }
 
