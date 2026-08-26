@@ -54,6 +54,13 @@ export type NrfiMarketValue = {
   edge: number | null;
   ev: number | null;
   updatedAt: string | null;
+  quotes?: Array<{
+    bookmaker: string;
+    bookmakerKey: string;
+    americanOdds: number;
+    updatedAt: string | null;
+  }>;
+  quoteCount?: number;
 };
 
 export type NrfiGame = {
@@ -284,6 +291,8 @@ async function buildNrfiData(date: string): Promise<NrfiResponse> {
         edge: side.edge,
         ev: side.ev,
         updatedAt: side.capturedAt,
+        quotes: side.quotes.map(q => ({ bookmaker: q.bookmaker, bookmakerKey: q.bookmakerKey, americanOdds: q.americanOdds, updatedAt: q.updatedAt })),
+        quoteCount: side.quoteCount,
       },
     } satisfies NrfiGame;
   });
