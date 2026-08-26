@@ -9,6 +9,12 @@ export type WnbaVerifiedMarketLine = {
   book: string | null;
   odds: number | null;
 };
+export type WnbaPlayerPropSignal = {
+  player: string;
+  marketCount: number;
+  bookCount: number;
+  markets: WnbaPropMarketKey[];
+};
 
 type PropEvent = {
   id?: string | number;
@@ -44,6 +50,9 @@ const PROP_MARKETS = [
   'player_rebounds_assists',
   'player_points_rebounds_assists',
 ].join(',');
+const SIGNAL_CACHE_MS = 10 * 60 * 1000;
+let signalCache: { at: number; value: Map<string, WnbaPlayerPropSignal> } | null = null;
+let signalInFlight: Promise<Map<string, WnbaPlayerPropSignal>> | null = null;
 
 function norm(v: unknown) {
   return String(v ?? '').toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
@@ -165,6 +174,68 @@ function collapseQuotes(quotes: Quote[]): WnbaVerifiedMarketLine[] {
     });
   }
   return out;
+}
+
+function buildPlayerSignals(quotes: Quote[]): Map<string, WnbaPlayerPropSignal> {
+  const grouped = new Map<string, { player: string; markets: Set<WnbaPropMarketKey>; books: Set<string> }>();
+  for (const quote of quotes) {
+    const key = norm(quote.player);
+    if (!key) continue;
+    const row = grouped.get(key) ?? { player: quote.player, markets: new Set<WnbaPropMarketKey>(), books: new Set<string>() };
+    row.markets.add(quote.market);
+    if (quote.book) row.books.add(norm(quote.book));
+    grouped.set(key, row);
+  }
+  return new Map([...grouped.entries()].map(([key, row]) => [key, {
+    player: row.player,
+    marketCount: row.markets.size,
+    bookCount: row.books.size,
+    markets: [...row.markets],
+  }]));
+}
+
+async function fetchAllCurrentWnbaQuotes(): Promise<Quote[]> {
+  const eventPayload = await propLineGet<unknown>('/sports/basketball_wnba/events', { cacheMs: 15 * 60 * 1000 });
+  const events = eventsFrom(eventPayload);
+  const allQuotes: Quote[] = [];
+  await Promise.all(events.map(async event => {
+    const id = event.id ?? event.event_id;
+    if (id === undefined || id === null) return;
+    try {
+      const payload = await propLineGet<unknown>(
+        `/sports/basketball_wnba/events/${encodeURIComponent(String(id))}/odds?markets=${PROP_MARKETS}`,
+        { cacheMs: 15 * 60 * 1000 },
+      );
+      allQuotes.push(...parseQuotes(payload));
+    } catch (error) {
+      console.warn(`[WNBA Props] PropLine availability signal unavailable for event ${String(id)}:`, error);
+    }
+  }));
+  return allQuotes;
+}
+
+/**
+ * Supporting availability signal for projected lineups only. Active player props
+ * can increase confidence that a player is expected to participate, but they do
+ * not confirm a starter and they never change First Basket probability directly.
+ */
+export async function fetchWnbaPlayerPropSignals(force = false): Promise<Map<string, WnbaPlayerPropSignal>> {
+  if (!process.env.PROPLINE_API_KEY?.trim()) return new Map();
+  if (!force && signalCache && Date.now() - signalCache.at < SIGNAL_CACHE_MS) return signalCache.value;
+  if (signalInFlight) return signalInFlight;
+  signalInFlight = (async () => {
+    try {
+      const value = buildPlayerSignals(await fetchAllCurrentWnbaQuotes());
+      signalCache = { at: Date.now(), value };
+      return value;
+    } catch (error) {
+      console.warn('[WNBA Props] PropLine player availability signals unavailable:', error);
+      return signalCache?.value ?? new Map<string, WnbaPlayerPropSignal>();
+    } finally {
+      signalInFlight = null;
+    }
+  })();
+  return signalInFlight;
 }
 
 export async function fetchWnbaPropMarketLines(games: WnbaGame[]): Promise<WnbaVerifiedMarketLine[]> {
