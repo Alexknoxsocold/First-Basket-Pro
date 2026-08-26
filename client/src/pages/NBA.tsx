@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { BarChart2, History, LayoutGrid, Users } from "lucide-react";
+import { BarChart2, LayoutGrid, Users } from "lucide-react";
 import AllGames from "@/pages/AllGames";
 import PlayerStats from "@/pages/PlayerStats";
 import FirstBasketHistory from "@/pages/FirstBasketHistory";
@@ -24,10 +24,6 @@ export default function NBA() {
             <button type="button" onClick={() => setSection("player-stats")} className={tabClass(section === "player-stats")} aria-current={section === "player-stats" ? "page" : undefined} data-testid="tab-nba-player-fb-stats">
               <BarChart2 className={`w-3.5 h-3.5 ${section === "player-stats" ? "text-primary" : ""}`} aria-hidden="true" />
               Player FB Stats
-            </button>
-            <button type="button" onClick={() => setSection("fb-history")} className={tabClass(section === "fb-history")} aria-current={section === "fb-history" ? "page" : undefined} data-testid="tab-nba-fb-history">
-              <History className={`w-3.5 h-3.5 ${section === "fb-history" ? "text-primary" : ""}`} aria-hidden="true" />
-              FB History
             </button>
             <button type="button" onClick={() => setSection("projected-lineups")} className={tabClass(section === "projected-lineups")} aria-current={section === "projected-lineups" ? "page" : undefined} data-testid="tab-nba-projected-lineups">
               <Users className={`w-3.5 h-3.5 ${section === "projected-lineups" ? "text-primary" : ""}`} aria-hidden="true" />
