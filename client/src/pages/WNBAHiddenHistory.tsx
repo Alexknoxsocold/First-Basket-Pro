@@ -9,7 +9,7 @@ export default function WNBAHiddenHistory() {
     const root = document.querySelector(".wnba-mobile-nav-fix");
     if (!root) return;
 
-    const hideStrongestIntro = () => {
+    const cleanHiddenWnbaUi = () => {
       for (const el of Array.from(root.querySelectorAll("div,p,h1,h2,h3,h4"))) {
         const text = el.textContent?.trim() ?? "";
         if (text !== STRONGEST_TITLE && text !== STRONGEST_COPY) continue;
@@ -24,10 +24,17 @@ export default function WNBAHiddenHistory() {
           block = block.parentElement;
         }
       }
+
+      // WNBA Props is intentionally removed from the product UI.
+      for (const button of Array.from(root.querySelectorAll("button"))) {
+        if (button.textContent?.trim() === "WNBA Props") {
+          (button as HTMLElement).style.display = "none";
+        }
+      }
     };
 
-    hideStrongestIntro();
-    const observer = new MutationObserver(hideStrongestIntro);
+    cleanHiddenWnbaUi();
+    const observer = new MutationObserver(cleanHiddenWnbaUi);
     observer.observe(root, { childList: true, subtree: true });
     return () => observer.disconnect();
   }, []);
@@ -37,6 +44,7 @@ export default function WNBAHiddenHistory() {
       <style>{`
         .wnba-mobile-nav-fix button:has(svg.lucide-history) { display: none !important; }
         .wnba-mobile-nav-fix button:has(svg.lucide-refresh-cw) { display: none !important; }
+        .wnba-mobile-nav-fix button:has(svg.lucide-trending-up) { display: none !important; }
 
         /* Remove the WNBA page intro/title copy above the content. */
         .wnba-mobile-nav-fix .mb-5.flex.flex-wrap.items-end.justify-between.gap-3 {
@@ -58,6 +66,9 @@ export default function WNBAHiddenHistory() {
             padding-bottom: 12px !important;
             display: inline-flex !important;
             align-items: center !important;
+          }
+          .wnba-mobile-nav-fix nav button:has(svg.lucide-trending-up) {
+            display: none !important;
           }
         }
       `}</style>
