@@ -1,5 +1,6 @@
-const PROPLINE_BASE = 'https://api.prop-line.com/v1';
-const MARKET_CACHE_MS = 5 * 60 * 1000;
+import { propLineGet } from './propLineClient.js';
+
+const MARKET_CACHE_MS = 10 * 60 * 1000;
 
 export type FirstInningBookQuote = {
   bookmaker: string;
@@ -96,21 +97,6 @@ function median(values: number[]): number {
   const sorted = [...values].sort((a, b) => a - b);
   const middle = Math.floor(sorted.length / 2);
   return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
-}
-
-async function propLineFetch<T>(path: string, apiKey: string, timeoutMs = 8000): Promise<T> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const response = await fetch(`${PROPLINE_BASE}${path}`, {
-      signal: controller.signal,
-      headers: { 'X-API-Key': apiKey, 'User-Agent': 'PreziTools/1.0' },
-    });
-    if (!response.ok) throw new Error(`PropLine ${response.status}`);
-    return await response.json() as T;
-  } finally {
-    clearTimeout(timer);
-  }
 }
 
 function asEvents(payload: unknown): PropLineEvent[] {
@@ -211,7 +197,7 @@ export async function fetchFirstInningMarkets(games: GameInput[]): Promise<First
   if (cache && cache.key === cacheKey && cache.expiresAt > Date.now()) return cache.value;
 
   try {
-    const events = asEvents(await propLineFetch<unknown>('/sports/baseball_mlb/events', apiKey));
+    const events = asEvents(await propLineGet<unknown>('/sports/baseball_mlb/events', { cacheMs: 20 * 60 * 1000 }));
     const pairs = games.map(game => ({ game, event: events.find(event => eventMatches(game, event)) })).filter((x): x is { game: GameInput; event: PropLineEvent } => Boolean(x.event));
     const markets = new Map<string, { NRFI?: FirstInningMarket; YRFI?: FirstInningMarket }>();
 
@@ -219,7 +205,7 @@ export async function fetchFirstInningMarkets(games: GameInput[]): Promise<First
       const eventId = event.id ?? event.event_id;
       if (eventId === undefined || eventId === null) return;
       try {
-        const payload = await propLineFetch<unknown>(`/sports/baseball_mlb/events/${encodeURIComponent(String(eventId))}/odds?markets=totals&period=i1`, apiKey);
+        const payload = await propLineGet<unknown>(`/sports/baseball_mlb/events/${encodeURIComponent(String(eventId))}/odds?markets=totals&period=i1`, { cacheMs: MARKET_CACHE_MS });
         const quotes = readQuotes(payload);
         const nrfi = buildSideMarket('NRFI', quotes.NRFI, quotes.YRFI, game.nrfiProbability);
         const yrfi = buildSideMarket('YRFI', quotes.YRFI, quotes.NRFI, 100 - game.nrfiProbability);
@@ -235,7 +221,7 @@ export async function fetchFirstInningMarkets(games: GameInput[]): Promise<First
   } catch (error) {
     console.warn('[MLB NRFI] PropLine market feed unavailable:', error);
     const value: FirstInningMarketFeed = { status: 'unavailable', source: 'PropLine', gamesMatched: 0, markets: new Map() };
-    cache = { key: cacheKey, expiresAt: Date.now() + 60_000, value };
+    cache = { key: cacheKey, expiresAt: Date.now() + 5 * 60 * 1000, value };
     return value;
   }
 }
