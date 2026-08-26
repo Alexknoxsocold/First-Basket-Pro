@@ -62,6 +62,10 @@ export default function MLB() {
         display: none !important;
       }
 
+      .mlb-first-inning-shell [class*="bg-primary/5"][class*="mb-6"] {
+        display: none !important;
+      }
+
       .mlb-home-runs-shell > div > div.flex.flex-wrap.items-start.justify-between h1 {
         font-size: 0 !important;
       }
