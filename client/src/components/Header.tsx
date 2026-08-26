@@ -65,6 +65,14 @@ export default function Header() {
     }
   };
 
+  const startProCheckout = () => {
+    if (!user) {
+      setLocation("/signup?next=pro");
+      return;
+    }
+    window.open(WHOP_PRO_URL, "_blank", "noopener,noreferrer");
+  };
+
   const brand = isBestPlays ? "Prezi Tools" : isMLB ? "MLB Pro" : isNFL ? "NFL Pro" : "First Basket Pro";
   const badge = isMLB ? seasonLabel("MLB") : isNFL ? seasonLabel("NFL") : isWNBA ? seasonLabel("WNBA") : isNBA ? seasonLabel("NBA") : null;
 
@@ -86,8 +94,8 @@ export default function Header() {
           </div>
 
           <div className="flex items-center gap-2">
-            {user && !billingLoading && !pro && (
-              <Button size="sm" className="hidden sm:flex h-8 gap-1.5 px-3 text-[10px] font-black" onClick={() => window.open(WHOP_PRO_URL, "_blank", "noopener,noreferrer")}>
+            {!billingLoading && !pro && (
+              <Button size="sm" className="hidden sm:flex h-8 gap-1.5 px-3 text-[10px] font-black" onClick={startProCheckout}>
                 <Crown className="h-3.5 w-3.5" />Upgrade Pro
               </Button>
             )}
@@ -104,7 +112,7 @@ export default function Header() {
                   {!billingLoading && (pro ? (
                     manageUrl ? <DropdownMenuItem onClick={() => window.open(manageUrl, "_blank", "noopener,noreferrer")}><ExternalLink className="mr-2 h-4 w-4" />Manage Pro</DropdownMenuItem> : null
                   ) : (
-                    <DropdownMenuItem onClick={() => window.open(WHOP_PRO_URL, "_blank", "noopener,noreferrer")}><Crown className="mr-2 h-4 w-4 text-primary" />Upgrade to Pro</DropdownMenuItem>
+                    <DropdownMenuItem onClick={startProCheckout}><Crown className="mr-2 h-4 w-4 text-primary" />Upgrade to Pro</DropdownMenuItem>
                   ))}
                   <DropdownMenuItem onClick={handleLogout} data-testid="button-logout"><LogOut className="mr-2 h-4 w-4" />Logout</DropdownMenuItem>
                 </DropdownMenuContent>
@@ -116,6 +124,8 @@ export default function Header() {
                   <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">Optional — data is free to browse</DropdownMenuLabel><DropdownMenuSeparator />
                   <DropdownMenuItem onClick={() => setLocation("/login")} data-testid="menu-item-login"><LogIn className="mr-2 h-4 w-4" />Sign In</DropdownMenuItem>
                   <DropdownMenuItem onClick={() => setLocation("/signup")} data-testid="menu-item-signup"><UserPlus className="mr-2 h-4 w-4" />Create Account</DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={startProCheckout}><Crown className="mr-2 h-4 w-4 text-primary" />Get Pro — $11/mo</DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             )}
