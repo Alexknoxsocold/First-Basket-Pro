@@ -83,9 +83,52 @@ const WNBA_TEAM_BG: Record<string, string> = {
   SEA: '#2C5234', WAS: '#C8102E', WSH: '#C8102E',
 };
 
+const WNBA_ARENA_IMAGE: Record<string, string> = {
+  ATL: 'https://commons.wikimedia.org/wiki/Special:FilePath/Gateway%20Center%20Arena%20at%20College%20Park.jpg',
+  CHI: 'https://commons.wikimedia.org/wiki/Special:FilePath/Chicago%20Sky%20game%20at%20Wintrust%20Arena.jpg',
+  CON: 'https://commons.wikimedia.org/wiki/Special:FilePath/Mohegan%20Sun%20Arena%20-%20June%2020%2C%202025.jpg',
+  CT: 'https://commons.wikimedia.org/wiki/Special:FilePath/Mohegan%20Sun%20Arena%20-%20June%2020%2C%202025.jpg',
+  DAL: 'https://commons.wikimedia.org/wiki/Special:FilePath/College%20Park%20Center.jpg',
+  GS: 'https://commons.wikimedia.org/wiki/Special:FilePath/Chase%20Center.jpg',
+  GSV: 'https://commons.wikimedia.org/wiki/Special:FilePath/Chase%20Center.jpg',
+  IND: 'https://commons.wikimedia.org/wiki/Special:FilePath/Gainbridge%20Fieldhouse.jpg',
+  LA: 'https://commons.wikimedia.org/wiki/Special:FilePath/Crypto.com%20Arena.jpg',
+  LAS: 'https://commons.wikimedia.org/wiki/Special:FilePath/Michelob%20Ultra%20Arena.jpg',
+  LV: 'https://commons.wikimedia.org/wiki/Special:FilePath/Michelob%20Ultra%20Arena.jpg',
+  MIN: 'https://commons.wikimedia.org/wiki/Special:FilePath/Target%20Center.jpg',
+  NY: 'https://commons.wikimedia.org/wiki/Special:FilePath/Barclays%20Center%20basketball.jpg',
+  NYL: 'https://commons.wikimedia.org/wiki/Special:FilePath/Barclays%20Center%20basketball.jpg',
+  PHX: 'https://commons.wikimedia.org/wiki/Special:FilePath/Footprint%20Center.jpg',
+  PHO: 'https://commons.wikimedia.org/wiki/Special:FilePath/Footprint%20Center.jpg',
+  SEA: 'https://commons.wikimedia.org/wiki/Special:FilePath/Climate%20Pledge%20Arena%20interior.jpg',
+  WAS: 'https://commons.wikimedia.org/wiki/Special:FilePath/Entertainment%20and%20Sports%20Arena.jpg',
+  WSH: 'https://commons.wikimedia.org/wiki/Special:FilePath/Entertainment%20and%20Sports%20Arena.jpg',
+};
+
 function wnbaLogo(team: string) {
   const key = team.toUpperCase();
   return `https://a.espncdn.com/i/teamlogos/wnba/500/${WNBA_LOGO_SLUG[key] || key.toLowerCase()}.png`;
+}
+
+function ArenaBackdrop({ homeTeam }: { homeTeam: string }) {
+  const key = homeTeam.toUpperCase();
+  const src = WNBA_ARENA_IMAGE[key];
+  const tint = WNBA_TEAM_BG[key] || '#1F2937';
+  return (
+    <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden" aria-hidden="true">
+      <div className="absolute inset-0 opacity-25" style={{ background: `linear-gradient(135deg, ${tint}55, transparent 55%)` }} />
+      {src ? (
+        <img
+          src={src}
+          alt=""
+          className="absolute inset-[-18px] h-[calc(100%+36px)] w-[calc(100%+36px)] scale-105 object-cover opacity-[0.13] blur-[6px] saturate-75"
+          onError={e => { e.currentTarget.style.display = 'none'; }}
+        />
+      ) : null}
+      <div className="absolute inset-0 bg-gradient-to-b from-background/70 via-background/82 to-background/96" />
+      <div className="absolute inset-0 bg-gradient-to-r from-background/40 via-transparent to-background/45" />
+    </div>
+  );
 }
 
 function TeamLogo({ team, size = 'md' }: { team: string; size?: 'sm' | 'md' | 'lg' }) {
@@ -269,7 +312,7 @@ function TipCard({ game }: { game: Game }) {
     : 'border-border/60 bg-background/40';
 
   return (
-    <div className="rounded-xl border border-border/70 bg-muted/[.05] p-3">
+    <div className="rounded-xl border border-border/70 bg-background/65 p-3 backdrop-blur-sm">
       <div className="mb-3 flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <CircleDot className="h-4 w-4 text-primary" />
@@ -319,54 +362,57 @@ function GameCard({ game, showAll }: { game: Game; showAll: boolean }) {
   const [expanded, setExpanded] = useState(showAll);
   const confirmed = game.lineupStatus === 'confirmed';
   return (
-    <article className="overflow-hidden rounded-2xl border bg-card shadow-sm transition-shadow hover:shadow-md">
-      <div className="border-b bg-gradient-to-r from-muted/35 via-card to-muted/20 p-4">
-        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
-          <div className="flex items-center gap-3">
-            <TeamLogo team={game.awayTeam} size="md" />
-            <div><div className="text-sm font-black">{game.awayTeam}</div><div className="max-w-[130px] truncate text-[9px] text-muted-foreground">{game.awayName}</div></div>
+    <article className="relative isolate overflow-hidden rounded-2xl border bg-card shadow-sm transition-shadow hover:shadow-md">
+      <ArenaBackdrop homeTeam={game.homeTeam} />
+      <div className="relative z-10">
+        <div className="border-b bg-background/55 p-4 backdrop-blur-[2px]">
+          <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
+            <div className="flex items-center gap-3">
+              <TeamLogo team={game.awayTeam} size="md" />
+              <div><div className="text-sm font-black">{game.awayTeam}</div><div className="max-w-[130px] truncate text-[9px] text-muted-foreground">{game.awayName}</div></div>
+            </div>
+            <div className="text-center">
+              <div className="text-[9px] font-bold uppercase tracking-[.14em] text-muted-foreground">First Basket</div>
+              <div className="mt-1 flex items-center justify-center gap-1 text-[10px] text-muted-foreground"><Clock className="h-3 w-3" />{time(game.date)}</div>
+            </div>
+            <div className="flex items-center justify-end gap-3 text-right">
+              <div><div className="text-sm font-black">{game.homeTeam}</div><div className="max-w-[130px] truncate text-[9px] text-muted-foreground">{game.homeName}</div></div>
+              <TeamLogo team={game.homeTeam} size="md" />
+            </div>
           </div>
-          <div className="text-center">
-            <div className="text-[9px] font-bold uppercase tracking-[.14em] text-muted-foreground">First Basket</div>
-            <div className="mt-1 flex items-center justify-center gap-1 text-[10px] text-muted-foreground"><Clock className="h-3 w-3" />{time(game.date)}</div>
-          </div>
-          <div className="flex items-center justify-end gap-3 text-right">
-            <div><div className="text-sm font-black">{game.homeTeam}</div><div className="max-w-[130px] truncate text-[9px] text-muted-foreground">{game.homeName}</div></div>
-            <TeamLogo team={game.homeTeam} size="md" />
+          <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
+            {confirmed
+              ? <Badge className="border-emerald-500/30 bg-emerald-500/15 text-emerald-600 dark:text-emerald-300">STARTERS CONFIRMED</Badge>
+              : game.lineupStatus === 'waiting'
+                ? <Badge variant="outline">WAITING FOR LINEUP</Badge>
+                : <Badge variant="outline" className="border-yellow-500/30 bg-yellow-500/[.08] text-yellow-700 dark:text-yellow-300">PROJECTED LINEUP</Badge>}
+            <Badge variant="outline" className="text-[9px]">{game.status}</Badge>
           </div>
         </div>
-        <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
-          {confirmed
-            ? <Badge className="border-emerald-500/30 bg-emerald-500/15 text-emerald-600 dark:text-emerald-300">STARTERS CONFIRMED</Badge>
-            : game.lineupStatus === 'waiting'
-              ? <Badge variant="outline">WAITING FOR LINEUP</Badge>
-              : <Badge variant="outline" className="border-yellow-500/30 bg-yellow-500/[.08] text-yellow-700 dark:text-yellow-300">PROJECTED LINEUP</Badge>}
-          <Badge variant="outline" className="text-[9px]">{game.status}</Badge>
-        </div>
-      </div>
 
-      {game.lineupStatus === 'waiting' ? (
-        <div className="p-8 text-center">
-          <AlertCircle className="mx-auto h-6 w-6 text-muted-foreground/40" />
-          <div className="mt-2 text-sm font-semibold">Waiting for reliable lineup data</div>
-          <div className="mt-1 text-[10px] text-muted-foreground">This matchup will populate automatically when enough starter information is available.</div>
-        </div>
-      ) : (
-        <div className="space-y-3 p-4">
-          <TipCard game={game} />
-          <button type="button" onClick={() => setExpanded(v => !v)} className="flex w-full items-center justify-between rounded-xl border bg-muted/15 px-3 py-2.5 text-left transition-colors hover:bg-muted/30" aria-expanded={expanded}>
-            <div>
-              <div className="text-xs font-bold">Player rankings</div>
-              <div className="mt-0.5 text-[9px] text-muted-foreground">Tap a player to reveal verified first-basket and opening-shot details.</div>
-            </div>
-            <div className="flex items-center gap-2">
-              <Badge variant="outline" className="text-[9px]">{game.candidates.length} players</Badge>
-              <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${expanded ? 'rotate-180' : ''}`} />
-            </div>
-          </button>
-          {expanded ? <div className="space-y-2">{game.candidates.map(p => <CandidateRow key={`${game.id}-${p.team}-${p.name}`} p={p} projected={!confirmed} />)}</div> : null}
-        </div>
-      )}
+        {game.lineupStatus === 'waiting' ? (
+          <div className="bg-background/62 p-8 text-center backdrop-blur-sm">
+            <AlertCircle className="mx-auto h-6 w-6 text-muted-foreground/40" />
+            <div className="mt-2 text-sm font-semibold">Waiting for reliable lineup data</div>
+            <div className="mt-1 text-[10px] text-muted-foreground">This matchup will populate automatically when enough starter information is available.</div>
+          </div>
+        ) : (
+          <div className="space-y-3 bg-background/48 p-4 backdrop-blur-[2px]">
+            <TipCard game={game} />
+            <button type="button" onClick={() => setExpanded(v => !v)} className="flex w-full items-center justify-between rounded-xl border bg-background/65 px-3 py-2.5 text-left backdrop-blur-sm transition-colors hover:bg-background/80" aria-expanded={expanded}>
+              <div>
+                <div className="text-xs font-bold">Player rankings</div>
+                <div className="mt-0.5 text-[9px] text-muted-foreground">Tap a player to reveal verified first-basket and opening-shot details.</div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className="text-[9px]">{game.candidates.length} players</Badge>
+                <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${expanded ? 'rotate-180' : ''}`} />
+              </div>
+            </button>
+            {expanded ? <div className="space-y-2">{game.candidates.map(p => <CandidateRow key={`${game.id}-${p.team}-${p.name}`} p={p} projected={!confirmed} />)}</div> : null}
+          </div>
+        )}
+      </div>
     </article>
   );
 }
