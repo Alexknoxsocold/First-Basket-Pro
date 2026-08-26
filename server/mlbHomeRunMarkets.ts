@@ -1,5 +1,6 @@
-const PROPLINE_BASE = 'https://api.prop-line.com/v1';
-const MARKET_CACHE_MS = 15 * 60 * 1000;
+import { propLineGet } from './propLineClient.js';
+
+const MARKET_CACHE_MS = 20 * 60 * 1000;
 
 export type HomeRunBookQuote = {
   bookmaker: string;
@@ -59,21 +60,6 @@ function median(values: number[]): number {
   return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
 }
 
-async function propLineFetch<T>(path: string, apiKey: string, timeoutMs = 8000): Promise<T> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const response = await fetch(`${PROPLINE_BASE}${path}`, {
-      signal: controller.signal,
-      headers: { 'X-API-Key': apiKey, 'User-Agent': 'PreziTools/1.0' },
-    });
-    if (!response.ok) throw new Error(`PropLine ${response.status}`);
-    return await response.json() as T;
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
 function asEvents(payload: unknown): PropLineEvent[] {
   if (Array.isArray(payload)) return payload as PropLineEvent[];
   if (payload && typeof payload === 'object') {
@@ -117,8 +103,6 @@ function buildPlayerMarkets(payload: unknown): Map<string, HomeRunMarket> {
         if (market.key !== 'batter_home_runs') continue;
         for (const outcome of market.outcomes ?? []) {
           if ((outcome.name ?? '').toLowerCase() !== 'yes') continue;
-          // PropLine may also carry alternate/milestone home-run rungs under this market.
-          // The main anytime-HR YES outcome has no point (or occasionally 0.5).
           if (outcome.point !== undefined && outcome.point !== null && outcome.point !== 0.5) continue;
           const player = String(outcome.description ?? '').trim();
           const americanOdds = Number(outcome.price);
@@ -131,7 +115,6 @@ function buildPlayerMarkets(payload: unknown): Map<string, HomeRunMarket> {
             americanOdds,
             updatedAt: outcome.book_updated_at ?? outcome.last_change_at ?? book.last_update ?? null,
           };
-          // Keep one anytime-HR quote per book. If duplicates arrive, keep the more conservative price.
           const existingIndex = entry.quotes.findIndex(q => q.bookmakerKey && q.bookmakerKey === quote.bookmakerKey);
           if (existingIndex >= 0) {
             if (americanImplied(quote.americanOdds) > americanImplied(entry.quotes[existingIndex].americanOdds)) entry.quotes[existingIndex] = quote;
@@ -150,8 +133,6 @@ function buildPlayerMarkets(payload: unknown): Map<string, HomeRunMarket> {
     const consensus = median(probabilities);
     if (!Number.isFinite(consensus)) continue;
 
-    // Reject isolated prices that are wildly different from the rest of the market.
-    // This prevents one stale/alternate quote from creating fake +200% EV plays.
     let trustedQuotes = entry.quotes.filter(q => {
       const p = americanImplied(q.americanOdds);
       if (!Number.isFinite(p)) return false;
@@ -199,7 +180,7 @@ export async function fetchHomeRunMarkets(games: GameInput[]): Promise<HomeRunMa
   if (cache && cache.key === cacheKey && cache.expiresAt > Date.now()) return cache.value;
 
   try {
-    const eventsPayload = await propLineFetch<unknown>('/sports/baseball_mlb/events', apiKey);
+    const eventsPayload = await propLineGet<unknown>('/sports/baseball_mlb/events', { cacheMs: 20 * 60 * 1000 });
     const events = asEvents(eventsPayload);
     const pairs = games.map(game => ({ game, event: events.find(event => eventMatches(game, event)) })).filter((x): x is { game: GameInput; event: PropLineEvent } => Boolean(x.event));
 
@@ -208,7 +189,7 @@ export async function fetchHomeRunMarkets(games: GameInput[]): Promise<HomeRunMa
       const eventId = event.id ?? event.event_id;
       if (eventId === undefined || eventId === null) return;
       try {
-        const payload = await propLineFetch<unknown>(`/sports/baseball_mlb/events/${encodeURIComponent(String(eventId))}/odds?markets=batter_home_runs`, apiKey);
+        const payload = await propLineGet<unknown>(`/sports/baseball_mlb/events/${encodeURIComponent(String(eventId))}/odds?markets=batter_home_runs`, { cacheMs: MARKET_CACHE_MS });
         const playerMarkets = buildPlayerMarkets(payload);
         if (playerMarkets.size) markets.set(game.gamePk, playerMarkets);
       } catch (error) {
@@ -229,7 +210,7 @@ export async function fetchHomeRunMarkets(games: GameInput[]): Promise<HomeRunMa
   } catch (error) {
     console.warn('[MLB Home Runs] PropLine market feed unavailable:', error);
     const value: HomeRunMarketFeed = { status: 'unavailable', source: 'PropLine', gamesMatched: 0, playersPriced: 0, markets: new Map() };
-    cache = { key: cacheKey, expiresAt: Date.now() + 60_000, value };
+    cache = { key: cacheKey, expiresAt: Date.now() + 5 * 60 * 1000, value };
     return value;
   }
 }
