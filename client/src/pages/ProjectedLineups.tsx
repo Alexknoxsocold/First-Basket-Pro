@@ -35,6 +35,8 @@ interface ProjectedLineupResponse {
   players: EspnPlayerStat[];
 }
 
+type FormTier = "HOT" | "STRONG" | "WATCH" | "COLD" | "INSUFFICIENT";
+
 function activeNbaSeasonLabel(date = new Date()) {
   const year = date.getFullYear();
   const month = date.getMonth() + 1;
@@ -67,6 +69,61 @@ function selectProjectedFive(players: EspnPlayerStat[]) {
     .slice(0, 5);
 }
 
+function historicalFormTier(player: EspnPlayerStat): FormTier {
+  const sample = player.previousSeasonGamesTracked ?? player.gamesPlayed ?? 0;
+  const rate = player.firstBasketPct ?? 0;
+  if (sample < 10) return "INSUFFICIENT";
+  if (rate >= 15) return "HOT";
+  if (rate >= 10) return "STRONG";
+  if (rate >= 6) return "WATCH";
+  return "COLD";
+}
+
+function formPresentation(tier: FormTier) {
+  switch (tier) {
+    case "HOT":
+      return {
+        label: "HOT",
+        dot: "bg-red-500",
+        text: "text-red-300",
+        badge: "border-red-500/40 bg-red-500/15 text-red-300",
+        row: "bg-red-500/[0.035]",
+      };
+    case "STRONG":
+      return {
+        label: "STRONG",
+        dot: "bg-emerald-500",
+        text: "text-emerald-300",
+        badge: "border-emerald-500/40 bg-emerald-500/15 text-emerald-300",
+        row: "bg-emerald-500/[0.025]",
+      };
+    case "WATCH":
+      return {
+        label: "WATCH",
+        dot: "bg-amber-400",
+        text: "text-amber-300",
+        badge: "border-amber-400/40 bg-amber-400/15 text-amber-300",
+        row: "bg-amber-400/[0.02]",
+      };
+    case "COLD":
+      return {
+        label: "COLD",
+        dot: "bg-slate-400",
+        text: "text-slate-300",
+        badge: "border-slate-400/30 bg-slate-400/10 text-slate-300",
+        row: "",
+      };
+    default:
+      return {
+        label: "SMALL SAMPLE",
+        dot: "bg-muted-foreground/50",
+        text: "text-muted-foreground",
+        badge: "border-border bg-muted/20 text-muted-foreground",
+        row: "",
+      };
+  }
+}
+
 function TeamLogo({ team }: { team: string }) {
   const logo = getTeamLogoUrl(team);
   return (
@@ -82,9 +139,11 @@ function PlayerRow({ player, index, offseason }: { player: EspnPlayerStat; index
   if (player.gamesPlayed !== undefined) roleParts.push(`${Math.round(player.gamesPlayed)} GP`);
   if ((player.avgMinutes ?? 0) > 0) roleParts.push(`${(player.avgMinutes ?? 0).toFixed(0)} MIN`);
   if ((player.avgPoints ?? 0) > 0) roleParts.push(`${(player.avgPoints ?? 0).toFixed(1)} PPG`);
+  const tier = historicalFormTier(player);
+  const form = formPresentation(tier);
 
   return (
-    <div className="flex items-center gap-3 px-3 py-2.5 border-t border-border/50">
+    <div className={`flex items-center gap-3 px-3 py-2.5 border-t border-border/50 ${offseason ? form.row : ""}`}>
       <span className="w-4 text-[10px] font-bold text-muted-foreground">{index + 1}</span>
       <Avatar className="w-9 h-9 ring-1 ring-border">
         <AvatarImage src={player.headshot} alt={player.player} className="object-cover object-top" />
@@ -94,17 +153,43 @@ function PlayerRow({ player, index, offseason }: { player: EspnPlayerStat; index
         <div className="flex items-center gap-1.5 flex-wrap">
           <span className="text-sm font-semibold truncate">{player.player}</span>
           <Badge variant="outline" className="h-4 px-1 text-[8px]">{offseason ? "PROJECTED" : player.isStarter ? "STARTER" : "PROJECTED"}</Badge>
+          {offseason && <Badge variant="outline" className={`h-4 px-1 text-[8px] ${form.badge}`}>{form.label}</Badge>}
           {!offseason && player.isStarter && <Badge className="h-4 px-1 text-[8px]">CONFIRMED</Badge>}
         </div>
         <p className="text-[10px] text-muted-foreground">{roleParts.join(" · ")}</p>
       </div>
       <div className="text-right shrink-0">
         <p className="text-[10px] text-muted-foreground">{offseason ? "25/26 FB" : "FB rate"}</p>
-        <p className="text-xs font-mono font-bold">{(player.firstBasketPct ?? 0).toFixed(1)}%</p>
+        <p className={`text-xs font-mono font-bold ${offseason ? form.text : ""}`}>{(player.firstBasketPct ?? 0).toFixed(1)}%</p>
         {offseason && (player.previousSeasonGamesTracked ?? 0) > 0 && (
           <p className="text-[9px] text-muted-foreground">{player.previousSeasonFirstBaskets ?? 0}/{player.previousSeasonGamesTracked}</p>
         )}
       </div>
+    </div>
+  );
+}
+
+function FormLegend() {
+  const entries: Array<{ tier: FormTier; copy: string }> = [
+    { tier: "HOT", copy: "15%+" },
+    { tier: "STRONG", copy: "10–14.9%" },
+    { tier: "WATCH", copy: "6–9.9%" },
+    { tier: "COLD", copy: "under 6%" },
+    { tier: "INSUFFICIENT", copy: "under 10 tracked games" },
+  ];
+  return (
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[10px] text-muted-foreground">
+      <span className="font-semibold text-foreground/80">Entering season form</span>
+      {entries.map(({ tier, copy }) => {
+        const form = formPresentation(tier);
+        return (
+          <span key={tier} className="inline-flex items-center gap-1.5">
+            <span className={`w-2 h-2 rounded-full ${form.dot}`} />
+            <span className={form.text}>{form.label}</span>
+            <span>{copy}</span>
+          </span>
+        );
+      })}
     </div>
   );
 }
@@ -195,6 +280,8 @@ export default function ProjectedLineups() {
           </p>
         </div>
       </div>
+
+      {offseason && <FormLegend />}
 
       {hardError ? (
         <div className="rounded-md border border-destructive/30 bg-destructive/5 p-6 text-sm text-destructive">Could not load the NBA lineup feed.</div>
