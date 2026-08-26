@@ -1,49 +1,22 @@
-import { useEffect } from "react";
 import WNBA from "./WNBA";
 
-const CLEARER_COPY = "A clearer game-by-game view of opening possession, model probability, verified first-basket history, and live market value when available.";
-const OPENING_TIPS_TITLE = "WNBA Opening Tips";
-const OPENING_TIPS_COPY = "Jump-ball matchups, verified tip rates, projected first possession, and confidence from the same opening-tip data used by the First Basket model.";
-
 export default function WNBAHiddenHistory() {
-  useEffect(() => {
-    const root = document.querySelector(".wnba-mobile-nav-fix");
-    if (!root) return;
-
-    const hideIntroCopy = () => {
-      for (const el of Array.from(root.querySelectorAll("p"))) {
-        if (el.textContent?.trim() === CLEARER_COPY) {
-          const parent = el.parentElement;
-          if (parent && (parent.textContent?.trim().length ?? 0) < 500) parent.style.display = "none";
-          else (el as HTMLElement).style.display = "none";
-        }
-      }
-
-      for (const heading of Array.from(root.querySelectorAll("h1,h2,h3,h4"))) {
-        if (heading.textContent?.trim() !== OPENING_TIPS_TITLE) continue;
-        let block = heading.parentElement;
-        while (block && block !== root) {
-          const text = block.textContent?.trim() ?? "";
-          if (text.includes(OPENING_TIPS_COPY) && text.length < 700) {
-            block.style.display = "none";
-            break;
-          }
-          block = block.parentElement;
-        }
-      }
-    };
-
-    hideIntroCopy();
-    const observer = new MutationObserver(hideIntroCopy);
-    observer.observe(root, { childList: true, subtree: true });
-    return () => observer.disconnect();
-  }, []);
-
   return (
     <>
       <style>{`
-        button:has(> svg.lucide-history) { display: none !important; }
-        button:has(> svg.lucide-refresh-cw) { display: none !important; }
+        .wnba-mobile-nav-fix button:has(svg.lucide-history) { display: none !important; }
+        .wnba-mobile-nav-fix button:has(svg.lucide-refresh-cw) { display: none !important; }
+
+        /* Remove the WNBA page intro/title copy above the content. */
+        .wnba-mobile-nav-fix .mb-5.flex.flex-wrap.items-end.justify-between.gap-3 {
+          display: none !important;
+        }
+
+        /* Remove the Opening Tips explanatory card. */
+        .wnba-mobile-nav-fix .mb-4.rounded-xl.border.bg-card.p-4.shadow-sm {
+          display: none !important;
+        }
+
         @media (max-width: 640px) {
           .wnba-mobile-nav-fix nav {
             padding-top: 4px !important;
