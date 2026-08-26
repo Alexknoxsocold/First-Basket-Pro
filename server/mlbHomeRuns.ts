@@ -11,6 +11,11 @@ export type MlbHomeRunMarket = {
   bestOdds: number;
   bestBook: string;
   impliedProbability: number;
+  consensusImpliedProbability: number;
+  quoteCount: number;
+  trustedQuoteCount: number;
+  outlierQuoteCount: number;
+  priceVerified: boolean;
   modelEdge: number;
   expectedValue: number;
   valueTier: 'BEST_VALUE' | 'VALUE' | 'NONE';
@@ -180,14 +185,20 @@ function decimalOdds(americanOdds: number): number {
 function attachMarket(candidate: MlbHomeRunCandidate, market: HomeRunMarket | undefined): MlbHomeRunCandidate {
   if (!market) return candidate;
   const modelProbability = candidate.probability / 100;
-  const edge = modelProbability - market.impliedProbability;
+  const edge = modelProbability - market.consensusImpliedProbability;
   const ev = modelProbability * (decimalOdds(market.bestOdds) - 1) - (1 - modelProbability);
-  const valueTier: MlbHomeRunMarket['valueTier'] = candidate.lineupConfirmed && candidate.confidence >= 72 && edge >= 0.04 && ev >= 0.12 ? 'BEST_VALUE' : candidate.lineupConfirmed && candidate.confidence >= 68 && edge >= 0.025 && ev >= 0.05 ? 'VALUE' : 'NONE';
+  const canQualify = market.priceVerified && market.trustedQuoteCount >= 2;
+  const valueTier: MlbHomeRunMarket['valueTier'] = canQualify && candidate.lineupConfirmed && candidate.confidence >= 72 && edge >= 0.04 && ev >= 0.12 ? 'BEST_VALUE' : canQualify && candidate.lineupConfirmed && candidate.confidence >= 68 && edge >= 0.025 && ev >= 0.05 ? 'VALUE' : 'NONE';
   const marketData: MlbHomeRunMarket = {
     source: 'PropLine',
     bestOdds: market.bestOdds,
     bestBook: market.bestBook,
     impliedProbability: Math.round(market.impliedProbability * 1000) / 10,
+    consensusImpliedProbability: Math.round(market.consensusImpliedProbability * 1000) / 10,
+    quoteCount: market.quoteCount,
+    trustedQuoteCount: market.trustedQuoteCount,
+    outlierQuoteCount: market.outlierQuoteCount,
+    priceVerified: market.priceVerified,
     modelEdge: Math.round(edge * 1000) / 10,
     expectedValue: Math.round(ev * 1000) / 10,
     valueTier,
@@ -264,8 +275,8 @@ async function fetchHomeRunData(date: string): Promise<MlbHomeRunResponse> {
     marketGamesMatched: marketFeed.gamesMatched,
     marketPlayersPriced: marketFeed.playersPriced,
     homepageReady: valuePlays.length > 0,
-    methodology: 'PreziTools estimates home-run probability independently from official MLB season/recent hitting, probable-pitcher HR allowance, park carry, weather and plate-appearance opportunity. PropLine batter_home_runs prices are then attached only as a market layer. The sportsbook price never changes the baseball probability; it is used to calculate implied probability, model edge and expected value. Value plays require a confirmed batting order, adequate model confidence and positive edge/EV.',
-    note: marketFeed.status === 'available' ? (valuePlays.length ? `${valuePlays.length} confirmed-lineup HR value play${valuePlays.length === 1 ? '' : 's'} currently clear the price-aware thresholds.` : 'PropLine HR prices are connected, but no confirmed hitter currently clears the value thresholds. Most-likely HR rankings remain available separately.') : marketFeed.status === 'disabled' ? 'PropLine is not enabled on this server. Add PROPLINE_API_KEY to enable price-aware HR value.' : 'PropLine is connected but live HR prices are temporarily unavailable. The independent baseball probability model remains available without inventing market value.',
+    methodology: 'PreziTools estimates home-run probability independently from official MLB season/recent hitting, probable-pitcher HR allowance, park carry, weather and plate-appearance opportunity. PropLine batter_home_runs prices are attached as a market layer. Multiple sportsbook quotes are compared to a consensus and extreme outliers are excluded from value qualification. A value play requires at least two trustworthy sportsbook quotes, a confirmed batting order, adequate model confidence and positive edge/EV. Sportsbook prices never change the baseball probability.',
+    note: marketFeed.status === 'available' ? (valuePlays.length ? `${valuePlays.length} confirmed-lineup HR value play${valuePlays.length === 1 ? '' : 's'} currently clear the verified multi-book price thresholds.` : 'PropLine HR prices are connected, but no confirmed hitter currently clears the verified multi-book value thresholds. Most-likely HR rankings remain available separately.') : marketFeed.status === 'disabled' ? 'PropLine is not enabled on this server. Add PROPLINE_API_KEY to enable price-aware HR value.' : 'PropLine is connected but live HR prices are temporarily unavailable. The independent baseball probability model remains available without inventing market value.',
   };
   cache.set(date, { expiresAt: Date.now() + cacheTtl(games), value }); return value;
 }
