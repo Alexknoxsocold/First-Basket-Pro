@@ -1,9 +1,22 @@
 import type { Express } from 'express';
+import { fetchHomeRunMarkets, normalizeHomeRunPlayer, type HomeRunMarket } from './mlbHomeRunMarkets';
 
 const MLB_BASE = 'https://statsapi.mlb.com/api/v1';
 const LEAGUE_HR_PER_PA = 0.032;
 const DEFAULT_CACHE_TTL_MS = 5 * 60 * 1000;
 const NEAR_GAME_CACHE_TTL_MS = 60 * 1000;
+
+export type MlbHomeRunMarket = {
+  source: 'PropLine';
+  bestOdds: number;
+  bestBook: string;
+  impliedProbability: number;
+  modelEdge: number;
+  expectedValue: number;
+  valueTier: 'BEST_VALUE' | 'VALUE' | 'NONE';
+  quotes: { bookmaker: string; bookmakerKey: string; americanOdds: number; updatedAt: string | null }[];
+  capturedAt: string;
+};
 
 export type MlbHomeRunCandidate = {
   gamePk: number;
@@ -25,22 +38,25 @@ export type MlbHomeRunCandidate = {
   pitcher: { battersFaced: number; homeRunsAllowed: number; homeRunRateAllowed: number | null };
   environment: { parkFactor: number; temperatureF: number | null; windMph: number | null; windDirection: string | null; weatherFactor: number };
   factors: string[];
-  market: null;
-  homepageEligible: false;
+  market: MlbHomeRunMarket | null;
+  homepageEligible: boolean;
 };
 
 export type MlbHomeRunResponse = {
   date: string;
-  modelVersion: 'hr-v1-research';
+  modelVersion: 'hr-v2-value';
   updatedAt: string;
   candidates: MlbHomeRunCandidate[];
   strongest: MlbHomeRunCandidate[];
+  valuePlays: MlbHomeRunCandidate[];
   watchlist: MlbHomeRunCandidate[];
   gamesWithConfirmedLineups: number;
   teamsWithConfirmedLineups: number;
   totalGames: number;
-  marketStatus: 'unavailable';
-  homepageReady: false;
+  marketStatus: 'available' | 'unavailable' | 'disabled';
+  marketGamesMatched: number;
+  marketPlayersPriced: number;
+  homepageReady: boolean;
   methodology: string;
   note: string;
 };
@@ -157,6 +173,30 @@ function buildCandidate(args: { game: ScheduleGame; player: PlayerInput; team: s
   return { gamePk: game.gamePk, gameTime: game.gameDate, playerId: player.id, player: player.name, team, opponent, headshot: `https://img.mlbstatic.com/mlb-photos/image/upload/w_213,q_100/v1/people/${player.id}/headshot/67/current`, battingOrder: player.order, lineupConfirmed: player.lineupConfirmed, probablePitcher: pitcher?.fullName ?? null, venue, probability: Math.round(probability * 1000) / 10, confidence, tier, season: { plateAppearances: hitter.plateAppearances, homeRuns: hitter.homeRuns, homeRunRate: Math.round((hitter.homeRuns / Math.max(1, hitter.plateAppearances)) * 1000) / 10, slugging: hitter.slugging, ops: hitter.ops }, recent: { plateAppearances: recent?.plateAppearances ?? 0, homeRuns: recent?.homeRuns ?? 0, homeRunRate: recent && recent.plateAppearances > 0 ? Math.round((recent.homeRuns / recent.plateAppearances) * 1000) / 10 : null }, pitcher: { battersFaced: pitcherStat?.battersFaced ?? 0, homeRunsAllowed: pitcherStat?.homeRuns ?? 0, homeRunRateAllowed: pitcherStat && pitcherStat.battersFaced > 0 ? Math.round((pitcherStat.homeRuns / pitcherStat.battersFaced) * 1000) / 10 : null }, environment: { parkFactor: Math.round(park * 1000) / 1000, temperatureF: weather?.temp ?? null, windMph: wf.windMph, windDirection: wf.direction, weatherFactor: Math.round(wf.factor * 1000) / 1000 }, factors, market: null, homepageEligible: false };
 }
 
+function decimalOdds(americanOdds: number): number {
+  return americanOdds > 0 ? 1 + americanOdds / 100 : 1 + 100 / Math.abs(americanOdds);
+}
+
+function attachMarket(candidate: MlbHomeRunCandidate, market: HomeRunMarket | undefined): MlbHomeRunCandidate {
+  if (!market) return candidate;
+  const modelProbability = candidate.probability / 100;
+  const edge = modelProbability - market.impliedProbability;
+  const ev = modelProbability * (decimalOdds(market.bestOdds) - 1) - (1 - modelProbability);
+  const valueTier: MlbHomeRunMarket['valueTier'] = candidate.lineupConfirmed && candidate.confidence >= 72 && edge >= 0.04 && ev >= 0.12 ? 'BEST_VALUE' : candidate.lineupConfirmed && candidate.confidence >= 68 && edge >= 0.025 && ev >= 0.05 ? 'VALUE' : 'NONE';
+  const marketData: MlbHomeRunMarket = {
+    source: 'PropLine',
+    bestOdds: market.bestOdds,
+    bestBook: market.bestBook,
+    impliedProbability: Math.round(market.impliedProbability * 1000) / 10,
+    modelEdge: Math.round(edge * 1000) / 10,
+    expectedValue: Math.round(ev * 1000) / 10,
+    valueTier,
+    quotes: market.quotes,
+    capturedAt: market.capturedAt,
+  };
+  return { ...candidate, market: marketData, homepageEligible: valueTier !== 'NONE' };
+}
+
 function cacheTtl(games: ScheduleGame[]): number {
   const now = Date.now();
   const near = games.some(g => { const t = new Date(g.gameDate).getTime(); return Number.isFinite(t) && t >= now - 30 * 60_000 && t <= now + 4 * 60 * 60_000; });
@@ -168,7 +208,8 @@ async function fetchHomeRunData(date: string): Promise<MlbHomeRunResponse> {
   const season = Number(date.slice(0, 4)); const d = new Date(`${date}T12:00:00Z`); d.setUTCDate(d.getUTCDate() - 14); const recentStart = d.toISOString().slice(0, 10);
   const schedule = await fetchJson<ScheduleResponse>(`${MLB_BASE}/schedule?sportId=1&date=${date}&hydrate=team,venue,probablePitcher`);
   const games = schedule.dates?.flatMap(day => day.games ?? []) ?? [];
-  const [hitting, pitching, recentHitting, gameSources] = await Promise.all([
+  const marketGames = games.map(game => ({ gamePk: game.gamePk, gameTime: game.gameDate, awayName: game.teams?.away?.team?.name ?? '', homeName: game.teams?.home?.team?.name ?? '' }));
+  const [hitting, pitching, recentHitting, gameSources, marketFeed] = await Promise.all([
     fetchStats(season, 'hitting'), fetchStats(season, 'pitching'), fetchStats(season, 'hitting', 'byDateRange', recentStart, date).catch(() => new Map<number, StatLine>()),
     Promise.all(games.map(async game => {
       const [feed, boxscore] = await Promise.all([
@@ -177,9 +218,10 @@ async function fetchHomeRunData(date: string): Promise<MlbHomeRunResponse> {
       ]);
       return { game, feed, boxscore };
     })),
+    fetchHomeRunMarkets(marketGames),
   ]);
 
-  const candidates: MlbHomeRunCandidate[] = []; let gamesWithConfirmedLineups = 0, teamsWithConfirmedLineups = 0, feedConfirmedTeams = 0, boxscoreConfirmedTeams = 0, fallbackTeams = 0;
+  const rawCandidates: MlbHomeRunCandidate[] = []; let gamesWithConfirmedLineups = 0, teamsWithConfirmedLineups = 0, feedConfirmedTeams = 0, boxscoreConfirmedTeams = 0, fallbackTeams = 0;
   for (const { game, feed, boxscore } of gameSources) {
     const away = game.teams?.away, home = game.teams?.home; const awayAbbr = away?.team?.abbreviation ?? away?.team?.name ?? 'AWAY', homeAbbr = home?.team?.abbreviation ?? home?.team?.name ?? 'HOME';
     const venue = feed?.gameData?.venue?.name ?? game.venue?.name ?? null, weather = feed?.gameData?.weather;
@@ -197,12 +239,34 @@ async function fetchHomeRunData(date: string): Promise<MlbHomeRunResponse> {
     ]);
     if (!awayConfirmed.length) fallbackTeams++; if (!homeConfirmed.length) fallbackTeams++;
     const awayPlayers = awayConfirmed.length ? awayConfirmed : awayPool.length ? awayPool : awayRoster; const homePlayers = homeConfirmed.length ? homeConfirmed : homePool.length ? homePool : homeRoster;
-    for (const p of awayPlayers) { const c = buildCandidate({ game, player: p, team: awayAbbr, opponent: homeAbbr, pitcher: home?.probablePitcher, hitter: hitting.get(p.id), recent: recentHitting.get(p.id), pitcherStat: home?.probablePitcher?.id ? pitching.get(home.probablePitcher.id) : undefined, venue, weather }); if (c) candidates.push(c); }
-    for (const p of homePlayers) { const c = buildCandidate({ game, player: p, team: homeAbbr, opponent: awayAbbr, pitcher: away?.probablePitcher, hitter: hitting.get(p.id), recent: recentHitting.get(p.id), pitcherStat: away?.probablePitcher?.id ? pitching.get(away.probablePitcher.id) : undefined, venue, weather }); if (c) candidates.push(c); }
+    for (const p of awayPlayers) { const c = buildCandidate({ game, player: p, team: awayAbbr, opponent: homeAbbr, pitcher: home?.probablePitcher, hitter: hitting.get(p.id), recent: recentHitting.get(p.id), pitcherStat: home?.probablePitcher?.id ? pitching.get(home.probablePitcher.id) : undefined, venue, weather }); if (c) rawCandidates.push(c); }
+    for (const p of homePlayers) { const c = buildCandidate({ game, player: p, team: homeAbbr, opponent: awayAbbr, pitcher: away?.probablePitcher, hitter: hitting.get(p.id), recent: recentHitting.get(p.id), pitcherStat: away?.probablePitcher?.id ? pitching.get(away.probablePitcher.id) : undefined, venue, weather }); if (c) rawCandidates.push(c); }
   }
-  candidates.sort((a,b) => b.probability - a.probability || b.confidence - a.confidence); const strongest = candidates.filter(c => c.lineupConfirmed && c.tier !== 'WATCH').slice(0,10), watchlist = candidates.filter(c => !c.lineupConfirmed).slice(0,12);
-  console.log(`[MLB Home Runs] ${date}: games=${games.length}, candidates=${candidates.length}, strongest=${strongest.length}, watchlist=${watchlist.length}, confirmedTeams=${teamsWithConfirmedLineups}, feedConfirmed=${feedConfirmedTeams}, boxscoreConfirmed=${boxscoreConfirmedTeams}, fallbackTeams=${fallbackTeams}`);
-  const value: MlbHomeRunResponse = { date, modelVersion: 'hr-v1-research', updatedAt: new Date().toISOString(), candidates, strongest, watchlist, gamesWithConfirmedLineups, teamsWithConfirmedLineups, totalGames: games.length, marketStatus: 'unavailable', homepageReady: false, methodology: 'Official MLB season and recent hitting rates are regressed toward league average, then adjusted for probable-pitcher HR allowance, park carry, weather, and plate-appearance opportunity. Lineup confirmation now cross-checks both the official MLB live feed and official MLB boxscore; when first pitch is within four hours, the server rechecks official lineups every minute.', note: strongest.length ? 'Confirmed-lineup HR recommendations are live. PreziTools cross-checks the official MLB live feed and boxscore for batting orders.' : watchlist.length ? 'Official batting orders are still pending for these teams. PreziTools is rechecking the MLB live feed and boxscore frequently as first pitch approaches.' : games.length === 0 ? 'No MLB games are scheduled for this date.' : hitting.size === 0 ? 'MLB season hitting data is temporarily unavailable, so the model is not forcing recommendations.' : 'MLB games are available, but no eligible hitter pool has populated yet. The model will retry automatically as official MLB feeds update.' };
+
+  const candidates = rawCandidates.map(candidate => attachMarket(candidate, marketFeed.markets.get(candidate.gamePk)?.get(normalizeHomeRunPlayer(candidate.player))));
+  candidates.sort((a,b) => b.probability - a.probability || b.confidence - a.confidence);
+  const strongest = candidates.filter(c => c.lineupConfirmed && c.tier !== 'WATCH').slice(0,10);
+  const valuePlays = candidates.filter(c => c.market?.valueTier !== 'NONE' && c.lineupConfirmed).sort((a,b) => (b.market?.expectedValue ?? -999) - (a.market?.expectedValue ?? -999) || (b.market?.modelEdge ?? -999) - (a.market?.modelEdge ?? -999)).slice(0,12);
+  const watchlist = candidates.filter(c => !c.lineupConfirmed).slice(0,12);
+  console.log(`[MLB Home Runs] ${date}: games=${games.length}, candidates=${candidates.length}, strongest=${strongest.length}, value=${valuePlays.length}, priced=${marketFeed.playersPriced}, marketGames=${marketFeed.gamesMatched}, confirmedTeams=${teamsWithConfirmedLineups}, feedConfirmed=${feedConfirmedTeams}, boxscoreConfirmed=${boxscoreConfirmedTeams}, fallbackTeams=${fallbackTeams}`);
+  const value: MlbHomeRunResponse = {
+    date,
+    modelVersion: 'hr-v2-value',
+    updatedAt: new Date().toISOString(),
+    candidates,
+    strongest,
+    valuePlays,
+    watchlist,
+    gamesWithConfirmedLineups,
+    teamsWithConfirmedLineups,
+    totalGames: games.length,
+    marketStatus: marketFeed.status,
+    marketGamesMatched: marketFeed.gamesMatched,
+    marketPlayersPriced: marketFeed.playersPriced,
+    homepageReady: valuePlays.length > 0,
+    methodology: 'PreziTools estimates home-run probability independently from official MLB season/recent hitting, probable-pitcher HR allowance, park carry, weather and plate-appearance opportunity. PropLine batter_home_runs prices are then attached only as a market layer. The sportsbook price never changes the baseball probability; it is used to calculate implied probability, model edge and expected value. Value plays require a confirmed batting order, adequate model confidence and positive edge/EV.',
+    note: marketFeed.status === 'available' ? (valuePlays.length ? `${valuePlays.length} confirmed-lineup HR value play${valuePlays.length === 1 ? '' : 's'} currently clear the price-aware thresholds.` : 'PropLine HR prices are connected, but no confirmed hitter currently clears the value thresholds. Most-likely HR rankings remain available separately.') : marketFeed.status === 'disabled' ? 'PropLine is not enabled on this server. Add PROPLINE_API_KEY to enable price-aware HR value.' : 'PropLine is connected but live HR prices are temporarily unavailable. The independent baseball probability model remains available without inventing market value.',
+  };
   cache.set(date, { expiresAt: Date.now() + cacheTtl(games), value }); return value;
 }
 
