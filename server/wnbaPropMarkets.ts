@@ -6,8 +6,11 @@ export type WnbaVerifiedMarketLine = {
   player: string;
   market: WnbaPropMarketKey;
   line: number;
+  consensusLine: number;
   book: string | null;
   odds: number | null;
+  bookCount: number;
+  quoteCount: number;
 };
 export type WnbaPlayerPropSignal = {
   player: string;
@@ -155,8 +158,7 @@ function collapseQuotes(quotes: Quote[]): WnbaVerifiedMarketLine[] {
     const consensus = median(lines);
     if (!Number.isFinite(consensus)) continue;
 
-    // PropLine carries alternate ladders. Use the line nearest the cross-book median
-    // so an extreme alternate does not become the model comparison line.
+    const books = new Set(group.map(q => norm(q.book)).filter(Boolean));
     const nearest = [...group].sort((a, b) => {
       const da = Math.abs(a.line - consensus), db = Math.abs(b.line - consensus);
       if (da !== db) return da - db;
@@ -169,8 +171,11 @@ function collapseQuotes(quotes: Quote[]): WnbaVerifiedMarketLine[] {
       player: nearest.player,
       market: nearest.market,
       line: nearest.line,
+      consensusLine: consensus,
       book: nearest.book || null,
       odds: nearest.odds,
+      bookCount: books.size,
+      quoteCount: group.length,
     });
   }
   return out;
