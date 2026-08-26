@@ -11,6 +11,7 @@ import { getFirstBasketLedgerSummary } from './fbPredictionLedger';
 import { registerWnbaFeature } from './wnbaFeature';
 import { registerNewsletterRoutes } from './newsletter';
 import { registerMlbHomeRunRoutes } from './mlbHomeRuns';
+import { registerNbaProjectedLineupRoutes } from './nbaProjectedLineups';
 
 const SEASON_RE = /^\d{4}\/\d{2}$/;
 const protectedMaintenancePaths = new Set([
@@ -30,6 +31,7 @@ export function registerProductionCleanupRoutes(app: Express): void {
   registerWnbaFeature(app);
   registerNewsletterRoutes(app);
   registerMlbHomeRunRoutes(app);
+  registerNbaProjectedLineupRoutes(app);
 
   // All mutation/sync endpoints are operational controls and must never be
   // callable anonymously in production. This middleware is registered before
