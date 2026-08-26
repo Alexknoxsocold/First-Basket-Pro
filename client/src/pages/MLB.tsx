@@ -9,9 +9,18 @@ export default function MLB() {
   return <div className="mx-0 md:-mx-6 lg:-mx-8 -mt-8">
     <style>{`
       @media (max-width: 640px) {
+        nav[aria-label="MLB sections"] { padding-top: 4px !important; }
+        nav[aria-label="MLB sections"] span {
+          min-height: 48px !important;
+          display: flex !important;
+          align-items: center !important;
+          padding-top: 14px !important;
+          padding-bottom: 12px !important;
+        }
         .mlb-first-inning-shell > div { margin-left: 0 !important; margin-right: 0 !important; }
+        .mlb-first-inning-shell > div > nav { padding-top: 4px !important; }
         .mlb-first-inning-shell > div > nav > div { padding-left: 0 !important; padding-right: 0 !important; }
-        .mlb-first-inning-shell > div > nav button { padding: 9px 10px !important; font-size: 10px !important; }
+        .mlb-first-inning-shell > div > nav button { min-height: 48px !important; padding: 14px 10px 12px !important; font-size: 10px !important; display: inline-flex !important; align-items: center !important; }
         .mlb-first-inning-shell > div > nav + div { padding: 18px 0 24px !important; }
         .mlb-first-inning-shell > div > nav + div > div:first-child { margin-bottom: 14px !important; flex-wrap: nowrap !important; align-items: center !important; }
         .mlb-first-inning-shell > div > nav + div > div:first-child h1 { font-size: 16px !important; line-height: 1.2 !important; }
