@@ -1,21 +1,30 @@
 import { useEffect, useState } from "react";
 import { Check, Crown, Sparkles, X } from "lucide-react";
+import { useBilling } from "@/context/BillingContext";
 
 const CHOICE_KEY = "prezitools-plan-welcome-v2";
 const WHOP_PRO_URL = "https://whop.com/prezitools/prezitools-pro/";
 
 export default function PlanWelcome() {
+  const { pro, isLoading: billingLoading } = useBilling();
   const [open, setOpen] = useState(false);
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
-    if (window.localStorage.getItem(CHOICE_KEY)) return;
+    if (billingLoading || pro || window.localStorage.getItem(CHOICE_KEY)) return;
     const show = window.setTimeout(() => {
       setOpen(true);
       requestAnimationFrame(() => setVisible(true));
     }, 850);
     return () => window.clearTimeout(show);
-  }, []);
+  }, [billingLoading, pro]);
+
+  useEffect(() => {
+    if (!pro || !open) return;
+    setVisible(false);
+    const timer = window.setTimeout(() => setOpen(false), 260);
+    return () => window.clearTimeout(timer);
+  }, [pro, open]);
 
   const close = (choice: "free") => {
     window.localStorage.setItem(CHOICE_KEY, choice);
@@ -27,7 +36,7 @@ export default function PlanWelcome() {
     window.location.assign(WHOP_PRO_URL);
   };
 
-  if (!open) return null;
+  if (!open || pro) return null;
 
   return (
     <div className={`fixed inset-0 z-[9998] flex items-center justify-center p-4 transition-all duration-300 ${visible ? "bg-black/32 opacity-100" : "bg-black/0 opacity-0"}`} role="dialog" aria-modal="true" aria-labelledby="plan-title">
