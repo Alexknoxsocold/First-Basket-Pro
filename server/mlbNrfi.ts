@@ -1,6 +1,7 @@
 import { calibrateRecommendedProbability } from "./mlbCalibration.js";
 import { predictNrfiV4, type V4Prediction } from "./mlbNrfiV4.js";
 import { recordNrfiShadowPrediction } from "./mlbNrfiShadowStore.js";
+import { fetchFirstInningMarkets } from "./mlbFirstInningMarkets.js";
 
 type EspnEvent = {
   id: string;
@@ -43,6 +44,18 @@ export type NrfiPitcher = {
   source?: "ESPN" | "MLB" | "pending";
 };
 
+export type NrfiMarketValue = {
+  available: boolean;
+  book: string | null;
+  selection: "NRFI" | "YRFI" | null;
+  price: number | null;
+  impliedProbability: number | null;
+  noVigProbability: number | null;
+  edge: number | null;
+  ev: number | null;
+  updatedAt: string | null;
+};
+
 export type NrfiGame = {
   id: string;
   /** ESPN's authoritative scheduled/actual first-pitch timestamp. */
@@ -64,6 +77,7 @@ export type NrfiGame = {
   outcome: "won" | "lost" | "pending";
   firstInningScore: string | null;
   v4Shadow?: V4Prediction;
+  marketValue?: NrfiMarketValue | null;
 };
 
 export type NrfiResponse = {
@@ -74,6 +88,7 @@ export type NrfiResponse = {
   updatedAt: string;
   source: string;
   methodology: string;
+  marketStatus?: "live" | "unavailable";
 };
 
 export type NrfiWindowResponse = {
@@ -238,7 +253,7 @@ async function buildNrfiData(date: string): Promise<NrfiResponse> {
   const sharedHistory = await fetchRecentHistory(date); const leagueBaseline = calculateLeagueBaseline(sharedHistory);
   const forms = await withConcurrency(teamIds, async teamId => [teamId, await fetchTeamForm(teamId, date, sharedHistory)] as const, 12); const formMap = new Map(forms);
   const fallback: TeamForm = { games: 0, scorelessPct: leagueBaseline.scorelessPct, runsPerFirstInning: leagueBaseline.runsPerInning, allowedPerFirstInning: leagueBaseline.runsPerInning, allowedScorelessPct: leagueBaseline.scorelessPct };
-  const games = await withConcurrency(rawGames, async ({ event, competition }) => {
+  const baseGames = await withConcurrency(rawGames, async ({ event, competition }) => {
     const away = competition.competitors!.find(c => c.homeAway === "away")!; const home = competition.competitors!.find(c => c.homeAway === "home")!;
     const [awayPitcher, homePitcher] = await Promise.all([getPitcher(away), getPitcher(home)]);
     const awayForm = formMap.get(away.team?.id ?? "") ?? fallback; const homeForm = formMap.get(home.team?.id ?? "") ?? fallback;
@@ -250,10 +265,46 @@ async function buildNrfiData(date: string): Promise<NrfiResponse> {
     const outcome = getOutcome(prediction.recommendation, competition);
     recordNrfiShadowPrediction({ gameId: event.id, createdAt: new Date().toISOString(), v3Probability: prediction.nrfiProbability / 100, v4: v4Shadow, outcome: outcome.outcome === "pending" ? undefined : outcome.firstInningScore === "0-0" ? "NRFI" : "YRFI" });
     const gameStartAt = event.date ?? `${date}T00:00:00Z`;
-    return { id: event.id, date: gameStartAt, gameStartAt, shortName: event.shortName ?? `${away.team?.abbreviation ?? "Away"} @ ${home.team?.abbreviation ?? "Home"}`, away: { abbreviation: away.team?.abbreviation ?? "AWAY", name: away.team?.displayName ?? away.team?.shortDisplayName ?? "Away", logo: away.team?.logos?.[0]?.href ?? null, pitcher: awayPitcher }, home: { abbreviation: home.team?.abbreviation ?? "HOME", name: home.team?.displayName ?? home.team?.shortDisplayName ?? "Home", logo: home.team?.logos?.[0]?.href ?? null, pitcher: homePitcher }, venue: competition.venue?.fullName ?? null, status: competition.status?.type?.detail ?? competition.status?.type?.state ?? "scheduled", ...prediction, ...outcome, v4Shadow } satisfies NrfiGame;
+    return { id: event.id, date: gameStartAt, gameStartAt, shortName: event.shortName ?? `${away.team?.abbreviation ?? "Away"} @ ${home.team?.abbreviation ?? "Home"}`, away: { abbreviation: away.team?.abbreviation ?? "AWAY", name: away.team?.displayName ?? away.team?.shortDisplayName ?? "Away", logo: away.team?.logos?.[0]?.href ?? null, pitcher: awayPitcher }, home: { abbreviation: home.team?.abbreviation ?? "HOME", name: home.team?.displayName ?? home.team?.shortDisplayName ?? "Home", logo: home.team?.logos?.[0]?.href ?? null, pitcher: homePitcher }, venue: competition.venue?.fullName ?? null, status: competition.status?.type?.detail ?? competition.status?.type?.state ?? "scheduled", ...prediction, ...outcome, v4Shadow, marketValue: null } satisfies NrfiGame;
   }, 8);
-  const promoted = games.filter(game => game.playStatus === "BEST_PLAY" || game.playStatus === "PLAY"); const ranked = [...promoted].sort((a, b) => b.modelEdge - a.modelEdge || (b.confidence === "High" ? 1 : 0) - (a.confidence === "High" ? 1 : 0)); const averageNrfiProbability = games.length ? Math.round(games.reduce((sum, g) => sum + g.nrfiProbability, 0) / games.length * 10) / 10 : null;
-  return { date, games, averageNrfiProbability, topPick: ranked[0] ?? null, updatedAt: new Date().toISOString(), source: "ESPN MLB scoreboard + MLB Stats API pitcher fallback + verified recent game summaries", methodology: "Model v3 remains the live recommendation engine. V4 runs in shadow mode with an uncertainty adjustment based on starter confirmation, pitcher metric completeness, sample size, lineup availability and environment data. Shadow results do not change live picks." };
+
+  const marketFeed = await fetchFirstInningMarkets(baseGames.map(game => ({ id: game.id, gameTime: game.gameStartAt, awayName: game.away.name, homeName: game.home.name, nrfiProbability: game.nrfiProbability })));
+  const games = baseGames.map(game => {
+    const side = marketFeed.markets.get(game.id)?.[game.recommendation];
+    if (!side) return game;
+    return {
+      ...game,
+      marketValue: {
+        available: true,
+        book: side.book,
+        selection: side.selection,
+        price: side.price,
+        impliedProbability: side.impliedProbability,
+        noVigProbability: side.noVigProbability,
+        edge: side.edge,
+        ev: side.ev,
+        updatedAt: side.capturedAt,
+      },
+    } satisfies NrfiGame;
+  });
+
+  const promoted = games.filter(game => game.playStatus === "BEST_PLAY" || game.playStatus === "PLAY");
+  const ranked = [...promoted].sort((a, b) => {
+    const aMarket = a.marketValue?.available ? a.marketValue.edge ?? -Infinity : a.modelEdge;
+    const bMarket = b.marketValue?.available ? b.marketValue.edge ?? -Infinity : b.modelEdge;
+    return bMarket - aMarket || (b.confidence === "High" ? 1 : 0) - (a.confidence === "High" ? 1 : 0);
+  });
+  const averageNrfiProbability = games.length ? Math.round(games.reduce((sum, g) => sum + g.nrfiProbability, 0) / games.length * 10) / 10 : null;
+  return {
+    date,
+    games,
+    averageNrfiProbability,
+    topPick: ranked[0] ?? null,
+    updatedAt: new Date().toISOString(),
+    source: "ESPN MLB scoreboard + MLB Stats API pitcher fallback + verified recent game summaries + PropLine 1st-inning totals",
+    methodology: "The baseball model remains independent. PropLine first-inning totals (period i1, total 0.5) are attached as a market layer for no-vig consensus, best price, model edge and EV. Sportsbook prices do not change the model probability or promote a model NO PLAY.",
+    marketStatus: marketFeed.status === "live" ? "live" : "unavailable",
+  };
 }
 
 export async function fetchNrfiData(date = getTodayET()): Promise<NrfiResponse> { const now = Date.now(); if (cachedResponse && cachedDate === date && now - cachedAt < CACHE_TTL) return cachedResponse; const existing = refreshInFlight.get(date); if (existing) return existing; const refresh = (async () => { try { const data = await buildNrfiData(date); cachedResponse = data; cachedDate = date; cachedAt = Date.now(); return data; } catch (error) { if (cachedResponse && cachedDate === date && now - cachedAt < STALE_TTL) return cachedResponse; throw error; } finally { refreshInFlight.delete(date); } })(); refreshInFlight.set(date, refresh); return refresh; }
