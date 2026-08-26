@@ -23,6 +23,7 @@ import { registerMlbV4PublicRoutes } from "./mlbPublicV4Routes";
 import { registerProductionCleanupRoutes } from "./productionCleanupRoutes";
 import { fetchNflMarkets } from "./nflMarkets";
 import { registerWhopBillingRoutes } from "./whopBilling";
+import { registerWnbaFeature } from "./wnbaFeature";
 
 const app = express();
 app.set('trust proxy', 1);
@@ -71,6 +72,7 @@ app.use(express.urlencoded({ extended: false, limit: '1mb' }));
 app.use(sessionMiddleware);
 app.use(authMiddleware);
 registerWhopBillingRoutes(app);
+registerWnbaFeature(app);
 
 app.use((req, res, next) => {
   const start = Date.now();
