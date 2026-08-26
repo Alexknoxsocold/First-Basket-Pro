@@ -6,6 +6,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Search, ShieldCheck, Users } from "lucide-react";
 import { getTeamLogoUrl } from "@/components/GameRow";
+import NbaArenaBackdrop from "@/components/NbaArenaBackdrop";
 
 interface EspnPlayerStat {
   player: string;
@@ -296,15 +297,18 @@ export default function ProjectedLineups() {
           )}
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
             {teams.map(({ team, players }) => (
-              <div key={team} className="rounded-lg border bg-card overflow-hidden">
-                <div className="px-3 py-3 flex items-center gap-3 bg-muted/20">
-                  <TeamLogo team={team} />
-                  <div className="flex-1">
-                    <p className="font-bold text-sm">{team}</p>
-                    <p className="text-[10px] text-muted-foreground">Projected starting five · {players.length}/5 available</p>
+              <div key={team} className="relative isolate rounded-lg border bg-card overflow-hidden">
+                <NbaArenaBackdrop team={team} />
+                <div className="relative z-10">
+                  <div className="px-3 py-3 flex items-center gap-3 bg-background/35 backdrop-blur-[1px]">
+                    <TeamLogo team={team} />
+                    <div className="flex-1">
+                      <p className="font-bold text-sm">{team}</p>
+                      <p className="text-[10px] text-muted-foreground">Projected starting five · {players.length}/5 available</p>
+                    </div>
                   </div>
+                  {players.map((player, index) => <PlayerRow key={`${team}-${player.espnId || player.id || player.player}`} player={player} index={index} offseason={offseason} />)}
                 </div>
-                {players.map((player, index) => <PlayerRow key={`${team}-${player.espnId || player.id || player.player}`} player={player} index={index} offseason={offseason} />)}
               </div>
             ))}
           </div>
