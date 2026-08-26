@@ -1,10 +1,10 @@
-import { getWnbaSlate, type WnbaCandidate, type WnbaGame } from './wnbaFirstBasket';
+import { getWnbaSlate } from './wnbaFirstBasket';
+import { fetchWnbaPropMarketLines, type WnbaPropMarketKey } from './wnbaPropMarkets';
 
 const MODEL_VERSION = 'WNBA-PROPS-V1';
 const CACHE_TTL_MS = 10 * 60 * 1000;
-const PARLAY_URL = 'https://parlay-api.com/v1/sports/basketball_wnba/props';
 
-export type WnbaPropKey = 'points' | 'rebounds' | 'assists' | 'threes' | 'rebounds_assists' | 'points_rebounds_assists';
+export type WnbaPropKey = WnbaPropMarketKey;
 export type WnbaPropPlay = {
   player: string;
   team: string;
@@ -43,8 +43,6 @@ export type WnbaPropsPayload = {
 
 type SeasonStats = { games:number; minutes:number; points:number; rebounds:number; assists:number; threes:number };
 type RecentLine = { points:number; rebounds:number; assists:number; threes:number };
-type MarketLine = { player:string; market:WnbaPropKey; line:number; book:string|null; odds:number|null };
-type GenericRow = Record<string, unknown>;
 
 let cache: { at:number; value:WnbaPropsPayload } | null = null;
 let inFlight: Promise<WnbaPropsPayload> | null = null;
@@ -114,33 +112,6 @@ async function recentStats(teams:string[]):Promise<Map<string,RecentLine[]>>{
   return out;
 }
 
-function marketFrom(v:unknown):WnbaPropKey|null{
-  const s=String(v??'').toLowerCase().replace(/[ -]+/g,'_');
-  if(s.includes('points_rebounds_assists')||s.includes('pts_reb_ast')||s.includes('pra'))return 'points_rebounds_assists';
-  if(s.includes('rebounds_assists')||s.includes('reb_ast'))return 'rebounds_assists';
-  if(s.includes('three')||s.includes('3pt')||s.includes('threes'))return 'threes';
-  if(s.includes('rebound'))return 'rebounds';
-  if(s.includes('assist'))return 'assists';
-  if(s.includes('point'))return 'points';
-  return null;
-}
-function extractRows(payload:any):GenericRow[]{if(Array.isArray(payload))return payload;for(const x of [payload?.data,payload?.results,payload?.props,payload?.markets,payload?.items]){if(Array.isArray(x))return x;if(x&&typeof x==='object')for(const v of Object.values(x))if(Array.isArray(v))return v as GenericRow[]}return[]}
-function rowPlayer(r:GenericRow){return String(r.player??r.player_name??r.athlete??r.participant??'').trim()}
-function rowLine(r:GenericRow){for(const v of [r.line,r.point,r.threshold,r.over_under_line,r.total]){const n=num(v);if(n!==null&&n>=0&&n<100)return n}return null}
-function rowBook(r:GenericRow){const x=String(r.bookmaker_title??r.bookmaker_name??r.book??r.source??'').trim();return x||null}
-function rowOdds(r:GenericRow){for(const v of [r.price_american,r.price,r.odds,r.american_odds,r.over_price,r.under_price]){const n=num(v);if(n!==null&&Math.abs(n)>=100)return n}return null}
-async function marketLines():Promise<MarketLine[]>{
-  const key=process.env.PARLAY_API_KEY; if(!key)return[];
-  const url=new URL(PARLAY_URL);
-  url.searchParams.set('markets','player_points,player_rebounds,player_assists,player_threes,player_rebounds_assists,player_points_rebounds_assists');
-  url.searchParams.set('bookmakers','fanduel,draftkings');
-  url.searchParams.set('limit','1000');
-  const d=await json(url.toString(),{'X-API-Key':key,Accept:'application/json'}); if(!d)return[];
-  const rows=extractRows(d), out:MarketLine[]=[];
-  for(const r of rows){const market=marketFrom(r.market_key??r.market??r.market_name??r.marketKey),line=rowLine(r),player=rowPlayer(r);if(!market||line===null||!player)continue;out.push({player,market,line,book:rowBook(r),odds:rowOdds(r)})}
-  return out;
-}
-
 const labels:Record<WnbaPropKey,string>={points:'Points',rebounds:'Rebounds',assists:'Assists',threes:'3PT Made',rebounds_assists:'Reb + Ast',points_rebounds_assists:'Pts + Reb + Ast'};
 const edgeFloor:Record<WnbaPropKey,number>={points:2.0,rebounds:1.2,assists:1.0,threes:0.55,rebounds_assists:1.7,points_rebounds_assists:2.8};
 function avg(lines:RecentLine[],key:WnbaPropKey){if(!lines.length)return null;const value=(x:RecentLine)=>key==='points'?x.points:key==='rebounds'?x.rebounds:key==='assists'?x.assists:key==='threes'?x.threes:key==='rebounds_assists'?x.rebounds+x.assists:x.points+x.rebounds+x.assists;return lines.reduce((s,x)=>s+value(x),0)/lines.length}
@@ -152,7 +123,7 @@ function reasonList(s:SeasonStats,seasonAvg:number,recentAvg:number|null,recentG
 async function build():Promise<WnbaPropsPayload>{
   const slate=await getWnbaSlate();
   const teams=[...new Set(slate.games.flatMap(g=>[g.awayTeam,g.homeTeam]))];
-  const [recent,lines]=await Promise.all([recentStats(teams),marketLines()]);
+  const [recent,lines]=await Promise.all([recentStats(teams),fetchWnbaPropMarketLines(slate.games)]);
   const rosters=new Map<string,any[]>(); await Promise.all(teams.map(async t=>rosters.set(t,await roster(t))));
   const plays:WnbaPropPlay[]=[]; let evaluated=0;
   const keys:WnbaPropKey[]=['points','rebounds','assists','threes','rebounds_assists','points_rebounds_assists'];
@@ -173,7 +144,7 @@ async function build():Promise<WnbaPropsPayload>{
     }
   }
   plays.sort((a,b)=>Number(b.isBettable)-Number(a.isBettable)||b.confidence-a.confidence||(b.edge??0)-(a.edge??0));
-  return {updatedAt:new Date().toISOString(),modelVersion:MODEL_VERSION,source:'ESPN season + recent WNBA box scores',marketSource:lines.length?'ParlayAPI verified lines when available':'No verified sportsbook lines currently available',plays,games:slate.games.length,playersEvaluated:evaluated,verifiedLines:plays.filter(x=>x.line!==null).length,note:'Prop projections are separate from the First Basket model. A betting side is shown only when a real market line is available and the model clears the market-specific edge threshold.'};
+  return {updatedAt:new Date().toISOString(),modelVersion:MODEL_VERSION,source:'ESPN season + recent WNBA box scores',marketSource:lines.length?'PropLine Pro verified sportsbook lines':'No verified sportsbook lines currently available',plays,games:slate.games.length,playersEvaluated:evaluated,verifiedLines:plays.filter(x=>x.line!==null).length,note:'Prop projections are separate from the First Basket model. PropLine only supplies sportsbook market context. A betting side is shown only when a verified market line exists and the independent PreziTools projection clears the market-specific edge threshold.'};
 }
 
 export async function getWnbaPropProjections(force=false):Promise<WnbaPropsPayload>{if(!force&&cache&&Date.now()-cache.at<CACHE_TTL_MS)return cache.value;if(inFlight)return inFlight;inFlight=build();try{const value=await inFlight;cache={at:Date.now(),value};return value}finally{inFlight=null}}
