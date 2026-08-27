@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'wouter';
-import { CheckCircle2, ChevronDown, Clock3, Mail, Trophy, XCircle } from 'lucide-react';
+import { CheckCircle2, ChevronDown, Clock3, Mail, Sparkles, Trophy, XCircle } from 'lucide-react';
 import BestPlays from './BestPlays';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -29,7 +29,32 @@ type OutcomePayload = {
   outcomes: Outcome[];
 };
 
+type WnbaCandidate = {
+  name: string;
+  team: string;
+  probability: number;
+  rank: number;
+  headshot?: string | null;
+};
+
+type WnbaGame = {
+  id: string;
+  date: string;
+  awayTeam: string;
+  homeTeam: string;
+  lineupStatus: 'confirmed' | 'projected' | 'waiting' | string;
+  candidates: WnbaCandidate[];
+};
+
+type WnbaSlate = { games: WnbaGame[] };
 type View = 'games' | 'outcomes' | 'wins';
+
+function gameTime(v: string) {
+  const d = new Date(v);
+  return Number.isNaN(d.getTime())
+    ? 'Time pending'
+    : d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York' }) + ' ET';
+}
 
 function OutcomeCard({ row }: { row: Outcome }) {
   const won = row.result === 'won';
@@ -55,6 +80,49 @@ function OutcomeCard({ row }: { row: Outcome }) {
   </Link>;
 }
 
+function WnbaStrongest({ slate, loading }: { slate?: WnbaSlate; loading: boolean }) {
+  const strongest = (slate?.games || [])
+    .flatMap(game => (game.candidates || []).slice(0, 2).map(player => ({ game, player })))
+    .filter(({ player }) => player.probability >= 10)
+    .sort((a, b) => a.player.rank - b.player.rank || b.player.probability - a.player.probability)
+    .slice(0, 2);
+
+  if (loading && !strongest.length) {
+    return <div className="grid grid-cols-1 gap-3 md:grid-cols-2"><Skeleton className="h-24 w-full rounded-xl" /><Skeleton className="h-24 w-full rounded-xl" /></div>;
+  }
+  if (!strongest.length) return null;
+
+  return <div className="rounded-xl border bg-card/85 p-3 sm:p-4 shadow-sm">
+    <div className="mb-3 flex items-center justify-between gap-3">
+      <div>
+        <div className="flex items-center gap-2 text-sm font-bold"><Sparkles className="h-4 w-4 text-primary" />WNBA Strongest Plays</div>
+        <div className="mt-1 text-[10px] text-muted-foreground">Pinned here so today's strongest WNBA first-basket plays do not get pushed off the homepage by other sports.</div>
+      </div>
+      <Link href="/wnba" className="shrink-0 text-[10px] font-semibold text-primary hover:underline">View WNBA</Link>
+    </div>
+    <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+      {strongest.map(({ game, player }) => <Link href="/wnba" key={`${game.id}-${player.rank}-${player.name}`} className="block rounded-xl border bg-background/60 p-3 transition-colors hover:bg-muted/40">
+        <div className="flex items-center gap-3">
+          <div className="h-12 w-12 shrink-0 overflow-hidden rounded-full border bg-muted">
+            {player.headshot ? <img src={player.headshot} alt={player.name} className="h-full w-full object-cover object-[50%_24%]" /> : <div className="flex h-full w-full items-center justify-center text-[10px] font-black">{player.team}</div>}
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="truncate text-sm font-black">{player.name}</span>
+              <Badge variant="outline" className={player.rank === 1 ? 'border-emerald-500/30 bg-emerald-500/10 text-[8px] text-emerald-600' : 'border-primary/25 bg-primary/10 text-[8px] text-primary'}>{player.rank === 1 ? 'BEST PLAY' : 'STRONG PLAY'}</Badge>
+            </div>
+            <div className="mt-1 text-[10px] text-muted-foreground">{game.awayTeam} @ {game.homeTeam} · {game.lineupStatus === 'confirmed' ? 'Confirmed starters' : 'Projected lineup'}</div>
+            <div className="mt-1.5 flex items-center justify-between gap-2">
+              <span className="text-[10px] text-muted-foreground">{gameTime(game.date)}</span>
+              <span className="font-mono text-sm font-black">{player.probability.toFixed(1)}%</span>
+            </div>
+          </div>
+        </div>
+      </Link>)}
+    </div>
+  </div>;
+}
+
 export default function BestPlaysHub() {
   const [view, setView] = useState<View>('games');
   const [newsletterEmail, setNewsletterEmail] = useState('');
@@ -64,6 +132,12 @@ export default function BestPlaysHub() {
     queryKey: ['/api/best-plays/outcomes'],
     staleTime: 30000,
     refetchInterval: 60000,
+    retry: 1,
+  });
+  const wnba = useQuery<WnbaSlate>({
+    queryKey: ['/api/wnba/first-basket'],
+    staleTime: 60000,
+    refetchInterval: 120000,
     retry: 1,
   });
 
@@ -117,7 +191,7 @@ export default function BestPlaysHub() {
       {newsletterStatus ? <div className="mt-2 text-[10px] text-muted-foreground">{newsletterStatus}</div> : null}
     </div>
 
-    {view === 'games' ? <BestPlays /> : <div className="space-y-4">
+    {view === 'games' ? <><WnbaStrongest slate={wnba.data} loading={wnba.isLoading} /><BestPlays /></> : <div className="space-y-4">
       {results.isLoading ? <><Skeleton className="h-24 w-full" /><Skeleton className="h-24 w-full" /></> : results.isError ? <div className="rounded-lg border bg-card p-6 text-center text-sm text-muted-foreground">Today's verified outcomes are temporarily unavailable.</div> : <>
         <div className="grid grid-cols-3 gap-3">
           <div className="rounded-lg border bg-card p-3"><div className="text-xl font-bold">{results.data?.total ?? 0}</div><div className="text-[10px] text-muted-foreground">Graded today</div></div>
