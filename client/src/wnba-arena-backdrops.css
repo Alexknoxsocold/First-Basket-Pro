@@ -1,10 +1,35 @@
-/* Reliable arena-photo fallbacks for WNBA game cards.
-   The WNBA page already renders a venue backdrop from its team map. These
-   selectors cover expansion-team aliases and replace arena URLs that may be
-   missing upstream, while keeping the image soft enough for model data to
-   remain readable. */
+/*
+ * WNBA HOME-ARENA BACKDROPS — PRESENTATION ONLY
+ *
+ * This stylesheet is intentionally isolated from every WNBA model/API path.
+ * It reads the home-team logo already rendered in the card and paints a
+ * blurred arena photograph behind the UI. It never changes game data,
+ * jumpers, probabilities, rankings, lineups, odds, or model calculations.
+ *
+ * We use direct CDN image URLs instead of Wikimedia Special:FilePath redirect
+ * URLs because the redirect form was intermittently failing in Safari/Render.
+ * If any photo fails, the card simply keeps its normal dark background.
+ */
 
+article.relative.isolate:has(.justify-end img[alt="ATL logo"])::before,
+article.relative.isolate:has(.justify-end img[alt="CHI logo"])::before,
+article.relative.isolate:has(.justify-end img[alt="CON logo"])::before,
+article.relative.isolate:has(.justify-end img[alt="CT logo"])::before,
+article.relative.isolate:has(.justify-end img[alt="DAL logo"])::before,
+article.relative.isolate:has(.justify-end img[alt="GS logo"])::before,
+article.relative.isolate:has(.justify-end img[alt="GSV logo"])::before,
+article.relative.isolate:has(.justify-end img[alt="IND logo"])::before,
+article.relative.isolate:has(.justify-end img[alt="LA logo"])::before,
+article.relative.isolate:has(.justify-end img[alt="LAS logo"])::before,
+article.relative.isolate:has(.justify-end img[alt="LV logo"])::before,
+article.relative.isolate:has(.justify-end img[alt="MIN logo"])::before,
+article.relative.isolate:has(.justify-end img[alt="NY logo"])::before,
+article.relative.isolate:has(.justify-end img[alt="NYL logo"])::before,
+article.relative.isolate:has(.justify-end img[alt="PHX logo"])::before,
+article.relative.isolate:has(.justify-end img[alt="PHO logo"])::before,
 article.relative.isolate:has(.justify-end img[alt="SEA logo"])::before,
+article.relative.isolate:has(.justify-end img[alt="WAS logo"])::before,
+article.relative.isolate:has(.justify-end img[alt="WSH logo"])::before,
 article.relative.isolate:has(.justify-end img[alt="TOR logo"])::before,
 article.relative.isolate:has(.justify-end img[alt="TTO logo"])::before,
 article.relative.isolate:has(.justify-end img[alt="TEM logo"])::before,
@@ -18,25 +43,91 @@ article.relative.isolate:has(.justify-end img[alt="PDX logo"])::before {
   background-position: center;
   background-size: cover;
   background-repeat: no-repeat;
-  filter: blur(7px) saturate(.8);
-  opacity: .18;
-  transform: scale(1.06);
+  filter: blur(7px) saturate(.82);
+  opacity: .24;
+  transform: scale(1.07);
 }
 
-/* Seattle Storm — Climate Pledge Arena, basketball configuration. */
+/* Atlanta Dream — Gateway Center Arena. */
+article.relative.isolate:has(.justify-end img[alt="ATL logo"])::before {
+  background-image: url("https://www.exploregeorgia.org/sites/default/files/gateway-center-arena-college-park-credit-atl-airport-district-cvb.jpg");
+}
+
+/* Chicago Sky — Wintrust Arena. */
+article.relative.isolate:has(.justify-end img[alt="CHI logo"])::before {
+  background-image: url("https://upload.wikimedia.org/wikipedia/commons/thumb/9/97/Chicago_Sky_game_at_Wintrust_Arena.jpg/960px-Chicago_Sky_game_at_Wintrust_Arena.jpg");
+}
+
+/* Connecticut Sun — Mohegan Sun Arena. */
+article.relative.isolate:has(.justify-end img[alt="CON logo"])::before,
+article.relative.isolate:has(.justify-end img[alt="CT logo"])::before {
+  background-image: url("https://upload.wikimedia.org/wikipedia/commons/thumb/8/80/Mohegan_Sun_Arena_-_June_20,_2025.jpg/960px-Mohegan_Sun_Arena_-_June_20,_2025.jpg");
+}
+
+/* Dallas Wings — College Park Center. */
+article.relative.isolate:has(.justify-end img[alt="DAL logo"])::before {
+  background-image: url("https://upload.wikimedia.org/wikipedia/commons/thumb/a/aa/Interior_view_of_College_Park_Center.jpg/960px-Interior_view_of_College_Park_Center.jpg");
+}
+
+/* Golden State Valkyries — Chase Center. */
+article.relative.isolate:has(.justify-end img[alt="GS logo"])::before,
+article.relative.isolate:has(.justify-end img[alt="GSV logo"])::before {
+  background-image: url("https://upload.wikimedia.org/wikipedia/commons/thumb/0/07/Chase_Center.jpg/960px-Chase_Center.jpg");
+}
+
+/* Indiana Fever — Gainbridge Fieldhouse. */
+article.relative.isolate:has(.justify-end img[alt="IND logo"])::before {
+  background-image: url("https://upload.wikimedia.org/wikipedia/commons/thumb/6/63/Conseco_Fieldhouse.jpg/960px-Conseco_Fieldhouse.jpg");
+}
+
+/* Los Angeles Sparks — Crypto.com Arena. */
+article.relative.isolate:has(.justify-end img[alt="LA logo"])::before {
+  background-image: url("https://upload.wikimedia.org/wikipedia/commons/thumb/4/4a/Crypto.com_Arena_interior_2024.jpg/960px-Crypto.com_Arena_interior_2024.jpg");
+}
+
+/* Las Vegas Aces — Michelob Ultra Arena. */
+article.relative.isolate:has(.justify-end img[alt="LAS logo"])::before,
+article.relative.isolate:has(.justify-end img[alt="LV logo"])::before {
+  background-image: url("https://aviewfrommyseat.com/wallpaper/moviegal-20210616012954.jpg");
+}
+
+/* Minnesota Lynx — Target Center. */
+article.relative.isolate:has(.justify-end img[alt="MIN logo"])::before {
+  background-image: url("https://upload.wikimedia.org/wikipedia/commons/thumb/9/94/Lynx_game_at_target-center.jpg/960px-Lynx_game_at_target-center.jpg");
+}
+
+/* New York Liberty — Barclays Center. */
+article.relative.isolate:has(.justify-end img[alt="NY logo"])::before,
+article.relative.isolate:has(.justify-end img[alt="NYL logo"])::before {
+  background-image: url("https://upload.wikimedia.org/wikipedia/commons/thumb/0/05/2024_WNBA_Finals_Game_1_NYL_vs._MIN_10.10.2024_73.jpg/960px-2024_WNBA_Finals_Game_1_NYL_vs._MIN_10.10.2024_73.jpg");
+}
+
+/* Phoenix Mercury — Footprint Center. */
+article.relative.isolate:has(.justify-end img[alt="PHX logo"])::before,
+article.relative.isolate:has(.justify-end img[alt="PHO logo"])::before {
+  background-image: url("https://upload.wikimedia.org/wikipedia/commons/thumb/5/54/Footprint_Center_2022.jpg/960px-Footprint_Center_2022.jpg");
+}
+
+/* Seattle Storm — Climate Pledge Arena. */
 article.relative.isolate:has(.justify-end img[alt="SEA logo"])::before {
-  background-image: url("https://commons.wikimedia.org/wiki/Special:FilePath/Seattle%20Storm%20vs%20Atlanta%20Dream%20at%20Climate%20Pledge%20Arena%20%28July%202022%29%20-%2002.jpg");
+  background-image: url("https://upload.wikimedia.org/wikipedia/commons/thumb/2/28/Climate_Pledge_Arena_interior_with_plane.jpg/960px-Climate_Pledge_Arena_interior_with_plane.jpg");
+}
+
+/* Washington Mystics — Entertainment & Sports Arena. */
+article.relative.isolate:has(.justify-end img[alt="WAS logo"])::before,
+article.relative.isolate:has(.justify-end img[alt="WSH logo"])::before {
+  background-image: url("https://upload.wikimedia.org/wikipedia/commons/thumb/6/66/AmeriCup_Qualifying_Game_at_St._Elizabeths_East_Entertainment_and_Sports_Arena.jpg/960px-AmeriCup_Qualifying_Game_at_St._Elizabeths_East_Entertainment_and_Sports_Arena.jpg");
 }
 
 /* Toronto Tempo — Coca-Cola Coliseum. */
 article.relative.isolate:has(.justify-end img[alt="TOR logo"])::before,
 article.relative.isolate:has(.justify-end img[alt="TTO logo"])::before,
 article.relative.isolate:has(.justify-end img[alt="TEM logo"])::before {
-  background-image: url("https://commons.wikimedia.org/wiki/Special:FilePath/Coca-Cola%20Coliseum%2C%20Exhibition%20Place%2C%20Toronto%2C%20Ontario%20%2829901775271%29.jpg");
+  background-image: url("https://upload.wikimedia.org/wikipedia/commons/thumb/2/21/Coca-Cola_Coliseum%2C_Exhibition_Place%2C_Toronto%2C_Ontario_%2829901775271%29.jpg/960px-Coca-Cola_Coliseum%2C_Exhibition_Place%2C_Toronto%2C_Ontario_%2829901775271%29.jpg");
 }
 
-/* Portland Fire / Portland expansion aliases — Moda Center. */
+/* Portland Fire — Moda Center. */
 article.relative.isolate:has(.justify-end img[alt="POR logo"])::before,
 article.relative.isolate:has(.justify-end img[alt="PDX logo"])::before {
-  background-image: url("https://commons.wikimedia.org/wiki/Special:FilePath/Moda%20Center%20at%20the%20Rose%20Quarter.jpg");
+  background-image: url("https://upload.wikimedia.org/wikipedia/commons/thumb/0/05/Moda_Center_at_the_Rose_Quarter.jpg/960px-Moda_Center_at_the_Rose_Quarter.jpg");
 }
