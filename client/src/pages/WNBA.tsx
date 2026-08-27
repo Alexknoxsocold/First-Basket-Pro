@@ -92,17 +92,17 @@ const WNBA_ARENA_IMAGE: Record<string, string> = {
   GS: 'https://commons.wikimedia.org/wiki/Special:FilePath/Chase%20Center.jpg',
   GSV: 'https://commons.wikimedia.org/wiki/Special:FilePath/Chase%20Center.jpg',
   IND: 'https://commons.wikimedia.org/wiki/Special:FilePath/Gainbridge%20Fieldhouse.jpg',
-  LA: 'https://commons.wikimedia.org/wiki/Special:FilePath/Crypto.com%20Arena.jpg',
+  LA: 'https://commons.wikimedia.org/wiki/Special:FilePath/Crypto.com%20Arena%20interior%202024.jpg',
   LAS: 'https://commons.wikimedia.org/wiki/Special:FilePath/Michelob%20Ultra%20Arena.jpg',
   LV: 'https://commons.wikimedia.org/wiki/Special:FilePath/Michelob%20Ultra%20Arena.jpg',
   MIN: 'https://commons.wikimedia.org/wiki/Special:FilePath/Target%20Center.jpg',
-  NY: 'https://commons.wikimedia.org/wiki/Special:FilePath/Barclays%20Center%20basketball.jpg',
-  NYL: 'https://commons.wikimedia.org/wiki/Special:FilePath/Barclays%20Center%20basketball.jpg',
+  NY: 'https://commons.wikimedia.org/wiki/Special:FilePath/2024%20WNBA%20Finals%20Game%201%20NYL%20vs.%20MIN%2010.10.2024%2073.jpg',
+  NYL: 'https://commons.wikimedia.org/wiki/Special:FilePath/2024%20WNBA%20Finals%20Game%201%20NYL%20vs.%20MIN%2010.10.2024%2073.jpg',
   PHX: 'https://commons.wikimedia.org/wiki/Special:FilePath/Footprint%20Center.jpg',
   PHO: 'https://commons.wikimedia.org/wiki/Special:FilePath/Footprint%20Center.jpg',
-  SEA: 'https://commons.wikimedia.org/wiki/Special:FilePath/Climate%20Pledge%20Arena%20interior.jpg',
-  WAS: 'https://commons.wikimedia.org/wiki/Special:FilePath/Entertainment%20and%20Sports%20Arena.jpg',
-  WSH: 'https://commons.wikimedia.org/wiki/Special:FilePath/Entertainment%20and%20Sports%20Arena.jpg',
+  SEA: 'https://commons.wikimedia.org/wiki/Special:FilePath/Seattle%20Storm%20vs%20Atlanta%20Dream%20at%20Climate%20Pledge%20Arena%20%28July%202022%29%20-%2002.jpg',
+  WAS: 'https://commons.wikimedia.org/wiki/Special:FilePath/AmeriCup%20Qualifying%20Game%20at%20St.%20Elizabeths%20East%20Entertainment%20and%20Sports%20Arena.jpg',
+  WSH: 'https://commons.wikimedia.org/wiki/Special:FilePath/AmeriCup%20Qualifying%20Game%20at%20St.%20Elizabeths%20East%20Entertainment%20and%20Sports%20Arena.jpg',
 };
 
 function wnbaLogo(team: string) {
@@ -114,25 +114,20 @@ function ArenaBackdrop({ homeTeam }: { homeTeam: string }) {
   const key = homeTeam.toUpperCase();
   const src = WNBA_ARENA_IMAGE[key];
   const tint = WNBA_TEAM_BG[key] || '#1F2937';
-  const logo = wnbaLogo(homeTeam);
   return (
     <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden" aria-hidden="true">
-      <div className="absolute inset-0 opacity-40" style={{ background: `linear-gradient(135deg, ${tint}88, transparent 58%)` }} />
-      <img
-        src={src || logo}
-        alt=""
-        loading="lazy"
-        className="absolute inset-[-20px] h-[calc(100%+40px)] w-[calc(100%+40px)] scale-110 object-cover opacity-[0.30] blur-[5px] saturate-90"
-        onError={e => {
-          if (e.currentTarget.src !== logo) e.currentTarget.src = logo;
-          else e.currentTarget.style.display = 'none';
-        }}
-      />
-      <div className="absolute -right-8 -top-8 h-40 w-40 opacity-[0.13] sm:h-52 sm:w-52">
-        <img src={logo} alt="" className="h-full w-full object-contain blur-[1px]" />
-      </div>
-      <div className="absolute inset-0 bg-gradient-to-b from-background/52 via-background/68 to-background/88" />
-      <div className="absolute inset-0 bg-gradient-to-r from-background/30 via-transparent to-background/38" />
+      <div className="absolute inset-0 opacity-20" style={{ background: `linear-gradient(135deg, ${tint}44, transparent 58%)` }} />
+      {src ? (
+        <img
+          src={src}
+          alt=""
+          loading="lazy"
+          className="absolute inset-[-18px] h-[calc(100%+36px)] w-[calc(100%+36px)] scale-105 object-cover opacity-[0.22] blur-[6px] saturate-75"
+          onError={e => { e.currentTarget.style.display = 'none'; }}
+        />
+      ) : null}
+      <div className="absolute inset-0 bg-gradient-to-b from-background/64 via-background/76 to-background/94" />
+      <div className="absolute inset-0 bg-gradient-to-r from-background/32 via-transparent to-background/42" />
     </div>
   );
 }
@@ -394,33 +389,24 @@ function GameCard({ game, showAll }: { game: Game; showAll: boolean }) {
               ? <Badge className="border-emerald-500/30 bg-emerald-500/15 text-emerald-600 dark:text-emerald-300">STARTERS CONFIRMED</Badge>
               : game.lineupStatus === 'waiting'
                 ? <Badge variant="outline">WAITING FOR LINEUP</Badge>
-                : <Badge variant="outline" className="border-yellow-500/30 bg-yellow-500/[.08] text-yellow-700 dark:text-yellow-300">PROJECTED LINEUP</Badge>}
-            <Badge variant="outline" className="text-[9px]">{game.status}</Badge>
+                : <Badge variant="outline" className="border-yellow-500/35 bg-yellow-500/10 text-yellow-700 dark:text-yellow-300">PROJECTED LINEUP</Badge>}
+            <Badge variant="outline">{game.status}</Badge>
           </div>
         </div>
-
-        {game.lineupStatus === 'waiting' ? (
-          <div className="bg-background/62 p-8 text-center backdrop-blur-sm">
-            <AlertCircle className="mx-auto h-6 w-6 text-muted-foreground/40" />
-            <div className="mt-2 text-sm font-semibold">Waiting for reliable lineup data</div>
-            <div className="mt-1 text-[10px] text-muted-foreground">This matchup will populate automatically when enough starter information is available.</div>
-          </div>
-        ) : (
-          <div className="space-y-3 bg-background/48 p-4 backdrop-blur-[2px]">
-            <TipCard game={game} />
-            <button type="button" onClick={() => setExpanded(v => !v)} className="flex w-full items-center justify-between rounded-xl border bg-background/65 px-3 py-2.5 text-left backdrop-blur-sm transition-colors hover:bg-background/80" aria-expanded={expanded}>
-              <div>
-                <div className="text-xs font-bold">Player rankings</div>
-                <div className="mt-0.5 text-[9px] text-muted-foreground">Tap a player to reveal verified first-basket and opening-shot details.</div>
-              </div>
-              <div className="flex items-center gap-2">
-                <Badge variant="outline" className="text-[9px]">{game.candidates.length} players</Badge>
-                <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${expanded ? 'rotate-180' : ''}`} />
-              </div>
-            </button>
-            {expanded ? <div className="space-y-2">{game.candidates.map(p => <CandidateRow key={`${game.id}-${p.team}-${p.name}`} p={p} projected={!confirmed} />)}</div> : null}
-          </div>
-        )}
+        <div className="space-y-3 bg-background/48 p-4 backdrop-blur-[2px]">
+          <TipCard game={game} />
+          {game.candidates.length ? (
+            <div className="rounded-xl border border-border/70 bg-background/62 p-3 backdrop-blur-sm">
+              <button type="button" onClick={() => setExpanded(v => !v)} className="flex w-full items-center justify-between gap-3 text-left">
+                <div><div className="text-xs font-bold">Player rankings</div><div className="mt-0.5 text-[9px] text-muted-foreground">Tap a player to reveal verified first-basket and opening-shot details.</div></div>
+                <div className="flex items-center gap-2"><Badge variant="outline" className="text-[8px]">{game.candidates.length} players</Badge><ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${expanded ? 'rotate-180' : ''}`} /></div>
+              </button>
+              {expanded ? <div className="mt-3 space-y-2">{game.candidates.map(p => <CandidateRow key={`${game.id}-${p.team}-${p.name}`} p={p} projected={!confirmed} />)}</div> : null}
+            </div>
+          ) : (
+            <div className="rounded-xl border border-dashed bg-background/50 p-5 text-center text-xs text-muted-foreground">Player model data is still building for this matchup.</div>
+          )}
+        </div>
       </div>
     </article>
   );
