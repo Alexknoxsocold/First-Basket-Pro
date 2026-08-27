@@ -1,7 +1,8 @@
 import type { Express } from 'express';
 import cron from 'node-cron';
 import { requireAdmin } from './auth';
-import { ensureWnbaSchema, getWnbaDiagnostics, getWnbaSlate, lockWnbaPredictions, runWnbaTracker } from './wnbaFirstBasket';
+import { ensureWnbaSchema, getWnbaDiagnostics, lockWnbaPredictions, runWnbaTracker } from './wnbaFirstBasket';
+import { getResilientWnbaSlate } from './wnbaSafeSlate';
 import { getWnbaHistory } from './wnbaHistory';
 import { backfillWnbaHistory, refreshRecentWnbaEvidence } from './wnbaBackfill';
 import { ensureWnbaEvidenceSchema } from './wnbaEvidence';
@@ -21,7 +22,7 @@ let started=false;
 export function registerWnbaFeature(app:Express):void{
   void Promise.all([ensureWnbaSchema(),ensureWnbaEvidenceSchema(),ensureWnbaTipBenchmarkSchema()]).catch(e=>console.error('[WNBA] Schema initialization failed:',e));
 
-  app.get('/api/wnba/first-basket',async(_req,res)=>{try{const slate=await getWnbaSlate();const calibrated=await applyCompetitorCalibrationToSlate(slate);res.setHeader('Cache-Control','public, max-age=60, stale-while-revalidate=180');res.json(calibrated)}catch(e){console.error('[WNBA] Slate error:',e);res.status(502).json({error:'Unable to load WNBA First Basket data'})}});
+  app.get('/api/wnba/first-basket',async(_req,res)=>{try{const slate=await getResilientWnbaSlate();const calibrated=await applyCompetitorCalibrationToSlate(slate);res.setHeader('Cache-Control','public, max-age=60, stale-while-revalidate=180');res.json(calibrated)}catch(e){console.error('[WNBA] Slate error:',e);res.status(502).json({error:'Unable to load WNBA First Basket data'})}});
   app.get('/api/wnba/props',async(_req,res)=>{try{res.setHeader('Cache-Control','public, max-age=120, stale-while-revalidate=300');res.json(await getWnbaPropProjections())}catch(e){console.error('[WNBA Props] Projection error:',e);res.status(502).json({error:'Unable to load WNBA prop projections'})}});
   app.get('/api/wnba/history',async(_req,res)=>{try{res.setHeader('Cache-Control','no-store');res.json(await getWnbaHistory())}catch(e){console.error('[WNBA] History error:',e);res.status(500).json({error:'Unable to load WNBA First Basket history'})}});
 
@@ -57,9 +58,9 @@ export function registerWnbaFeature(app:Express):void{
 
   cron.schedule('*/15 10-23 * * *',async()=>{try{const r=await lockWnbaPredictions();if(r.eligible||r.locked)console.log(`[WNBA] Lock pass: ${r.locked} locked, ${r.waiting} waiting.`)}catch(e){console.warn('[WNBA] Lock pass failed:',e)}},{timezone:'America/New_York'});
   cron.schedule('*/30 12-23 * * *',async()=>{try{const r=await runWnbaTracker();const g=await gradePendingCompetitorTipProjections();if(r.processed||r.unresolved)console.log(`[WNBA] Strict tracker: ${r.processed} processed, ${r.unresolved} unresolved.`);if(g.graded)console.log(`[WNBA Benchmark] Graded ${g.graded} competitor tip projection(s).`)}catch(e){console.warn('[WNBA] Strict tracker failed:',e)}},{timezone:'America/New_York'});
-  cron.schedule('*/30 0-3 * * *',async()=>{try{const r=await runWnbaTracker();const g=await gradePendingCompetitorTipProjections();if(r.processed||r.unresolved)console.log(`[WNBA] Late strict tracker: ${r.processed} processed, ${r.unresolved} unresolved.`);if(g.graded)console.log(`[WNBA Benchmark] Late grading: ${g.graded} competitor projection(s).`)}catch(e){console.warn('[WNBA] Late strict tracker failed:',e)}},{timezone:'America/New_York'});
+  cron.schedule('*/30 0-3 * * *',async()=>{try{const r=await runWnbaTracker();const g=await gradePendingCompetitorTipProjections();if(r.processed||r.unresolved)console.log(`[WNBA] Late strict tracker: ${r.processed} processed, ${r.unresolved} unresolved.`);if(g.graded)console.log(`[WNBA Benchmark] Late grading: ${g.graded} competitor tip projection(s).`)}catch(e){console.warn('[WNBA] Late tracker failed:',e)}},{timezone:'America/New_York'});
   cron.schedule('23 * * * *',async()=>{try{const [r,v]=await Promise.all([backfillWnbaHistory(7,24),refreshRecentWnbaEvidence(10)]);const g=await gradePendingCompetitorTipProjections();console.log(`[WNBA] Strict rebuild: ${r.gamesAdded} verified, ${r.unresolved} rejected; evidence refreshed ${v.updated}/${v.checked}${r.done?' (season complete)':''}; competitor grading ${g.graded}.`)}catch(e){console.warn('[WNBA] Strict rebuild failed:',e)}},{timezone:'America/New_York'});
-  void getWnbaSlate(true).then(s=>console.log(`[WNBA] Warmed ${s.games.length} games across ${s.teams.length} teams.`)).catch(e=>console.warn('[WNBA] Warm failed:',e));
+  void getResilientWnbaSlate(true).then(s=>console.log(`[WNBA] Warmed ${s.games.length} games across ${s.teams.length} teams.`)).catch(e=>console.warn('[WNBA] Warm failed:',e));
   void Promise.all([runWnbaTracker(),backfillWnbaHistory(7,24),refreshRecentWnbaEvidence(10)]).then(async([t,r,v])=>{const g=await gradePendingCompetitorTipProjections();console.log(`[WNBA] Startup strict tracker ${t.processed} processed/${t.unresolved} unresolved; rebuild added ${r.gamesAdded}; evidence ${v.updated}/${v.checked}; competitor grading ${g.graded}.`)}).catch(e=>console.warn('[WNBA] Startup strict maintenance failed:',e));
-  console.log('[WNBA] First Basket initialized: projections, locks, strict grading, competitor calibration research, and hourly strict history rebuild active.');
+  console.log('[WNBA] First Basket initialized: projections, locks, strict grading, competitor calibration research, persistent slate fail-safe, and hourly strict history rebuild active.');
 }
