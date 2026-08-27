@@ -114,19 +114,25 @@ function ArenaBackdrop({ homeTeam }: { homeTeam: string }) {
   const key = homeTeam.toUpperCase();
   const src = WNBA_ARENA_IMAGE[key];
   const tint = WNBA_TEAM_BG[key] || '#1F2937';
+  const logo = wnbaLogo(homeTeam);
   return (
     <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden" aria-hidden="true">
-      <div className="absolute inset-0 opacity-25" style={{ background: `linear-gradient(135deg, ${tint}55, transparent 55%)` }} />
-      {src ? (
-        <img
-          src={src}
-          alt=""
-          className="absolute inset-[-18px] h-[calc(100%+36px)] w-[calc(100%+36px)] scale-105 object-cover opacity-[0.13] blur-[6px] saturate-75"
-          onError={e => { e.currentTarget.style.display = 'none'; }}
-        />
-      ) : null}
-      <div className="absolute inset-0 bg-gradient-to-b from-background/70 via-background/82 to-background/96" />
-      <div className="absolute inset-0 bg-gradient-to-r from-background/40 via-transparent to-background/45" />
+      <div className="absolute inset-0 opacity-40" style={{ background: `linear-gradient(135deg, ${tint}88, transparent 58%)` }} />
+      <img
+        src={src || logo}
+        alt=""
+        loading="lazy"
+        className="absolute inset-[-20px] h-[calc(100%+40px)] w-[calc(100%+40px)] scale-110 object-cover opacity-[0.30] blur-[5px] saturate-90"
+        onError={e => {
+          if (e.currentTarget.src !== logo) e.currentTarget.src = logo;
+          else e.currentTarget.style.display = 'none';
+        }}
+      />
+      <div className="absolute -right-8 -top-8 h-40 w-40 opacity-[0.13] sm:h-52 sm:w-52">
+        <img src={logo} alt="" className="h-full w-full object-contain blur-[1px]" />
+      </div>
+      <div className="absolute inset-0 bg-gradient-to-b from-background/52 via-background/68 to-background/88" />
+      <div className="absolute inset-0 bg-gradient-to-r from-background/30 via-transparent to-background/38" />
     </div>
   );
 }
@@ -262,26 +268,29 @@ function CandidateRow({ p, projected }: { p: Candidate; projected: boolean }) {
 function StrongestCard({ game, p }: { game: Game; p: Candidate }) {
   const best = p.rank === 1;
   return (
-    <article className={`overflow-hidden rounded-xl border shadow-sm ${best ? 'border-emerald-500/30 bg-emerald-500/[.05]' : 'border-primary/20 bg-card'}`}>
-      <div className={`flex items-center justify-between gap-3 border-b px-4 py-3 ${best ? 'bg-emerald-500/[.08]' : 'bg-muted/20'}`}>
-        <div>
-          <div className="text-[10px] text-muted-foreground">{game.awayTeam} @ {game.homeTeam} · {time(game.date)}</div>
-          <div className="mt-0.5 text-sm font-bold">{p.name}</div>
-        </div>
-        <div className="text-right">
-          <Badge className={best ? 'bg-emerald-500/15 text-emerald-500 border-emerald-500/30' : 'bg-primary/10 text-primary border-primary/25'}>{best ? 'BEST PLAY' : 'STRONG PLAY'}</Badge>
-          <div className="mt-1 font-mono text-lg font-black">{p.probability.toFixed(1)}%</div>
-        </div>
-      </div>
-      <div className="flex items-center gap-3 p-4">
-        <PlayerHeadshot p={p} large />
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge variant="secondary" className="text-[9px]">{p.team}</Badge>
-            <span className="text-[10px] text-muted-foreground">{game.lineupStatus === 'confirmed' ? 'Confirmed starters' : 'Projected lineup'}</span>
+    <article className={`relative isolate overflow-hidden rounded-xl border shadow-sm ${best ? 'border-emerald-500/30 bg-emerald-500/[.05]' : 'border-primary/20 bg-card'}`}>
+      <ArenaBackdrop homeTeam={game.homeTeam} />
+      <div className="relative z-10">
+        <div className={`flex items-center justify-between gap-3 border-b px-4 py-3 ${best ? 'bg-emerald-500/[.08]' : 'bg-background/55'}`}>
+          <div>
+            <div className="text-[10px] text-muted-foreground">{game.awayTeam} @ {game.homeTeam} · {time(game.date)}</div>
+            <div className="mt-0.5 text-sm font-bold">{p.name}</div>
           </div>
-          <div className="mt-1 text-[10px] text-muted-foreground">{p.position} · {p.avgPoints.toFixed(1)} PPG · {p.avgFga.toFixed(1)} FGA</div>
-          <div className="mt-1 text-[10px] text-muted-foreground">Verified FB: {p.currentFirstBaskets}/{p.currentGamesTracked} ({rate(p.currentFirstBaskets, p.currentGamesTracked)})</div>
+          <div className="text-right">
+            <Badge className={best ? 'bg-emerald-500/15 text-emerald-500 border-emerald-500/30' : 'bg-primary/10 text-primary border-primary/25'}>{best ? 'BEST PLAY' : 'STRONG PLAY'}</Badge>
+            <div className="mt-1 font-mono text-lg font-black">{p.probability.toFixed(1)}%</div>
+          </div>
+        </div>
+        <div className="flex items-center gap-3 bg-background/42 p-4 backdrop-blur-[2px]">
+          <PlayerHeadshot p={p} large />
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="secondary" className="text-[9px]">{p.team}</Badge>
+              <span className="text-[10px] text-muted-foreground">{game.lineupStatus === 'confirmed' ? 'Confirmed starters' : 'Projected lineup'}</span>
+            </div>
+            <div className="mt-1 text-[10px] text-muted-foreground">{p.position} · {p.avgPoints.toFixed(1)} PPG · {p.avgFga.toFixed(1)} FGA</div>
+            <div className="mt-1 text-[10px] text-muted-foreground">Verified FB: {p.currentFirstBaskets}/{p.currentGamesTracked} ({rate(p.currentFirstBaskets, p.currentGamesTracked)})</div>
+          </div>
         </div>
       </div>
     </article>
