@@ -1,7 +1,7 @@
 import type { Express } from 'express';
 import cron from 'node-cron';
 import { requireAdmin } from './auth';
-import { ensureWnbaSchema, getWnbaDiagnostics, getWnbaSlate, lockWnbaPredictions, runWnbaTracker } from './wnbaFirstBasket';
+import { ensureWnbaSchema, getWnbaDiagnostics, getWnbaSlate, lockWnbaPredictions, runWnbaTracker, type WnbaSlate } from './wnbaFirstBasket';
 import { getWnbaHistory } from './wnbaHistory';
 import { backfillWnbaHistory, refreshRecentWnbaEvidence } from './wnbaBackfill';
 import { ensureWnbaEvidenceSchema } from './wnbaEvidence';
@@ -18,10 +18,55 @@ import {
 } from './wnbaTipBenchmark';
 
 let started=false;
+let lastNonEmptySlate: WnbaSlate | null = null;
+
+function etCalendarDate(value = new Date()): string {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit'
+  }).formatToParts(value);
+  const y = parts.find(p => p.type === 'year')?.value;
+  const m = parts.find(p => p.type === 'month')?.value;
+  const d = parts.find(p => p.type === 'day')?.value;
+  return `${y}-${m}-${d}`;
+}
+
+function slateEtDate(slate: WnbaSlate): string | null {
+  const first = slate.games[0]?.date;
+  if (!first) return null;
+  const parsed = new Date(first);
+  return Number.isNaN(parsed.getTime()) ? null : etCalendarDate(parsed);
+}
+
+async function getGameDaySlate(): Promise<WnbaSlate> {
+  let slate = await getWnbaSlate();
+
+  // ESPN can briefly return an empty scoreboard while live game data is changing.
+  // Never let that transient response erase today's WNBA page. Retry once without
+  // the internal slate cache, then fall back to the last known non-empty slate for
+  // the same Eastern calendar day only.
+  if (!slate.games.length) {
+    const refreshed = await getWnbaSlate(true);
+    if (refreshed.games.length) slate = refreshed;
+  }
+
+  const today = etCalendarDate();
+  if (slate.games.length) {
+    if (slateEtDate(slate) === today) lastNonEmptySlate = slate;
+    return slate;
+  }
+
+  if (lastNonEmptySlate && slateEtDate(lastNonEmptySlate) === today) {
+    console.warn('[WNBA] ESPN returned an empty current-day slate; serving last non-empty ET game-day slate.');
+    return lastNonEmptySlate;
+  }
+
+  return slate;
+}
+
 export function registerWnbaFeature(app:Express):void{
   void Promise.all([ensureWnbaSchema(),ensureWnbaEvidenceSchema(),ensureWnbaTipBenchmarkSchema()]).catch(e=>console.error('[WNBA] Schema initialization failed:',e));
 
-  app.get('/api/wnba/first-basket',async(_req,res)=>{try{const slate=await getWnbaSlate();const calibrated=await applyCompetitorCalibrationToSlate(slate);res.setHeader('Cache-Control','public, max-age=60, stale-while-revalidate=180');res.json(calibrated)}catch(e){console.error('[WNBA] Slate error:',e);res.status(502).json({error:'Unable to load WNBA First Basket data'})}});
+  app.get('/api/wnba/first-basket',async(_req,res)=>{try{const slate=await getGameDaySlate();const calibrated=await applyCompetitorCalibrationToSlate(slate);res.setHeader('Cache-Control','no-store, max-age=0');res.setHeader('Pragma','no-cache');res.json(calibrated)}catch(e){console.error('[WNBA] Slate error:',e);res.status(502).json({error:'Unable to load WNBA First Basket data'})}});
   app.get('/api/wnba/props',async(_req,res)=>{try{res.setHeader('Cache-Control','public, max-age=120, stale-while-revalidate=300');res.json(await getWnbaPropProjections())}catch(e){console.error('[WNBA Props] Projection error:',e);res.status(502).json({error:'Unable to load WNBA prop projections'})}});
   app.get('/api/wnba/history',async(_req,res)=>{try{res.setHeader('Cache-Control','no-store');res.json(await getWnbaHistory())}catch(e){console.error('[WNBA] History error:',e);res.status(500).json({error:'Unable to load WNBA First Basket history'})}});
 
@@ -57,9 +102,9 @@ export function registerWnbaFeature(app:Express):void{
 
   cron.schedule('*/15 10-23 * * *',async()=>{try{const r=await lockWnbaPredictions();if(r.eligible||r.locked)console.log(`[WNBA] Lock pass: ${r.locked} locked, ${r.waiting} waiting.`)}catch(e){console.warn('[WNBA] Lock pass failed:',e)}},{timezone:'America/New_York'});
   cron.schedule('*/30 12-23 * * *',async()=>{try{const r=await runWnbaTracker();const g=await gradePendingCompetitorTipProjections();if(r.processed||r.unresolved)console.log(`[WNBA] Strict tracker: ${r.processed} processed, ${r.unresolved} unresolved.`);if(g.graded)console.log(`[WNBA Benchmark] Graded ${g.graded} competitor tip projection(s).`)}catch(e){console.warn('[WNBA] Strict tracker failed:',e)}},{timezone:'America/New_York'});
-  cron.schedule('*/30 0-3 * * *',async()=>{try{const r=await runWnbaTracker();const g=await gradePendingCompetitorTipProjections();if(r.processed||r.unresolved)console.log(`[WNBA] Late strict tracker: ${r.processed} processed, ${r.unresolved} unresolved.`);if(g.graded)console.log(`[WNBA Benchmark] Late grading: ${g.graded} competitor projection(s).`)}catch(e){console.warn('[WNBA] Late strict tracker failed:',e)}},{timezone:'America/New_York'});
+  cron.schedule('*/30 0-3 * * *',async()=>{try{const r=await runWnbaTracker();const g=await gradePendingCompetitorTipProjections();if(r.processed||r.unresolved)console.log(`[WNBA] Late strict tracker: ${r.processed} processed, ${r.unresolved} unresolved.`);if(g.graded)console.log(`[WNBA Benchmark] Late grading: ${g.graded} competitor tip projection(s).`)}catch(e){console.warn('[WNBA] Late strict tracker failed:',e)}},{timezone:'America/New_York'});
   cron.schedule('23 * * * *',async()=>{try{const [r,v]=await Promise.all([backfillWnbaHistory(7,24),refreshRecentWnbaEvidence(10)]);const g=await gradePendingCompetitorTipProjections();console.log(`[WNBA] Strict rebuild: ${r.gamesAdded} verified, ${r.unresolved} rejected; evidence refreshed ${v.updated}/${v.checked}${r.done?' (season complete)':''}; competitor grading ${g.graded}.`)}catch(e){console.warn('[WNBA] Strict rebuild failed:',e)}},{timezone:'America/New_York'});
-  void getWnbaSlate(true).then(s=>console.log(`[WNBA] Warmed ${s.games.length} games across ${s.teams.length} teams.`)).catch(e=>console.warn('[WNBA] Warm failed:',e));
+  void getWnbaSlate(true).then(s=>{if(s.games.length&&slateEtDate(s)===etCalendarDate())lastNonEmptySlate=s;console.log(`[WNBA] Warmed ${s.games.length} games across ${s.teams.length} teams.`)}).catch(e=>console.warn('[WNBA] Warm failed:',e));
   void Promise.all([runWnbaTracker(),backfillWnbaHistory(7,24),refreshRecentWnbaEvidence(10)]).then(async([t,r,v])=>{const g=await gradePendingCompetitorTipProjections();console.log(`[WNBA] Startup strict tracker ${t.processed} processed/${t.unresolved} unresolved; rebuild added ${r.gamesAdded}; evidence ${v.updated}/${v.checked}; competitor grading ${g.graded}.`)}).catch(e=>console.warn('[WNBA] Startup strict maintenance failed:',e));
   console.log('[WNBA] First Basket initialized: projections, locks, strict grading, competitor calibration research, and hourly strict history rebuild active.');
 }
