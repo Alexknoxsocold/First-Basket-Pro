@@ -49,6 +49,7 @@ type EspnCompetitor={ homeAway?:string; team?:{ abbreviation?:string; displayNam
 type EspnEvent={ id?:string; date?:string; status?:{type?:{description?:string;state?:string}}; competitions?:{competitors?:EspnCompetitor[]}[] };
 
 let cache:{expiresAt:number;value:NflMarketFeed}|null=null;
+let espnFallbackCount=0;
 
 function normalize(v:string){return v.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]/g,'');}
 function americanImplied(odds:number){if(!Number.isFinite(odds)||odds===0)return null;return odds>0?100/(odds+100):Math.abs(odds)/(Math.abs(odds)+100);}
@@ -69,9 +70,33 @@ function oddsRows(payload:unknown):PropOdds[]{
   return[];
 }
 
-async function fetchJson<T>(url:string,timeout=9000):Promise<T>{
+async function fetchOnce<T>(url:string,timeout:number):Promise<T>{
   const c=new AbortController();const t=setTimeout(()=>c.abort(),timeout);
-  try{const r=await fetch(url,{signal:c.signal,headers:{'User-Agent':'PreziTools/1.0'}});if(!r.ok)throw new Error(`HTTP ${r.status}`);return await r.json() as T;}finally{clearTimeout(t);}
+  try{
+    const r=await fetch(url,{signal:c.signal,headers:{
+      'User-Agent':'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/126 Safari/537.36',
+      'Accept':'application/json,text/plain,*/*',
+      'Referer':'https://www.espn.com/',
+    }});
+    if(!r.ok)throw new Error(`HTTP ${r.status}`);
+    return await r.json() as T;
+  }finally{clearTimeout(t);}
+}
+
+async function fetchJson<T>(url:string,timeout=9000):Promise<T>{
+  try{return await fetchOnce<T>(url,timeout);}catch(primaryError){
+    try{
+      const parsed=new URL(url);
+      if(parsed.hostname!=='site.api.espn.com')throw primaryError;
+      parsed.hostname='site.web.api.espn.com';
+      const value=await fetchOnce<T>(parsed.toString(),timeout);
+      espnFallbackCount++;
+      console.warn(`[NFL Markets] ESPN primary denied; mirror succeeded (${parsed.pathname})`);
+      return value;
+    }catch(fallbackError){
+      throw new Error(`ESPN fetch failed: primary=${primaryError instanceof Error?primaryError.message:String(primaryError)} fallback=${fallbackError instanceof Error?fallbackError.message:String(fallbackError)}`);
+    }
+  }
 }
 
 function quote(book:PropBook,outcome:PropOutcome):NflBookQuote|null{
@@ -170,6 +195,7 @@ export async function fetchNflMarkets():Promise<NflMarketFeed>{
     game.marketStatus=(game.qualified.moneyline||game.qualified.anytimeTd||game.qualified.firstTd)?'available':'unavailable';
   }
 
+  console.log(`[NFL Markets] slate=${games.length} matched=${propRowsByGame.size} qualified=${games.filter(g=>g.marketStatus==='available').length} espnFallbacks=${espnFallbackCount}`);
   const value:NflMarketFeed={source:'ESPN + PropLine + PreziTools NFL Model',marketStatus:games.some(g=>g.marketStatus==='available')?'available':'unavailable',updatedAt:new Date().toISOString(),games,thresholds};
   cache={expiresAt:Date.now()+CACHE_MS,value};return value;
 }
