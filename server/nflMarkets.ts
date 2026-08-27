@@ -1,3 +1,4 @@
+import './espnFetchPatch.js';
 import { propLineGet } from './propLineClient.js';
 import { modelMoneyline, qualifyTdMarkets, type ModelConfidence } from './nflModels.js';
 
