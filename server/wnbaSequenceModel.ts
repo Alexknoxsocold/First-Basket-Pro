@@ -1,9 +1,3 @@
-import {
-  americanOddsToImpliedProbability,
-  expectedValuePerDollar,
-  modelEdgePoints,
-  qualifiesAsMarketValue,
-} from "./odds/normalized.js";
 import type { WnbaCandidate, WnbaGame, WnbaSlate } from "./wnbaFirstBasket.js";
 
 export type WnbaSequenceCandidate = WnbaCandidate & {
@@ -12,6 +6,7 @@ export type WnbaSequenceCandidate = WnbaCandidate & {
   sequenceAdjustment: number;
   projectedFirstPossessionPct: number | null;
   sequenceWeight: number;
+  sequenceRank: number;
 };
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
@@ -39,61 +34,56 @@ function sequenceTarget(candidate: WnbaCandidate, possessionPct: number): number
   return clamp(base * possessionMultiplier * openingMultiplier * finishingMultiplier, 1, 35);
 }
 
-function refreshMarket(candidate: WnbaSequenceCandidate): WnbaSequenceCandidate {
-  const market = candidate.marketOdds;
-  if (!market || !Number.isFinite(market.bestOdds)) return candidate;
-  const bestOdds = market.bestOdds;
-  const impliedProbability = americanOddsToImpliedProbability(bestOdds) * 100;
-  const edgePoints = modelEdgePoints(candidate.probability, bestOdds);
-  const expectedValue = expectedValuePerDollar(candidate.probability, bestOdds);
-  return {
-    ...candidate,
-    marketOdds: {
-      ...market,
-      impliedProbability,
-      edgePoints,
-      expectedValue,
-      qualifiesValue: candidate.rank <= 3 && qualifiesAsMarketValue(candidate.probability, bestOdds),
-    },
-  };
-}
-
 function applyToGame(game: WnbaGame): WnbaGame {
   if (!game.candidates.length) return game;
   const weight = confidenceWeight(game.tipSignal.confidence);
-  if (weight <= 0 || game.tipSignal.awayTipPct === null || game.tipSignal.homeTipPct === null) return game;
+  const hasPossessionSignal = weight > 0 && game.tipSignal.awayTipPct !== null && game.tipSignal.homeTipPct !== null;
 
-  const candidates = game.candidates.map(candidate => {
-    const possessionPct = candidate.team === game.awayTeam ? game.tipSignal.awayTipPct! : game.tipSignal.homeTipPct!;
-    const target = sequenceTarget(candidate, possessionPct);
-    const probability = Math.round(clamp(candidate.probability * (1 - weight) + target * weight, 1, 35) * 10) / 10;
+  const shadow = game.candidates.map(candidate => {
+    const possessionPct = hasPossessionSignal
+      ? (candidate.team === game.awayTeam ? game.tipSignal.awayTipPct! : game.tipSignal.homeTipPct!)
+      : null;
+    const target = possessionPct === null ? candidate.probability : sequenceTarget(candidate, possessionPct);
+    const sequenceProbability = Math.round(clamp(candidate.probability * (1 - weight) + target * weight, 1, 35) * 10) / 10;
     return {
       ...candidate,
-      probability,
       baseProbability: candidate.probability,
-      sequenceProbability: probability,
-      sequenceAdjustment: Math.round((probability - candidate.probability) * 10) / 10,
-      projectedFirstPossessionPct: Math.round(possessionPct * 10) / 10,
+      sequenceProbability,
+      sequenceAdjustment: Math.round((sequenceProbability - candidate.probability) * 10) / 10,
+      projectedFirstPossessionPct: possessionPct === null ? null : Math.round(possessionPct * 10) / 10,
       sequenceWeight: weight,
+      sequenceRank: candidate.rank,
     } satisfies WnbaSequenceCandidate;
   });
 
-  candidates.sort((a, b) => b.probability - a.probability || b.avgFga - a.avgFga || b.avgMinutes - a.avgMinutes);
-  const ranked = candidates.map((candidate, index) => refreshMarket({ ...candidate, rank: index + 1 }));
-  return { ...game, candidates: ranked, topPick: ranked[0] ?? null };
+  const sequenceRanks = [...shadow]
+    .sort((a, b) => b.sequenceProbability - a.sequenceProbability || b.avgFga - a.avgFga || b.avgMinutes - a.avgMinutes)
+    .map((candidate, index) => ({ key: `${candidate.team}|${candidate.name}`.toLowerCase(), rank: index + 1 }));
+  const rankByPlayer = new Map(sequenceRanks.map(item => [item.key, item.rank]));
+
+  // Keep public probability, public rank, topPick and market EV tied to the
+  // proven/locked model until this challenger is graded out-of-sample. The
+  // sequence fields are research telemetry only, so users never see one number
+  // while the prediction ledger records another.
+  const candidates = shadow.map(candidate => ({
+    ...candidate,
+    sequenceRank: rankByPlayer.get(`${candidate.team}|${candidate.name}`.toLowerCase()) ?? candidate.rank,
+  }));
+  return { ...game, candidates };
 }
 
 /**
- * Adds a conservative possession-first layer only when verified tip evidence is
- * emerging or usable. The legacy player model remains the majority weight, so
- * a small WNBA sample cannot suddenly rewrite the board.
+ * Possession-first challenger: tip win -> opening-shot opportunity -> finishing.
+ * It is intentionally shadow-only until enough graded games prove that it
+ * improves calibration. Live probabilities/ranks and locked predictions remain
+ * unchanged.
  */
 export function applyWnbaSequenceModel(slate: WnbaSlate): WnbaSlate {
   const games = slate.games.map(applyToGame);
   return {
     ...slate,
     games,
-    modelVersion: `${slate.modelVersion}+SEQ-V1`,
-    source: `${slate.source} + conservative possession-first sequence weighting (tip win -> opening shot opportunity -> finishing)`,
+    modelVersion: `${slate.modelVersion}+SEQ-SHADOW-V1`,
+    source: `${slate.source} + possession-first sequence challenger (shadow-only; tip win -> opening shot opportunity -> finishing)`,
   };
 }
