@@ -6,6 +6,7 @@ import { getWnbaHistory } from './wnbaHistory';
 import { backfillWnbaHistory, refreshRecentWnbaEvidence } from './wnbaBackfill';
 import { ensureWnbaEvidenceSchema } from './wnbaEvidence';
 import { getWnbaPropProjections } from './wnbaProps';
+import { applyWnbaSequenceModel } from './wnbaSequenceModel';
 import {
   DEFAULT_WNBA_TIP_COMPETITOR,
   applyCompetitorCalibrationToSlate,
@@ -66,7 +67,7 @@ async function getGameDaySlate(): Promise<WnbaSlate> {
 export function registerWnbaFeature(app:Express):void{
   void Promise.all([ensureWnbaSchema(),ensureWnbaEvidenceSchema(),ensureWnbaTipBenchmarkSchema()]).catch(e=>console.error('[WNBA] Schema initialization failed:',e));
 
-  app.get('/api/wnba/first-basket',async(_req,res)=>{try{const slate=await getGameDaySlate();const calibrated=await applyCompetitorCalibrationToSlate(slate);res.setHeader('Cache-Control','no-store, max-age=0');res.setHeader('Pragma','no-cache');res.json(calibrated)}catch(e){console.error('[WNBA] Slate error:',e);res.status(502).json({error:'Unable to load WNBA First Basket data'})}});
+  app.get('/api/wnba/first-basket',async(_req,res)=>{try{const slate=applyWnbaSequenceModel(await getGameDaySlate());const calibrated=await applyCompetitorCalibrationToSlate(slate);res.setHeader('Cache-Control','no-store, max-age=0');res.setHeader('Pragma','no-cache');res.json(calibrated)}catch(e){console.error('[WNBA] Slate error:',e);res.status(502).json({error:'Unable to load WNBA First Basket data'})}});
   app.get('/api/wnba/props',async(_req,res)=>{try{res.setHeader('Cache-Control','public, max-age=120, stale-while-revalidate=300');res.json(await getWnbaPropProjections())}catch(e){console.error('[WNBA Props] Projection error:',e);res.status(502).json({error:'Unable to load WNBA prop projections'})}});
   app.get('/api/wnba/history',async(_req,res)=>{try{res.setHeader('Cache-Control','no-store');res.json(await getWnbaHistory())}catch(e){console.error('[WNBA] History error:',e);res.status(500).json({error:'Unable to load WNBA First Basket history'})}});
 
@@ -95,7 +96,7 @@ export function registerWnbaFeature(app:Express):void{
 
   app.post('/api/admin/wnba/run',requireAdmin,async(_req,res)=>{try{const [locks,tracking,evidence]=await Promise.all([lockWnbaPredictions(),runWnbaTracker(),refreshRecentWnbaEvidence(10)]);const competitorGrading=await gradePendingCompetitorTipProjections();res.json({locks,tracking,evidence,competitorGrading})}catch(e){console.error('[WNBA] Manual WNBA run failed:',e);res.status(500).json({error:'WNBA maintenance pass failed'})}});
   app.post('/api/admin/wnba/backfill',requireAdmin,async(req,res)=>{try{const days=Math.max(1,Math.min(14,Number(req.body?.days??7))),maxGames=Math.max(1,Math.min(40,Number(req.body?.maxGames??24)));const result=await backfillWnbaHistory(days,maxGames);const competitorGrading=await gradePendingCompetitorTipProjections();res.json({...result,competitorGrading})}catch(e){console.error('[WNBA] Strict backfill failed:',e);res.status(500).json({error:'WNBA strict history rebuild failed'})}});
-  app.get('/api/admin/wnba/diagnostics',requireAdmin,async(req,res)=>{try{const days=typeof req.query.days==='string'?Number(req.query.days):30;const [d,competitor]=await Promise.all([getWnbaDiagnostics(Number.isFinite(days)?days:30),getCompetitorBenchmarkSummary(DEFAULT_WNBA_TIP_COMPETITOR,180)]);res.json({...d,historyStatus:'rebuilding-strict',trackerStatus:'active-strict',competitorBenchmark:competitor.calibration})}catch(e){console.error('[WNBA] Diagnostics failed:',e);res.status(500).json({error:'Unable to load WNBA diagnostics'})}});
+  app.get('/api/admin/wnba/diagnostics',requireAdmin,async(req,res)=>{try{const days=typeof req.query.days==='string'?Number(req.query.days):30;const [d,competitor]=await Promise.all([getWnbaDiagnostics(Number.isFinite(days)?days:30),getCompetitorBenchmarkSummary(DEFAULT_WNBA_TIP_COMPETITOR,180)]);res.json({...d,historyStatus:'rebuilding-strict',trackerStatus:'active-strict',sequenceModel:'possession-first-seq-v1',competitorBenchmark:competitor.calibration})}catch(e){console.error('[WNBA] Diagnostics failed:',e);res.status(500).json({error:'Unable to load WNBA diagnostics'})}});
 
   if(started)return;started=true;
   void seedInitialCompetitorTipObservations().then(r=>console.log(`[WNBA Benchmark] Preserved ${r.saved} initial competitor observations.`)).then(()=>gradePendingCompetitorTipProjections()).then(r=>{if(r.graded)console.log(`[WNBA Benchmark] Graded ${r.graded} preserved competitor observations.`)}).catch(e=>console.warn('[WNBA Benchmark] Initial observation seed failed:',e));
@@ -106,5 +107,5 @@ export function registerWnbaFeature(app:Express):void{
   cron.schedule('23 * * * *',async()=>{try{const [r,v]=await Promise.all([backfillWnbaHistory(7,24),refreshRecentWnbaEvidence(10)]);const g=await gradePendingCompetitorTipProjections();console.log(`[WNBA] Strict rebuild: ${r.gamesAdded} verified, ${r.unresolved} rejected; evidence refreshed ${v.updated}/${v.checked}${r.done?' (season complete)':''}; competitor grading ${g.graded}.`)}catch(e){console.warn('[WNBA] Strict rebuild failed:',e)}},{timezone:'America/New_York'});
   void getWnbaSlate(true).then(s=>{if(s.games.length&&slateEtDate(s)===etCalendarDate())lastNonEmptySlate=s;console.log(`[WNBA] Warmed ${s.games.length} games across ${s.teams.length} teams.`)}).catch(e=>console.warn('[WNBA] Warm failed:',e));
   void Promise.all([runWnbaTracker(),backfillWnbaHistory(7,24),refreshRecentWnbaEvidence(10)]).then(async([t,r,v])=>{const g=await gradePendingCompetitorTipProjections();console.log(`[WNBA] Startup strict tracker ${t.processed} processed/${t.unresolved} unresolved; rebuild added ${r.gamesAdded}; evidence ${v.updated}/${v.checked}; competitor grading ${g.graded}.`)}).catch(e=>console.warn('[WNBA] Startup strict maintenance failed:',e));
-  console.log('[WNBA] First Basket initialized: projections, locks, strict grading, competitor calibration research, and hourly strict history rebuild active.');
+  console.log('[WNBA] First Basket initialized: projections, locks, strict grading, possession-sequence weighting, competitor calibration research, and hourly strict history rebuild active.');
 }
