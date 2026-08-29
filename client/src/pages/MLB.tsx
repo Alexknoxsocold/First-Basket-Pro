@@ -67,10 +67,6 @@ export default function MLB() {
         }
       }
 
-      .mlb-first-inning-shell article[data-testid^="card-nrfi-"] .mt-4.space-y-1 {
-        display: none !important;
-      }
-
       .mlb-first-inning-shell [class*="bg-primary/5"][class*="mb-6"] {
         display: none !important;
       }

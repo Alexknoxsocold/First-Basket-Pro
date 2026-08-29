@@ -47,21 +47,36 @@ export function evaluateMlbModelHealth(input: MlbModelHealthInput): MlbModelHeal
     score -= 15;
     reasons.push("Log loss is elevated.");
   }
-  if (input.predictionCount > 0 && input.lineupConfirmedCount / input.predictionCount < 0.50) {
-    score -= 10;
-    reasons.push("Lineup confirmation coverage is low.");
+
+  // Older callers did not yet attach lineup/pitcher coverage telemetry and
+  // passed all three counters as zero. Treat that exact combination as unknown
+  // rather than incorrectly grading the model as if every lineup/starter failed.
+  const qualityCoverageUnknown = input.predictionCount > 0 &&
+    input.lineupConfirmedCount === 0 &&
+    input.pitcherConfirmedCount === 0 &&
+    input.missingPitcherMetricCount === 0;
+
+  if (qualityCoverageUnknown) {
+    score -= 5;
+    reasons.push("Lineup and pitcher coverage telemetry is not attached to this health sample yet.");
+  } else {
+    if (input.predictionCount > 0 && input.lineupConfirmedCount / input.predictionCount < 0.50) {
+      score -= 10;
+      reasons.push("Lineup confirmation coverage is low.");
+    }
+    if (input.predictionCount > 0 && input.pitcherConfirmedCount / input.predictionCount < 0.90) {
+      score -= 10;
+      reasons.push("Starting-pitcher confirmation coverage is below target.");
+    }
+    if (input.predictionCount > 0 && input.missingPitcherMetricCount / input.predictionCount > 0.50) {
+      score -= 10;
+      reasons.push("Pitcher metric coverage is incomplete.");
+    }
   }
-  if (input.predictionCount > 0 && input.pitcherConfirmedCount / input.predictionCount < 0.90) {
-    score -= 10;
-    reasons.push("Starting-pitcher confirmation coverage is below target.");
-  }
+
   if (input.marketQuoteCount > 0 && input.staleMarketQuoteCount / input.marketQuoteCount > 0.25) {
     score -= 10;
     reasons.push("Too many collected market quotes are stale.");
-  }
-  if (input.predictionCount > 0 && input.missingPitcherMetricCount / input.predictionCount > 0.50) {
-    score -= 10;
-    reasons.push("Pitcher metric coverage is incomplete.");
   }
 
   score = Math.round(clamp(score, 0, 100));

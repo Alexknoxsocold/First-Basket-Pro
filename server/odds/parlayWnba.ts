@@ -129,7 +129,7 @@ async function requestRows(): Promise<ParlayPropRow[]> {
     const response = await fetch(url, { headers: { 'X-API-Key': apiKey, Accept: 'application/json' }, signal: AbortSignal.timeout(8000) });
     if (!response.ok) {
       diagnostics = { ...diagnostics, keyConfigured: true, lastFetchAt: new Date().toISOString(), lastHttpStatus: response.status };
-      console.warn(`[ParlayAPI] WNBA first-basket request failed: ${response.status}`);
+      console.warn(`[ParlayAPI] WNBA first-basket request failed: ${response.status}${response.status === 403 ? ' (provider quota/tier rejected request)' : ''}`);
       return cache?.rows ?? [];
     }
     const payload = await response.json();
@@ -167,7 +167,7 @@ export async function getWnbaFirstBasketMarket(playerName: string, modelProbabil
   const draftkings = matches.filter(x => rowBookKey(x.row) === 'draftkings').sort((a, b) => b.odds - a.odds)[0]?.odds ?? null;
   const edgePoints = modelEdgePoints(modelProbabilityPct, best.odds);
   const expectedValue = expectedValuePerDollar(modelProbabilityPct, best.odds);
-  return { source: 'ParlayAPI', market: 'player_first_basket', bestOdds: best.odds, bestOddsDisplay: formatAmericanOdds(best.odds), bestBook: rowBookTitle(best.row), fanduelOdds: fanduel, draftkingsOdds: draftkings, impliedProbability: Math.max(0, modelProbabilityPct - edgePoints), edgePoints, expectedValue, qualifiesValue: rank === 3 && qualifiesAsMarketValue(modelProbabilityPct, best.odds), lastUpdate: rowLastUpdate(best.row) };
+  return { source: 'ParlayAPI', market: 'player_first_basket', bestOdds: best.odds, bestOddsDisplay: formatAmericanOdds(best.odds), bestBook: rowBookTitle(best.row), fanduelOdds: fanduel, draftkingsOdds: draftkings, impliedProbability: Math.max(0, modelProbabilityPct - edgePoints), edgePoints, expectedValue, qualifiesValue: rank <= 3 && qualifiesAsMarketValue(modelProbabilityPct, best.odds), lastUpdate: rowLastUpdate(best.row) };
 }
 
 export async function attachWnbaFirstBasketMarkets<T extends { name: string; probability: number; rank: number }>(candidates: T[]): Promise<Array<T & { marketOdds: WnbaFirstBasketMarket | null }>> {
