@@ -158,6 +158,12 @@ function tierClass(row: Candidate) {
     return "border-orange-500/35 bg-orange-500/10 text-orange-600 dark:text-orange-300";
   return "border-border bg-muted/30 text-muted-foreground";
 }
+function probabilityClass(probability: number) {
+  if (probability >= 22) return "text-emerald-500";
+  if (probability >= 17) return "text-orange-500";
+  if (probability >= 12) return "text-amber-500";
+  return "text-foreground";
+}
 function environmentEffect(row: Candidate) {
   return (row.environment.parkFactor * row.environment.weatherFactor - 1) * 100;
 }
@@ -528,7 +534,9 @@ function ConfirmedRow({
           </div>
         </div>
         <div className="text-right">
-          <div className="font-mono text-2xl font-black">
+          <div
+            className={`font-mono text-2xl font-black ${probabilityClass(row.probability)}`}
+          >
             {row.probability.toFixed(1)}%
           </div>
           <div className="text-[8px] uppercase text-muted-foreground">
@@ -577,7 +585,9 @@ function WatchRow({
         </Badge>
       </div>
       <div className="text-right">
-        <div className="font-mono text-xl font-black">
+        <div
+          className={`font-mono text-xl font-black ${probabilityClass(row.probability)}`}
+        >
           {row.probability.toFixed(1)}%
         </div>
         <div className="text-[8px] uppercase text-muted-foreground">
