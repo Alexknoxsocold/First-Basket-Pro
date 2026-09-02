@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   Activity,
@@ -719,10 +719,99 @@ function PlayerDetailModal({
     </div>
   );
 }
+function GameHrModal({
+  game,
+  rows,
+  onClose,
+  onOpenPlayer,
+}: {
+  game: Candidate;
+  rows: Candidate[];
+  onClose: () => void;
+  onOpenPlayer: (row: Candidate) => void;
+}) {
+  const effect = environmentEffect(game);
+  const WeatherIcon = weatherIcon(game);
+  return (
+    <div
+      className="fixed inset-0 z-[90] flex items-end justify-center bg-black/70 backdrop-blur-sm sm:items-center sm:p-4"
+      onMouseDown={(event) => {
+        if (event.currentTarget === event.target) onClose();
+      }}
+    >
+      <div className="max-h-[92vh] w-full max-w-2xl overflow-hidden rounded-t-3xl border bg-card shadow-2xl sm:rounded-3xl">
+        <div className="border-b bg-gradient-to-br from-orange-500/15 via-card to-cyan-500/10 p-5">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <div className="text-[9px] font-black uppercase tracking-[0.18em] text-orange-500">
+                Top HR targets
+              </div>
+              <h3 className="mt-1 text-2xl font-black">
+                {game.team} vs {game.opponent}
+              </h3>
+              <div className="mt-1 flex items-center gap-1.5 text-[10px] text-muted-foreground">
+                <MapPin className="h-3 w-3" />
+                {game.venue ?? "Venue pending"} · {time(game.gameTime)}
+              </div>
+            </div>
+            <Button variant="ghost" size="icon" onClick={onClose}>
+              <X className="h-5 w-5" />
+            </Button>
+          </div>
+          <div className="mt-4 grid grid-cols-3 gap-2">
+            <div className="rounded-xl border bg-background/60 p-3 text-center">
+              <WeatherIcon className="mx-auto h-4 w-4 text-sky-400" />
+              <div className="mt-1 truncate text-xs font-black">
+                {game.environment.condition ?? "Clear"}
+              </div>
+              <div className="text-[8px] uppercase text-muted-foreground">
+                Weather
+              </div>
+            </div>
+            <div className="rounded-xl border bg-background/60 p-3 text-center">
+              <Wind className="mx-auto h-4 w-4 text-cyan-400" />
+              <div className="mt-1 text-xs font-black">
+                {game.environment.windMph !== null
+                  ? `${Math.round(game.environment.windMph)} mph`
+                  : "—"}
+              </div>
+              <div className="truncate text-[8px] uppercase text-muted-foreground">
+                {windSummary(game)}
+              </div>
+            </div>
+            <div className="rounded-xl border bg-background/60 p-3 text-center">
+              <Flame className="mx-auto h-4 w-4 text-orange-500" />
+              <div className="mt-1 font-mono text-xs font-black">
+                {effect >= 0 ? "+" : ""}
+                {effect.toFixed(1)}%
+              </div>
+              <div className="text-[8px] uppercase text-muted-foreground">
+                HR carry
+              </div>
+            </div>
+          </div>
+        </div>
+        <div className="max-h-[58vh] overflow-y-auto">
+          {rows.map((row, index) => (
+            <div key={`${row.gamePk}-${row.playerId}`} className="relative">
+              <div className="absolute left-3 top-4 z-10 flex h-6 w-6 items-center justify-center rounded-full bg-orange-500 text-[10px] font-black text-white shadow">
+                {index + 1}
+              </div>
+              <ConfirmedRow row={row} onOpen={onOpenPlayer} />
+            </div>
+          ))}
+        </div>
+        <div className="border-t bg-muted/20 px-5 py-3 text-center text-[9px] text-muted-foreground">
+          Ranked for today using hitter power, pitcher matchup, park, weather,
+          and wind
+        </div>
+      </div>
+    </div>
+  );
+}
 export default function MLBHomeRuns() {
   const [selectedPlayer, setSelectedPlayer] = useState<Candidate | null>(null);
   const [selectedGamePk, setSelectedGamePk] = useState<number | null>(null);
-  const boardRef = useRef<HTMLElement>(null);
   const { data, isLoading, error } = useQuery<Payload>({
     queryKey: ["/api/mlb/home-runs"],
     staleTime: 60_000,
@@ -771,14 +860,16 @@ export default function MLBHomeRuns() {
           b.confidence - a.confidence,
       )
       .slice(0, 20),
-    selectedGameRows = selectedGamePk === null
-      ? boardRows
-      : upcomingCandidates
-          .filter((row) => row.gamePk === selectedGamePk)
-          .sort(
-            (a, b) =>
-              b.probability - a.probability || b.confidence - a.confidence,
-          ),
+    selectedGameRows =
+      selectedGamePk === null
+        ? []
+        : upcomingCandidates
+            .filter((row) => row.gamePk === selectedGamePk)
+            .sort(
+              (a, b) =>
+                b.probability - a.probability || b.confidence - a.confidence,
+            )
+            .slice(0, 5),
     selectedGame = environmentGames.find(
       ({ row }) => row.gamePk === selectedGamePk,
     )?.row,
@@ -795,6 +886,14 @@ export default function MLBHomeRuns() {
         <PlayerDetailModal
           row={selectedPlayer}
           onClose={() => setSelectedPlayer(null)}
+        />
+      )}
+      {selectedGame && (
+        <GameHrModal
+          game={selectedGame}
+          rows={selectedGameRows}
+          onClose={() => setSelectedGamePk(null)}
+          onOpenPlayer={setSelectedPlayer}
         />
       )}
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -874,51 +973,30 @@ export default function MLBHomeRuns() {
                     row={row}
                     candidateCount={count}
                     selected={selectedGamePk === row.gamePk}
-                    onSelect={(game) => {
-                      setSelectedGamePk(game.gamePk);
-                      window.requestAnimationFrame(() =>
-                        boardRef.current?.scrollIntoView({
-                          behavior: "smooth",
-                          block: "start",
-                        }),
-                      );
-                    }}
+                    onSelect={(game) => setSelectedGamePk(game.gamePk)}
                   />
                 ))}
               </div>
             </section>
           )}
-          <section ref={boardRef} className="scroll-mt-4">
+          <section>
             <div className="mb-3 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <div className="h-2.5 w-2.5 rounded-full bg-orange-500" />
                 <h2 className="text-base font-black">Today&apos;s HR Board</h2>
                 <Badge variant="outline" className="h-5 text-[9px]">
-                  {selectedGameRows.length}
+                  {boardRows.length}
                 </Badge>
               </div>
-              {selectedGame ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setSelectedGamePk(null)}
-                  className="h-7 max-w-[190px] gap-1.5 px-2 text-[9px]"
-                >
-                  <span className="truncate">
-                    {selectedGame.team} vs {selectedGame.opponent}
-                  </span>
-                  <X className="h-3 w-3 shrink-0" />
-                </Button>
-              ) : valueCount > 0 ? (
+              {valueCount > 0 ? (
                 <span className="text-[9px] font-semibold text-violet-500">
                   {valueCount} VALUE {valueCount === 1 ? "PRICE" : "PRICES"}
                 </span>
               ) : null}
             </div>
             <div className="max-h-[820px] overflow-y-auto rounded-2xl border border-orange-500/20 bg-card/85">
-              {selectedGameRows.length ? (
-                selectedGameRows.map((row) => (
+              {boardRows.length ? (
+                boardRows.map((row) => (
                   <ConfirmedRow
                     key={`${row.gamePk}-${row.playerId}`}
                     row={row}
