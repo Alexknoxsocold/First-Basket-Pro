@@ -12,6 +12,11 @@ type DecisionAudit = {
   separation: number;
 };
 
+function isFinalStatus(status: string | null | undefined): boolean {
+  const normalized = (status ?? "").trim().toLowerCase();
+  return normalized === "post" || normalized.includes("final") || normalized.includes("completed");
+}
+
 function buildDecisionAudit(game: NrfiGame): DecisionAudit {
   const v3Probability = game.nrfiProbability / 100;
   const v4Probability = game.v4Shadow?.uncertaintyAdjustedNrfiProbability ?? null;
@@ -105,11 +110,6 @@ async function calibrateGame(game: NrfiGame, policy: MlbAdaptiveDecisionPolicy):
   const transformedNrfi = transformed.nrfiProbability / 100;
   const transformedSideProbability = transformedNrfi >= 0.5 ? transformedNrfi : 1 - transformedNrfi;
 
-  // Do not let the broad 50-55% historical bucket repeatedly pull modest,
-  // current-game signals back toward 50/50. Historical calibration only gets
-  // authority once the live V3/V4 blend already has at least a 55% side.
-  // That keeps learning useful for genuinely strong calls without erasing the
-  // LEAN signal before the decision gate can evaluate it.
   const calibrated = transformedSideProbability >= 0.55
     ? clamp(await calibrateRecommendedProbability(transformedNrfi), 0.35, 0.65)
     : transformedNrfi;
@@ -126,7 +126,13 @@ async function calibrateGame(game: NrfiGame, policy: MlbAdaptiveDecisionPolicy):
       : "Historical calibration: held neutral below 55% so weak historical buckets cannot flatten a live directional signal.",
     decisionGate(playStatus, nrfiProbability / 100, transformed.confidence, transformed.sampleSize, agreement, policy),
   ];
-  return { ...transformed, nrfiProbability, recommendation, modelEdge, playStatus, factors };
+
+  // A first-inning result may be known while the baseball game is still live.
+  // Keep the public card pending until ESPN marks the full game final; this
+  // prevents active games from appearing in Wins/Losses prematurely.
+  const outcome: NrfiGame["outcome"] = isFinalStatus(transformed.status) ? transformed.outcome : "pending";
+
+  return { ...transformed, nrfiProbability, recommendation, modelEdge, playStatus, factors, outcome };
 }
 
 function rankTopPick(games: NrfiGame[]): NrfiGame | null {
