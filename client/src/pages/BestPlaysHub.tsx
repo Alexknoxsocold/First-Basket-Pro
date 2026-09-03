@@ -5,6 +5,7 @@ import { CheckCircle2, ChevronDown, Clock3, Mail, Trophy, XCircle } from 'lucide
 import BestPlays from './BestPlays';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
+import heroArtwork from '@/assets/IMG_1005.jpeg';
 
 type Outcome = {
   id: string;
@@ -88,18 +89,23 @@ export default function BestPlaysHub() {
   }
 
   return <div className="space-y-4">
-    <div className="relative z-20 flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-card/95 p-3 shadow-sm backdrop-blur">
-      <div>
-        <div className="flex items-center gap-2"><Trophy className="w-4 h-4 text-primary" /><span className="text-sm font-bold">Best Plays</span></div>
-        <div className="mt-1 text-[10px] text-muted-foreground">Daily results reset at midnight ET.</div>
-      </div>
-      <div className="relative">
-        <select value={view} onChange={e => setView(e.target.value as View)} className="appearance-none rounded-md border bg-background pl-3 pr-9 py-2 text-xs font-semibold shadow-sm focus:outline-none focus:ring-2 focus:ring-ring" aria-label="Best Plays view">
-          <option value="games">Today's Games</option>
-          <option value="outcomes">Today's Outcomes</option>
-          <option value="wins">Today's Winning Outcomes</option>
-        </select>
-        <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+    <div className="relative z-20 overflow-hidden rounded-xl border bg-card shadow-sm">
+      <img src={heroArtwork} alt="" aria-hidden="true" className="absolute inset-0 h-full w-full object-cover object-center opacity-20 sm:opacity-25" />
+      <div className="absolute inset-0 bg-gradient-to-r from-card via-card/95 to-card/55" />
+      <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-card/75" />
+      <div className="relative flex flex-wrap items-center justify-between gap-3 p-4 sm:p-5">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2"><Trophy className="w-4 h-4 text-primary" /><span className="text-sm font-bold">Best Plays</span></div>
+          <div className="mt-1 text-[10px] text-muted-foreground">Daily results reset at midnight ET.</div>
+        </div>
+        <div className="relative">
+          <select value={view} onChange={e => setView(e.target.value as View)} className="appearance-none rounded-md border bg-background/90 pl-3 pr-9 py-2 text-xs font-semibold shadow-sm backdrop-blur focus:outline-none focus:ring-2 focus:ring-ring" aria-label="Best Plays view">
+            <option value="games">Today's Games</option>
+            <option value="outcomes">Today's Outcomes</option>
+            <option value="wins">Today's Winning Outcomes</option>
+          </select>
+          <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        </div>
       </div>
     </div>
 
