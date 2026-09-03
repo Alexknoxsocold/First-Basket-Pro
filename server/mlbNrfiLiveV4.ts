@@ -36,8 +36,6 @@ function classifyLivePlay(
   const edge = Math.abs(probability - 0.5);
   const learnedLeanThreshold = adaptiveLeanThreshold(probability, policy);
 
-  // Low-quality inputs remain conservative. Correct NO_PLAY history is never
-  // allowed to override missing evidence or V3/V4 disagreement.
   if (sampleSize < 3 || confidence === "Low") return edge >= 0.04 && agreement === "strong" ? "LEAN" : "NO_PLAY";
   if (agreement === "mixed") {
     if (edge >= 0.07 && confidence === "High" && sampleSize >= 8) return "LEAN";
@@ -104,14 +102,28 @@ function applyLiveV4(game: NrfiGame, policy: MlbAdaptiveDecisionPolicy): NrfiGam
 
 async function calibrateGame(game: NrfiGame, policy: MlbAdaptiveDecisionPolicy): Promise<NrfiGame> {
   const transformed = applyLiveV4(game, policy);
-  const calibrated = clamp(await calibrateRecommendedProbability(transformed.nrfiProbability / 100), 0.35, 0.65);
+  const transformedNrfi = transformed.nrfiProbability / 100;
+  const transformedSideProbability = transformedNrfi >= 0.5 ? transformedNrfi : 1 - transformedNrfi;
+
+  // Do not let the broad 50-55% historical bucket repeatedly pull modest,
+  // current-game signals back toward 50/50. Historical calibration only gets
+  // authority once the live V3/V4 blend already has at least a 55% side.
+  // That keeps learning useful for genuinely strong calls without erasing the
+  // LEAN signal before the decision gate can evaluate it.
+  const calibrated = transformedSideProbability >= 0.55
+    ? clamp(await calibrateRecommendedProbability(transformedNrfi), 0.35, 0.65)
+    : transformedNrfi;
+
   const nrfiProbability = Math.round(calibrated * 1000) / 10;
   const recommendation: NrfiGame["recommendation"] = nrfiProbability >= 50 ? "NRFI" : "YRFI";
   const modelEdge = Math.round(Math.abs(nrfiProbability - 50) * 10) / 10;
   const agreement = buildDecisionAudit(game).agreement;
   const playStatus = classifyLivePlay(nrfiProbability / 100, transformed.confidence, transformed.sampleSize, agreement, policy);
   const factors = [
-    ...(transformed.factors ?? []).filter(f => !f.startsWith("Decision gate:")),
+    ...(transformed.factors ?? []).filter(f => !f.startsWith("Decision gate:") && !f.startsWith("Historical calibration:")),
+    transformedSideProbability >= 0.55
+      ? "Historical calibration: applied because the live side probability cleared 55%."
+      : "Historical calibration: held neutral below 55% so weak historical buckets cannot flatten a live directional signal.",
     decisionGate(playStatus, nrfiProbability / 100, transformed.confidence, transformed.sampleSize, agreement, policy),
   ];
   return { ...transformed, nrfiProbability, recommendation, modelEdge, playStatus, factors };
@@ -129,7 +141,7 @@ export async function fetchNrfiDataV4Live(date?: string): Promise<NrfiResponse> 
     games,
     averageNrfiProbability: games.length ? Math.round(games.reduce((sum, game) => sum + game.nrfiProbability, 0) / games.length * 10) / 10 : null,
     topPick: rankTopPick(games),
-    methodology: "V4 live blend: calibrated V3 baseline + uncertainty-adjusted V4 first-inning signal. V4 influence scales with data quality, weak inputs shrink toward neutral, and model disagreement caps promotion. Correct historical V4 NO PLAY calls may lower the matching side's LEAN gate from 3.5 to 3.0 probability points only after 30+ graded examples with a 55%+ hit rate and a 2-point positive calibration gap. PLAY and BEST PLAY gates never auto-relax.",
+    methodology: "V4 live blend: V3 baseline + uncertainty-adjusted V4 first-inning signal. V4 influence scales with data quality, weak inputs shrink toward neutral, and disagreement caps promotion. Historical bucket calibration is only allowed to alter calls whose live side probability is already at least 55%, preventing the large near-50/50 bucket from flattening valid directional leans. Correct historical V4 NO PLAY calls may lower the matching side's LEAN gate from 3.5 to 3.0 probability points only after 30+ graded examples with a 55%+ hit rate and a 2-point positive calibration gap. PLAY and BEST PLAY gates never auto-relax.",
   };
 }
 
