@@ -153,12 +153,115 @@ export default function MLB() {
         .mlb-market-row > div:first-child { align-items: center !important; }
         .mlb-market-row > div:last-child { margin-top: 8px !important; padding-top: 8px; border-top: 1px solid hsl(var(--border) / .6); }
 
-        .mlb-home-runs-shell { padding: 20px 12px 28px !important; width: 100% !important; }
+        /* Home Runs: compact, touch-first, and free of nested-scroll glitches. */
+        .mlb-home-runs-shell { padding: 18px 12px 30px !important; width: 100% !important; }
         .mlb-home-runs-shell * { min-width: 0; }
+        .mlb-home-runs-shell > div { gap: 18px !important; }
         .mlb-home-runs-shell [class*="overflow-x-auto"] { -webkit-overflow-scrolling: touch; scrollbar-width: none; }
         .mlb-home-runs-shell [class*="overflow-x-auto"]::-webkit-scrollbar { display: none; }
         .mlb-home-runs-shell [class*="grid"] { max-width: 100%; }
         .mlb-home-runs-shell button { touch-action: manipulation; }
+
+        /* Keep the top of the HR page simple and useful. */
+        .mlb-home-runs-shell > div > div.flex.flex-wrap.items-start.justify-between { margin-bottom: 0 !important; align-items: center !important; }
+        .mlb-home-runs-shell > div > .grid.grid-cols-3.gap-3 {
+          grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+          gap: 8px !important;
+        }
+        .mlb-home-runs-shell > div > .grid.grid-cols-3.gap-3 > div {
+          padding: 12px !important;
+          border-radius: 14px !important;
+        }
+        .mlb-home-runs-shell > div > .grid.grid-cols-3.gap-3 > div:first-child {
+          grid-column: 1 / -1 !important;
+          display: grid !important;
+          grid-template-columns: 1fr auto !important;
+          align-items: center !important;
+          column-gap: 10px !important;
+        }
+        .mlb-home-runs-shell > div > .grid.grid-cols-3.gap-3 > div:first-child > div:nth-child(2) {
+          grid-row: 1 / span 2 !important;
+          grid-column: 2 !important;
+          font-size: 27px !important;
+          margin-top: 0 !important;
+        }
+        .mlb-home-runs-shell > div > .grid.grid-cols-3.gap-3 .text-2xl { font-size: 22px !important; }
+
+        /* Reimagine weather as compact game cards instead of giant narrow diamonds. */
+        .mlb-home-runs-shell section > div.flex.gap-3.overflow-x-auto {
+          gap: 10px !important;
+          margin-left: -2px;
+          margin-right: -12px;
+          padding-right: 12px;
+          padding-bottom: 5px !important;
+          scroll-snap-type: x mandatory;
+        }
+        .mlb-home-runs-shell button[aria-label^="Show home run hitters"] {
+          min-width: min(82vw, 315px) !important;
+          width: min(82vw, 315px) !important;
+          max-width: 315px !important;
+          flex: 0 0 auto !important;
+          border-radius: 16px !important;
+          scroll-snap-align: start;
+          box-shadow: none !important;
+        }
+        .mlb-home-runs-shell button[aria-label^="Show home run hitters"] > div:first-child {
+          padding: 12px 12px 9px !important;
+        }
+        .mlb-home-runs-shell button[aria-label^="Show home run hitters"] > div.px-4 {
+          display: none !important;
+        }
+        .mlb-home-runs-shell button[aria-label^="Show home run hitters"] > .grid.grid-cols-4 {
+          grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+          gap: 7px !important;
+          padding: 8px 12px 12px !important;
+        }
+        .mlb-home-runs-shell button[aria-label^="Show home run hitters"] > .grid.grid-cols-4 > div {
+          padding: 8px !important;
+          border-radius: 11px !important;
+          display: grid !important;
+          grid-template-columns: auto 1fr !important;
+          align-items: center !important;
+          column-gap: 6px !important;
+          text-align: left !important;
+        }
+        .mlb-home-runs-shell button[aria-label^="Show home run hitters"] > .grid.grid-cols-4 > div svg {
+          margin: 0 !important;
+          grid-row: 1 / span 2;
+        }
+        .mlb-home-runs-shell button[aria-label^="Show home run hitters"] > .grid.grid-cols-4 > div > div {
+          margin-top: 0 !important;
+          line-height: 1.1 !important;
+        }
+        .mlb-home-runs-shell button[aria-label^="Show home run hitters"] > div:last-child {
+          padding: 9px 12px !important;
+        }
+
+        /* Let the page itself scroll; no awkward scroll box inside the board/watchlist. */
+        .mlb-home-runs-shell section > div[class*="max-h-"] {
+          max-height: none !important;
+          overflow-y: visible !important;
+          border-radius: 14px !important;
+        }
+        .mlb-home-runs-shell section button.w-full.border-b,
+        .mlb-home-runs-shell section button.grid.w-full {
+          padding-left: 12px !important;
+          padding-right: 12px !important;
+        }
+        .mlb-home-runs-shell section button.w-full.border-b > div:first-child {
+          grid-template-columns: auto minmax(0,1fr) 76px !important;
+          gap: 9px !important;
+        }
+        .mlb-home-runs-shell section button.w-full.border-b [class*="h-14"][class*="w-14"] {
+          height: 46px !important;
+          width: 46px !important;
+        }
+        .mlb-home-runs-shell section button.w-full.border-b .text-2xl { font-size: 20px !important; }
+        .mlb-home-runs-shell section button.grid.w-full {
+          grid-template-columns: 38px minmax(0,1fr) 68px !important;
+          gap: 9px !important;
+        }
+        .mlb-home-runs-shell section button.grid.w-full .text-xl { font-size: 17px !important; }
       }
 
       @media (min-width: 641px) {
