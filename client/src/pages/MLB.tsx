@@ -44,33 +44,33 @@ function MarketValueStrip() {
 
   if (!valueGames.length) return null;
 
-  return <div className="max-w-7xl mx-auto px-4 md:px-6 lg:px-8 pt-5">
-    <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-4">
-      <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+  return <div className="max-w-7xl mx-auto px-4 md:px-6 lg:px-8 pb-8">
+    <div className="border-t pt-6">
+      <div className="flex flex-wrap items-end justify-between gap-2 mb-3">
         <div>
-          <div className="text-xs font-bold uppercase tracking-wide text-emerald-500">Market value detected</div>
-          <div className="text-[11px] text-muted-foreground mt-1">This is sportsbook value only. It does not override the model's PLAY / LEAN / NO PLAY decision.</div>
+          <div className="text-sm font-bold">Market Value Watchlist</div>
+          <div className="text-[11px] text-muted-foreground mt-1">Secondary pricing signal only · it never overrides the model's PLAY / LEAN / NO PLAY decision.</div>
         </div>
-        <div className="text-xs font-semibold text-emerald-500">{valueGames.length} priced edge{valueGames.length === 1 ? '' : 's'}</div>
+        <div className="text-[10px] font-medium text-muted-foreground">{valueGames.length} positive price edge{valueGames.length === 1 ? '' : 's'}</div>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
         {valueGames.map(game => {
           const market = game.marketValue!;
           const sideProbability = game.recommendation === 'NRFI' ? game.nrfiProbability : 100 - game.nrfiProbability;
-          return <div key={game.id} className="rounded-md border bg-background/70 px-3 py-2.5">
+          const isModelPlay = game.playStatus === 'BEST_PLAY' || game.playStatus === 'PLAY';
+          return <div key={game.id} className="rounded-md border bg-card/55 px-3 py-2.5">
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
                 <div className="truncate text-xs font-semibold">{game.shortName}</div>
                 <div className="text-[10px] text-muted-foreground mt-1">
-                  Model: <span className={game.playStatus === 'NO_PLAY' ? 'text-red-500 font-semibold' : 'font-semibold'}>{game.playStatus.replace('_', ' ')}</span>
-                  {' · '}{game.recommendation} {sideProbability.toFixed(1)}%
+                  {game.recommendation} {sideProbability.toFixed(1)}% · Model <span className={isModelPlay ? 'font-semibold text-foreground' : 'font-semibold'}>{game.playStatus.replace('_', ' ')}</span>
                 </div>
               </div>
-              <div className="shrink-0 rounded border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-[9px] font-bold text-emerald-500">VALUE</div>
+              <div className="shrink-0 rounded border border-emerald-500/25 bg-emerald-500/8 px-2 py-1 text-[9px] font-semibold text-emerald-500">PRICE EDGE</div>
             </div>
-            <div className="mt-2 flex items-center justify-between text-[10px]">
-              <span className="text-muted-foreground">{market.book ?? 'Market'} {priceLabel(market.price)}</span>
-              <span className="font-mono text-emerald-500">+{(market.edge ?? 0).toFixed(1)} pts · +{(market.ev ?? 0).toFixed(1)}% EV</span>
+            <div className="mt-2 flex items-center justify-between gap-3 text-[10px]">
+              <span className="truncate text-muted-foreground">{market.book ?? 'Market'} {priceLabel(market.price)}</span>
+              <span className="shrink-0 font-mono text-emerald-500">+{(market.edge ?? 0).toFixed(1)} pts · +{(market.ev ?? 0).toFixed(1)}% EV</span>
             </div>
           </div>;
         })}
@@ -176,6 +176,6 @@ export default function MLB() {
 
     {homeRuns
       ? <div className="mlb-home-runs-shell max-w-7xl mx-auto px-0 md:px-6 lg:px-8 py-8"><MLBHomeRuns /></div>
-      : <><MarketValueStrip /><div className="mlb-first-inning-shell px-4 pt-5 md:px-0"><NRFIPro /></div></>}
+      : <><div className="mlb-first-inning-shell px-4 pt-8 md:px-0"><NRFIPro /></div><MarketValueStrip /></>}
   </div>;
 }
