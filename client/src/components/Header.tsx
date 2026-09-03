@@ -82,7 +82,7 @@ export default function Header() {
     window.open(WHOP_PRO_URL, "_blank", "noopener,noreferrer");
   };
 
-  const brand = isBestPlays ? "Prezi Tools" : isMLB ? "MLB Pro" : isNFL ? "NFL Pro" : "First Basket Pro";
+  const brand = isBestPlays ? "PreziTools" : isMLB ? "MLB Pro" : isNFL ? "NFL Pro" : "First Basket Pro";
   const badge = isMLB ? seasonLabel("MLB") : isNFL ? seasonLabel("NFL") : isWNBA ? seasonLabel("WNBA") : isNBA ? seasonLabel("NBA") : null;
 
   return (
