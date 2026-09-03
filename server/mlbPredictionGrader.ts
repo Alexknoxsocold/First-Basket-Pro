@@ -17,6 +17,7 @@ export type GraderGame = {
   sampleSize?: number;
   factors?: string[];
   v4Shadow?: unknown;
+  status?: string | null;
   outcome: "won" | "lost" | "pending";
   firstInningScore: string | null;
 };
@@ -33,7 +34,12 @@ function parseFirstInningScore(value: string | null): { away: number; home: numb
   return { away, home, normalized: `${away}-${home}` };
 }
 
-/** A valid first-inning score is the grading authority. */
+function isCompletedGameStatus(status: string | null | undefined): boolean {
+  const normalized = (status ?? "").trim().toLowerCase();
+  return normalized === "post" || normalized.includes("final") || normalized.includes("completed");
+}
+
+/** A valid first-inning score grades only after the full game is final. */
 export async function persistAndGradeNrfiGames(games: GraderGame[], modelVersion = "v4-live"): Promise<void> {
   const quotes = getCachedMlbRfiQuotes();
   for (const game of games) {
@@ -49,9 +55,10 @@ export async function persistAndGradeNrfiGames(games: GraderGame[], modelVersion
     const now = Date.now();
     const startMs = start.getTime();
 
-    // A settled first-inning score may grade only an existing official pregame
-    // lock. It can never create a historical prediction after the result exists.
-    if (actualOutcome && parsedScore) {
+    // Do not write W/L results while a game is still live. The first-inning
+    // result can be known early, but public grading waits for ESPN to mark the
+    // full game final so live games never appear in Wins/Losses prematurely.
+    if (actualOutcome && parsedScore && isCompletedGameStatus(game.status)) {
       await gradeExistingLockedPrediction({
         date: predictionDate,
         gameId: game.id,
