@@ -7,8 +7,9 @@
 
 @layer base {
   * { @apply border-border; }
-  html { -webkit-text-size-adjust:100%; scroll-behavior:smooth; }
-  body { @apply font-sans antialiased bg-background text-foreground; min-width:320px; overflow-x:hidden; }
+  html { -webkit-text-size-adjust:100%; scroll-behavior:smooth; background:hsl(var(--background)); min-height:100%; }
+  body { @apply font-sans antialiased bg-background text-foreground; min-width:320px; min-height:100%; overflow-x:hidden; }
+  #root { min-height:100%; background:hsl(var(--background)); }
   button,a,input,select,textarea { -webkit-tap-highlight-color:transparent; }
   img,svg { max-width:100%; }
   ::selection { background:hsl(var(--primary)/.22); }
@@ -42,6 +43,7 @@ main article, main [class*="rounded-md"][class*="border"], main [class*="rounded
 .bp-nebula { animation:bpNebulaDriftVisible 18s ease-in-out infinite!important;opacity:.46!important;will-change:transform; }
 
 @media (max-width:640px) {
+  html, body, #root { background:hsl(var(--background)) !important; }
   html { font-size:14px; }
   body { line-height:1.4; }
   main { overflow-x:clip; }
