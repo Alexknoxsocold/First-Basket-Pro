@@ -15,11 +15,11 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const BASE_URL = (process.env.NEWSLETTER_BASE_URL || process.env.RENDER_EXTERNAL_URL || 'https://prezitools.com').replace(/\/$/, '');
 const BRAND_GREEN = '#20e68a';
 const BRAND_GREEN_DARK = '#0fb96a';
-const BRAND_BG = '#070b0d';
-const BRAND_PANEL = '#0f1518';
-const BRAND_PANEL_2 = '#151d20';
+const BRAND_BG = '#0d1826';
+const BRAND_PANEL = '#112235';
+const BRAND_PANEL_2 = '#15283b';
 const BRAND_TEXT = '#f4f7f6';
-const BRAND_MUTED = '#9ca8a3';
+const BRAND_MUTED = '#8fa2b7';
 let schedulerStarted = false;
 
 function todayET() {
@@ -44,40 +44,41 @@ function emailShell(inner: string, token: string, preheader: string) {
   const previewImage = siteUrl('/PreziTools_link_preview_HD.jpg');
   const favicon = siteUrl('/favicon.png');
   return `<!doctype html>
-<html>
+<html style="background:${BRAND_BG};">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <meta name="color-scheme" content="dark" />
   <meta name="supported-color-schemes" content="dark" />
+  <meta name="theme-color" content="${BRAND_BG}" />
   <title>PreziTools</title>
 </head>
-<body style="margin:0;padding:0;background:${BRAND_BG};font-family:Inter,Segoe UI,Arial,sans-serif;color:${BRAND_TEXT};">
+<body bgcolor="${BRAND_BG}" style="margin:0;padding:0;background:${BRAND_BG} !important;font-family:Inter,Segoe UI,Arial,sans-serif;color:${BRAND_TEXT};">
   <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">${escapeHtml(preheader)}</div>
-  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:${BRAND_BG};">
-    <tr><td align="center" style="padding:24px 12px 34px;">
-      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width:680px;">
-        <tr><td style="padding:8px 4px 18px;">
-          <table role="presentation" width="100%"><tr>
-            <td style="vertical-align:middle;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" bgcolor="${BRAND_BG}" style="background:${BRAND_BG} !important;">
+    <tr><td align="center" bgcolor="${BRAND_BG}" style="padding:24px 12px 34px;background:${BRAND_BG} !important;">
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" bgcolor="${BRAND_BG}" style="max-width:680px;background:${BRAND_BG} !important;">
+        <tr><td bgcolor="${BRAND_BG}" style="padding:8px 4px 18px;background:${BRAND_BG} !important;">
+          <table role="presentation" width="100%" bgcolor="${BRAND_BG}" style="background:${BRAND_BG} !important;"><tr>
+            <td bgcolor="${BRAND_BG}" style="vertical-align:middle;background:${BRAND_BG} !important;">
               <img src="${favicon}" width="34" height="34" alt="PreziTools" style="display:inline-block;border-radius:9px;vertical-align:middle;margin-right:10px;" />
               <span style="font-size:19px;font-weight:900;letter-spacing:-.4px;vertical-align:middle;color:${BRAND_TEXT};">PreziTools</span>
             </td>
-            <td align="right" style="font-size:11px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:${BRAND_GREEN};">Daily Plays</td>
+            <td align="right" bgcolor="${BRAND_BG}" style="font-size:11px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:${BRAND_GREEN};background:${BRAND_BG} !important;">Daily Plays</td>
           </tr></table>
         </td></tr>
-        <tr><td style="background:${BRAND_PANEL};border:1px solid #233034;border-radius:20px;overflow:hidden;box-shadow:0 14px 44px rgba(0,0,0,.28);">
+        <tr><td bgcolor="${BRAND_PANEL}" style="background:${BRAND_PANEL} !important;border:1px solid #29415a;border-radius:20px;overflow:hidden;box-shadow:0 14px 44px rgba(0,0,0,.28);">
           <img src="${previewImage}" width="680" alt="PreziTools sports analytics dashboard" style="display:block;width:100%;height:auto;border:0;" />
           ${inner}
         </td></tr>
-        <tr><td style="padding:20px 12px 0;text-align:center;font-size:11px;line-height:1.6;color:#6f7c78;">
+        <tr><td bgcolor="${BRAND_BG}" style="padding:20px 12px 0;text-align:center;font-size:11px;line-height:1.6;color:#74879a;background:${BRAND_BG} !important;">
           You are receiving this because you joined PreziTools Daily Plays.<br />
           Model projections are informational and are not guarantees of outcomes.<br />
-          <a href="${unsubscribe}" style="color:#9ca8a3;text-decoration:underline;">Unsubscribe</a>
+          <a href="${unsubscribe}" style="color:#91a5b8;text-decoration:underline;">Unsubscribe</a>
           &nbsp;·&nbsp;
-          <a href="${siteUrl('/legal?tab=privacy')}" style="color:#9ca8a3;text-decoration:underline;">Privacy</a>
+          <a href="${siteUrl('/legal?tab=privacy')}" style="color:#91a5b8;text-decoration:underline;">Privacy</a>
           &nbsp;·&nbsp;
-          <a href="${siteUrl('/')}" style="color:#9ca8a3;text-decoration:underline;">PreziTools.com</a>
+          <a href="${siteUrl('/')}" style="color:#91a5b8;text-decoration:underline;">PreziTools.com</a>
         </td></tr>
       </table>
     </td></tr>
@@ -108,8 +109,6 @@ async function sendResendEmail(to: string, subject: string, html: string) {
   return body;
 }
 
-// Resend accepts an unsubscribe header URL. For individualized links we build the
-// real List-Unsubscribe header in the call sites where the subscriber token is known.
 function unsubscribeUrlForHeaders(_email: string) {
   return `${BASE_URL}/`;
 }
@@ -161,18 +160,18 @@ export async function unsubscribeNewsletter(token: string) {
 
 function welcomeHtml(token: string) {
   const inner = `
-    <div style="padding:30px 28px 32px;">
-      <div style="display:inline-block;padding:7px 10px;border-radius:999px;background:rgba(32,230,138,.12);border:1px solid rgba(32,230,138,.35);font-size:10px;font-weight:900;letter-spacing:.12em;text-transform:uppercase;color:${BRAND_GREEN};">You're officially in</div>
+    <div style="padding:30px 28px 32px;background:${BRAND_PANEL};color:${BRAND_TEXT};">
+      <div style="display:inline-block;padding:7px 10px;border-radius:999px;background:#143927;border:1px solid #24724d;font-size:10px;font-weight:900;letter-spacing:.12em;text-transform:uppercase;color:${BRAND_GREEN};">You're officially in</div>
       <h1 style="margin:16px 0 10px;font-size:30px;line-height:1.08;letter-spacing:-.8px;color:${BRAND_TEXT};">Welcome to PreziTools Daily Plays.</h1>
       <p style="margin:0;color:${BRAND_MUTED};font-size:14px;line-height:1.7;">Your inbox is now connected to the same model-driven board you see on PreziTools. We filter the slate and surface the strongest qualified opportunities instead of flooding you with every game.</p>
 
-      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:24px 0 0;"><tr>
-        <td width="33.33%" style="padding:0 5px 0 0;"><div style="background:${BRAND_PANEL_2};border:1px solid #273438;border-radius:14px;padding:14px 12px;"><div style="color:${BRAND_GREEN};font-size:11px;font-weight:900;">WNBA</div><div style="margin-top:5px;color:#c6cfcc;font-size:11px;line-height:1.4;">Strongest player plays</div></div></td>
-        <td width="33.33%" style="padding:0 3px;"><div style="background:${BRAND_PANEL_2};border:1px solid #273438;border-radius:14px;padding:14px 12px;"><div style="color:${BRAND_GREEN};font-size:11px;font-weight:900;">NBA</div><div style="margin-top:5px;color:#c6cfcc;font-size:11px;line-height:1.4;">First-basket signals</div></div></td>
-        <td width="33.33%" style="padding:0 0 0 5px;"><div style="background:${BRAND_PANEL_2};border:1px solid #273438;border-radius:14px;padding:14px 12px;"><div style="color:${BRAND_GREEN};font-size:11px;font-weight:900;">MLB</div><div style="margin-top:5px;color:#c6cfcc;font-size:11px;line-height:1.4;">NRFI / YRFI value</div></div></td>
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" bgcolor="${BRAND_PANEL}" style="margin:24px 0 0;background:${BRAND_PANEL};"><tr>
+        <td width="33.33%" bgcolor="${BRAND_PANEL}" style="padding:0 5px 0 0;"><div style="background:${BRAND_PANEL_2};border:1px solid #29415a;border-radius:14px;padding:14px 12px;"><div style="color:${BRAND_GREEN};font-size:11px;font-weight:900;">WNBA</div><div style="margin-top:5px;color:#c6d2de;font-size:11px;line-height:1.4;">Strongest player plays</div></div></td>
+        <td width="33.33%" bgcolor="${BRAND_PANEL}" style="padding:0 3px;"><div style="background:${BRAND_PANEL_2};border:1px solid #29415a;border-radius:14px;padding:14px 12px;"><div style="color:${BRAND_GREEN};font-size:11px;font-weight:900;">NBA</div><div style="margin-top:5px;color:#c6d2de;font-size:11px;line-height:1.4;">First-basket signals</div></div></td>
+        <td width="33.33%" bgcolor="${BRAND_PANEL}" style="padding:0 0 0 5px;"><div style="background:${BRAND_PANEL_2};border:1px solid #29415a;border-radius:14px;padding:14px 12px;"><div style="color:${BRAND_GREEN};font-size:11px;font-weight:900;">MLB</div><div style="margin-top:5px;color:#c6d2de;font-size:11px;line-height:1.4;">NRFI / YRFI value</div></div></td>
       </tr></table>
 
-      <div style="margin-top:24px;background:#0a1012;border:1px solid #233034;border-radius:14px;padding:16px;">
+      <div style="margin-top:24px;background:#0f2031;border:1px solid #29415a;border-radius:14px;padding:16px;">
         <div style="font-size:12px;font-weight:900;color:${BRAND_TEXT};">What to expect</div>
         <div style="margin-top:8px;font-size:12px;line-height:1.75;color:${BRAND_MUTED};">• A curated daily digest of qualified plays<br />• Probability and matchup context at a glance<br />• Updates that respect confirmed lineups and available model data<br />• One-click unsubscribe in every email</div>
       </div>
@@ -180,7 +179,7 @@ function welcomeHtml(token: string) {
       <table role="presentation" cellspacing="0" cellpadding="0" style="margin-top:26px;"><tr><td bgcolor="${BRAND_GREEN}" style="border-radius:10px;">
         <a href="${siteUrl('/')}" style="display:inline-block;padding:13px 20px;color:#03110a;text-decoration:none;font-size:13px;font-weight:900;">Open today's board →</a>
       </td></tr></table>
-      <p style="margin:18px 0 0;font-size:11px;line-height:1.6;color:#71807b;">Tip: add <strong style="color:#aeb8b5;">support@prezitools.com</strong> to your contacts so Daily Plays stays out of spam.</p>
+      <p style="margin:18px 0 0;font-size:11px;line-height:1.6;color:#74879a;">Tip: add <strong style="color:#c2cfdb;">support@prezitools.com</strong> to your contacts so Daily Plays stays out of spam.</p>
     </div>`;
   return emailShell(inner, token, 'Welcome to PreziTools Daily Plays — your sports analytics digest is ready.');
 }
@@ -286,9 +285,9 @@ async function buildDigest() {
 }
 
 function playCardHtml(p: DigestPlay) {
-  return `<div style="margin:10px 0;background:${BRAND_PANEL_2};border:1px solid #273438;border-radius:14px;padding:15px 16px;">
+  return `<div style="margin:10px 0;background:${BRAND_PANEL_2};border:1px solid #29415a;border-radius:14px;padding:15px 16px;color:${BRAND_TEXT};">
     <div style="font-size:10px;font-weight:900;letter-spacing:.1em;color:${BRAND_GREEN};">${escapeHtml(p.label)} · ${escapeHtml(p.matchup)}</div>
-    <table role="presentation" width="100%" style="margin-top:7px;"><tr>
+    <table role="presentation" width="100%" bgcolor="${BRAND_PANEL_2}" style="margin-top:7px;background:${BRAND_PANEL_2};"><tr>
       <td style="font-size:16px;font-weight:900;color:${BRAND_TEXT};">${escapeHtml(p.pick)}</td>
       <td align="right" style="font-size:17px;font-weight:900;color:${BRAND_GREEN};">${p.probability.toFixed(1)}%</td>
     </tr></table>
@@ -298,7 +297,7 @@ function playCardHtml(p: DigestPlay) {
 
 function sectionHtml(title: string, rows: DigestPlay[]) {
   if (!rows.length) return '';
-  return `<div style="margin-top:26px;"><div style="font-size:12px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:#cfd7d4;">${escapeHtml(title)}</div>${rows.map(playCardHtml).join('')}</div>`;
+  return `<div style="margin-top:26px;"><div style="font-size:12px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:#d7e2ec;">${escapeHtml(title)}</div>${rows.map(playCardHtml).join('')}</div>`;
 }
 
 function digestHtml(plays: DigestPlay[], token: string) {
@@ -307,15 +306,15 @@ function digestHtml(plays: DigestPlay[], token: string) {
   const mlb = plays.filter(p => p.sport === 'MLB');
   const top = plays[0];
   const inner = `
-    <div style="padding:28px;">
-      <div style="display:inline-block;padding:7px 10px;border-radius:999px;background:rgba(32,230,138,.12);border:1px solid rgba(32,230,138,.35);font-size:10px;font-weight:900;letter-spacing:.12em;text-transform:uppercase;color:${BRAND_GREEN};">${escapeHtml(todayET())} slate</div>
+    <div style="padding:28px;background:${BRAND_PANEL};color:${BRAND_TEXT};">
+      <div style="display:inline-block;padding:7px 10px;border-radius:999px;background:#143927;border:1px solid #24724d;font-size:10px;font-weight:900;letter-spacing:.12em;text-transform:uppercase;color:${BRAND_GREEN};">${escapeHtml(todayET())} slate</div>
       <h1 style="margin:15px 0 8px;font-size:28px;line-height:1.1;letter-spacing:-.7px;color:${BRAND_TEXT};">Today's strongest model-qualified plays.</h1>
       <p style="margin:0;color:${BRAND_MUTED};font-size:13px;line-height:1.65;">A clean, ranked view of the opportunities that cleared the PreziTools model filters. Data can update as lineups and markets change.</p>
-      ${top ? `<div style="margin-top:22px;padding:18px;background:linear-gradient(135deg,#10251c,#0d1714);border:1px solid rgba(32,230,138,.42);border-radius:16px;"><div style="font-size:10px;font-weight:900;letter-spacing:.12em;text-transform:uppercase;color:${BRAND_GREEN};">Top signal</div><div style="margin-top:7px;font-size:18px;font-weight:900;">${escapeHtml(top.pick)}</div><div style="margin-top:5px;font-size:12px;color:${BRAND_MUTED};">${escapeHtml(top.sport)} · ${escapeHtml(top.matchup)} · ${top.probability.toFixed(1)}%</div></div>` : ''}
+      ${top ? `<div style="margin-top:22px;padding:18px;background:#102a22;border:1px solid #26764f;border-radius:16px;color:${BRAND_TEXT};"><div style="font-size:10px;font-weight:900;letter-spacing:.12em;text-transform:uppercase;color:${BRAND_GREEN};">Top signal</div><div style="margin-top:7px;font-size:18px;font-weight:900;color:${BRAND_TEXT};">${escapeHtml(top.pick)}</div><div style="margin-top:5px;font-size:12px;color:${BRAND_MUTED};">${escapeHtml(top.sport)} · ${escapeHtml(top.matchup)} · ${top.probability.toFixed(1)}%</div></div>` : ''}
       ${sectionHtml('WNBA strongest plays', wnba)}
       ${sectionHtml('NBA strongest plays', nba)}
       ${sectionHtml('MLB best & value plays', mlb)}
-      ${plays.length ? '' : `<div style="margin-top:24px;padding:24px;border-radius:14px;border:1px solid #273438;background:${BRAND_PANEL_2};text-align:center;color:${BRAND_MUTED};font-size:13px;">No plays currently clear the model thresholds. We'll keep the board selective rather than force action.</div>`}
+      ${plays.length ? '' : `<div style="margin-top:24px;padding:24px;border-radius:14px;border:1px solid #29415a;background:${BRAND_PANEL_2};text-align:center;color:${BRAND_MUTED};font-size:13px;">No plays currently clear the model thresholds. We'll keep the board selective rather than force action.</div>`}
       <table role="presentation" cellspacing="0" cellpadding="0" style="margin-top:28px;"><tr><td bgcolor="${BRAND_GREEN}" style="border-radius:10px;"><a href="${siteUrl('/')}" style="display:inline-block;padding:13px 20px;color:#03110a;text-decoration:none;font-size:13px;font-weight:900;">View live board →</a></td></tr></table>
     </div>`;
   return emailShell(inner, token, `PreziTools Daily Plays for ${todayET()} — strongest model-qualified opportunities.`);
@@ -395,7 +394,7 @@ export function registerNewsletterRoutes(app: Express) {
     const token = typeof req.query.token === 'string' ? req.query.token : '';
     const ok = token ? await unsubscribeNewsletter(token) : false;
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    return res.status(ok ? 200 : 400).send(`<!doctype html><html><body style="margin:0;background:#070b0d;color:#f4f7f6;font-family:Arial,sans-serif;padding:40px;"><div style="max-width:560px;margin:60px auto;background:#0f1518;border:1px solid #273438;border-radius:18px;padding:30px;"><h2 style="margin-top:0;">${ok ? 'You’re unsubscribed.' : 'Unable to unsubscribe'}</h2><p style="color:#9ca8a3;line-height:1.6;">${ok ? 'You will no longer receive PreziTools Daily Plays. You can rejoin any time from prezitools.com.' : 'This unsubscribe link is invalid or expired.'}</p><a href="${siteUrl('/')}" style="color:${BRAND_GREEN};font-weight:bold;">Return to PreziTools</a></div></body></html>`);
+    return res.status(ok ? 200 : 400).send(`<!doctype html><html><body style="margin:0;background:${BRAND_BG};color:${BRAND_TEXT};font-family:Arial,sans-serif;padding:40px;"><div style="max-width:560px;margin:60px auto;background:${BRAND_PANEL};border:1px solid #29415a;border-radius:18px;padding:30px;"><h2 style="margin-top:0;">${ok ? 'You’re unsubscribed.' : 'Unable to unsubscribe'}</h2><p style="color:${BRAND_MUTED};line-height:1.6;">${ok ? 'You will no longer receive PreziTools Daily Plays. You can rejoin any time from prezitools.com.' : 'This unsubscribe link is invalid or expired.'}</p><a href="${siteUrl('/')}" style="color:${BRAND_GREEN};font-weight:bold;">Return to PreziTools</a></div></body></html>`);
   });
 
   app.post('/api/admin/newsletter/send-now', requireAdmin, async (req, res) => {
